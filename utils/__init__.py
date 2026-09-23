@@ -1,9 +1,6 @@
-# Purpose: Utils package initialization.
+# Purpose: utils package marker.
 # What the code does:
-#   - Exposes platform, text helpers, and OS detector.
+#   - Nothing; kept free of imports so importing a single submodule (e.g. core.version)
+#     does not pull in Qt, SQLite, parsers, or jieba.
 # Usage notes, dependencies, or assumptions:
-#   - None.
-
-from .platform_helper import open_file_with_default_app, reveal_in_file_manager, format_file_size, format_timestamp
-from .text_helper import tokenize_for_fts, extract_keywords_from_query, generate_highlighted_snippets
-from .os_detector import detect_os, CURRENT_OS, OSInfo
+#   - Import submodules directly, e.g. `from utils.<module> import <name>`.

@@ -11,12 +11,9 @@
 #   - Shares ~/.doc_searcher/index.db and config.json with the GUI (override with
 #     DOC_SEARCHER_DATA_DIR). Search folders are managed in the GUI.
 
-import os
 import sys
 from contextlib import asynccontextmanager
 from typing import Annotated, Any, AsyncIterator, Literal, Optional
-
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from mcp.server.mcpserver import MCPServer, ResourceSecurity
 from mcp.server.mcpserver.exceptions import ResourceNotFoundError, ToolError

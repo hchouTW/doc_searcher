@@ -14,9 +14,6 @@ import os
 import argparse
 import re
 
-# Ensure package modules can be imported
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
 EXIT_OK = 0
 EXIT_UNAVAILABLE = 1
 TYPE_FILTERS = ("all", "pdf", "word", "doc", "excel", "xls", "ppt", "powerpoint", "text")

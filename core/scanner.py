@@ -14,10 +14,7 @@ import fnmatch
 import re
 from typing import Callable, List, Dict, Optional, Set, Tuple
 
-try:
-    from parsers import SUPPORTED_EXTENSIONS
-except (ImportError, ValueError):
-    from ..parsers import SUPPORTED_EXTENSIONS
+from parsers import SUPPORTED_EXTENSIONS
 
 
 _ABSOLUTE_PATTERN_RE = re.compile(r"^(/|[A-Za-z]:/)")

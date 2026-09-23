@@ -1,11 +1,6 @@
-# Purpose: Core package initialization.
+# Purpose: core package marker.
 # What the code does:
-#   - Exposes Config, Database, FileScanner, DocumentIndexer, and DocumentSearcher.
+#   - Nothing; kept free of imports so importing a single submodule (e.g. core.version)
+#     does not pull in Qt, SQLite, parsers, or jieba.
 # Usage notes, dependencies, or assumptions:
-#   - None.
-
-from .config import AppConfig
-from .database import Database
-from .scanner import FileScanner
-from .indexer import DocumentIndexer
-from .searcher import DocumentSearcher, SearchResultItem, SegmentMatch
+#   - Import submodules directly, e.g. `from core.<module> import <name>`.

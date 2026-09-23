@@ -17,20 +17,12 @@ from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional
 import jieba
 
-try:
-    from core.database import Database
-    from core.scanner import is_absolute_pattern
-    from utils.text_helper import (
-        extract_keywords_from_query, generate_highlighted_snippets,
-        generate_regex_highlighted_snippets,
-    )
-except (ImportError, ValueError):
-    from .database import Database
-    from .scanner import is_absolute_pattern
-    from ..utils.text_helper import (
-        extract_keywords_from_query, generate_highlighted_snippets,
-        generate_regex_highlighted_snippets,
-    )
+from core.database import Database
+from core.scanner import is_absolute_pattern
+from utils.text_helper import (
+    extract_keywords_from_query, generate_highlighted_snippets,
+    generate_regex_highlighted_snippets,
+)
 
 
 @dataclass
