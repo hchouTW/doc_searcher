@@ -1,7 +1,7 @@
 # Purpose: PDF document text extraction parser.
 # What the code does:
 #   - Uses pymupdf (fitz) to extract text page-by-page.
-#   - Detects and handles encrypted/password-protected files gracefully.
+#   - Reports ENCRYPTED only when a user password is required to read the text.
 #   - Catches corrupted or invalid PDFs without crashing.
 # Usage notes, dependencies, or assumptions:
 #   - Requires pymupdf.
@@ -9,7 +9,7 @@
 
 import os
 from typing import List
-from .base import BaseParser, ExtractedDoc, PageSegment
+from .base import BaseParser, ExtractedDoc, PageSegment, ParseStatus
 
 
 class PdfParser(BaseParser):
@@ -25,27 +25,20 @@ class PdfParser(BaseParser):
             try:
                 import fitz as pymupdf
             except ImportError:
-                return ExtractedDoc(
-                    file_path=abs_path,
-                    file_type="pdf",
-                    error="pymupdf is not installed."
+                return ExtractedDoc.failed(
+                    abs_path, "pdf", ParseStatus.DEPENDENCY_MISSING, "pymupdf is not installed."
                 )
 
         try:
             doc = pymupdf.open(abs_path)
         except Exception as e:
-            return ExtractedDoc(
-                file_path=abs_path,
-                file_type="pdf",
-                error=f"Cannot open PDF: {str(e)}"
-            )
+            return ExtractedDoc.from_exception(abs_path, "pdf", "Cannot open PDF", e)
 
         try:
-            if doc.is_encrypted:
-                return ExtractedDoc(
-                    file_path=abs_path,
-                    file_type="pdf",
-                    error="Document is password protected."
+            # Owner-password-only PDFs (permissions) open without a password and stay readable.
+            if doc.needs_pass:
+                return ExtractedDoc.failed(
+                    abs_path, "pdf", ParseStatus.ENCRYPTED, "Document is password protected."
                 )
 
             total_pages = len(doc)

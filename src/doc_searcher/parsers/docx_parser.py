@@ -9,7 +9,7 @@
 
 import os
 from typing import List
-from .base import BaseParser, ExtractedDoc, PageSegment
+from .base import BaseParser, ExtractedDoc, PageSegment, ParseStatus
 
 
 class DocxParser(BaseParser):
@@ -22,20 +22,14 @@ class DocxParser(BaseParser):
         try:
             import docx
         except ImportError:
-            return ExtractedDoc(
-                file_path=abs_path,
-                file_type="docx",
-                error="python-docx is not installed."
+            return ExtractedDoc.failed(
+                abs_path, "docx", ParseStatus.DEPENDENCY_MISSING, "python-docx is not installed."
             )
 
         try:
             doc = docx.Document(abs_path)
         except Exception as e:
-            return ExtractedDoc(
-                file_path=abs_path,
-                file_type="docx",
-                error=f"Cannot open docx file: {str(e)}"
-            )
+            return ExtractedDoc.from_exception(abs_path, "docx", "Cannot open docx file", e)
 
         try:
             # Collect paragraphs
@@ -89,8 +83,4 @@ class DocxParser(BaseParser):
                 segments=segments
             )
         except Exception as e:
-            return ExtractedDoc(
-                file_path=abs_path,
-                file_type="docx",
-                error=f"Error reading docx content: {str(e)}"
-            )
+            return ExtractedDoc.from_exception(abs_path, "docx", "Error reading docx content", e)

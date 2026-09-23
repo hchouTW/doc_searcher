@@ -3,6 +3,8 @@
 #   - Uses olefile to read OLE2 Compound File streams (PowerPoint Document, Current User).
 #   - Decodes slide text sequences from binary records in pure Python.
 #   - Catches corrupted or invalid files safely.
+#   - Best-effort: all slide text is returned as one segment (no per-slide boundaries) and may
+#     include noise; there is no real .ppt fixture in the test suite.
 # Usage notes, dependencies, or assumptions:
 #   - Requires olefile.
 #   - Cross-platform for Windows and macOS.
@@ -10,7 +12,7 @@
 import os
 import re
 from typing import List
-from .base import BaseParser, ExtractedDoc, PageSegment
+from .base import BaseParser, ExtractedDoc, PageSegment, ParseStatus
 
 
 class PptParser(BaseParser):
@@ -23,17 +25,13 @@ class PptParser(BaseParser):
         try:
             import olefile
         except ImportError:
-            return ExtractedDoc(
-                file_path=abs_path,
-                file_type="ppt",
-                error="olefile is not installed."
+            return ExtractedDoc.failed(
+                abs_path, "ppt", ParseStatus.DEPENDENCY_MISSING, "olefile is not installed."
             )
 
         if not olefile.isOleFile(abs_path):
-            return ExtractedDoc(
-                file_path=abs_path,
-                file_type="ppt",
-                error="Not a valid OLE2 PowerPoint file."
+            return ExtractedDoc.failed(
+                abs_path, "ppt", ParseStatus.CORRUPT, "Not a valid OLE2 PowerPoint file."
             )
 
         try:
@@ -67,11 +65,7 @@ class PptParser(BaseParser):
                 segments=segments
             )
         except Exception as e:
-            return ExtractedDoc(
-                file_path=abs_path,
-                file_type="ppt",
-                error=f"Error parsing .ppt file: {str(e)}"
-            )
+            return ExtractedDoc.from_exception(abs_path, "ppt", "Error parsing .ppt file", e)
 
     def _extract_ppt_strings(self, data: bytes, min_len: int = 3) -> str:
         """Extract readable UTF-16LE and ASCII text blocks from PowerPoint Document stream."""

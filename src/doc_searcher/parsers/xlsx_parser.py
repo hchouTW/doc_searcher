@@ -9,7 +9,7 @@
 
 import os
 from typing import List
-from .base import BaseParser, ExtractedDoc, PageSegment
+from .base import BaseParser, ExtractedDoc, PageSegment, ParseStatus
 
 
 class XlsxParser(BaseParser):
@@ -22,10 +22,8 @@ class XlsxParser(BaseParser):
         try:
             import openpyxl
         except ImportError:
-            return ExtractedDoc(
-                file_path=abs_path,
-                file_type="xlsx",
-                error="openpyxl is not installed."
+            return ExtractedDoc.failed(
+                abs_path, "xlsx", ParseStatus.DEPENDENCY_MISSING, "openpyxl is not installed."
             )
 
         wb = None
@@ -60,11 +58,7 @@ class XlsxParser(BaseParser):
                 segments=segments
             )
         except Exception as e:
-            return ExtractedDoc(
-                file_path=abs_path,
-                file_type="xlsx",
-                error=f"Error reading xlsx file: {str(e)}"
-            )
+            return ExtractedDoc.from_exception(abs_path, "xlsx", "Error reading xlsx file", e)
         finally:
             if wb is not None:
                 try:

@@ -9,7 +9,7 @@
 
 import os
 from typing import List
-from .base import BaseParser, ExtractedDoc, PageSegment
+from .base import BaseParser, ExtractedDoc, PageSegment, ParseStatus
 
 
 class XlsParser(BaseParser):
@@ -22,12 +22,11 @@ class XlsParser(BaseParser):
         try:
             import xlrd
         except ImportError:
-            return ExtractedDoc(
-                file_path=abs_path,
-                file_type="xls",
-                error="xlrd is not installed."
+            return ExtractedDoc.failed(
+                abs_path, "xls", ParseStatus.DEPENDENCY_MISSING, "xlrd is not installed."
             )
 
+        book = None
         try:
             book = xlrd.open_workbook(abs_path, on_demand=True)
             sheet_names = book.sheet_names()
@@ -62,8 +61,9 @@ class XlsParser(BaseParser):
                 segments=segments
             )
         except Exception as e:
-            return ExtractedDoc(
-                file_path=abs_path,
-                file_type="xls",
-                error=f"Error reading xls file: {str(e)}"
-            )
+            if "encrypted" in str(e).lower():
+                return ExtractedDoc.failed(abs_path, "xls", ParseStatus.ENCRYPTED, f"Workbook is encrypted: {e}")
+            return ExtractedDoc.from_exception(abs_path, "xls", "Error reading xls file", e)
+        finally:
+            if book is not None:
+                book.release_resources()  # on_demand keeps the file open until released

@@ -11,10 +11,11 @@
    - 自動識別 Windows 10/11、macOS、Linux 與 x86_64/ARM64，不需手動選擇平台。
 2. **多格式全支援（涵蓋新舊版 Office）**：
    - **PDF**：`.pdf`（PyMuPDF 高速向量文字流抽取與頁碼定位）
-   - **Word**：新版 `.docx`（python-docx）與 舊版 `.doc`（純 Python OLE 串流解析）
+   - **Word**：新版 `.docx`（python-docx）與 舊版 `.doc`（純 Python OLE 串流解析，盡力擷取：可能夾雜樣式／字型名稱等雜訊）
    - **Excel**：新版 `.xlsx`（openpyxl 串流唯讀讀取）與 舊版 `.xls`（xlrd 支援）
-   - **PowerPoint**：新版 `.pptx`（python-pptx）與 舊版 `.ppt`（純 Python OLE 串流解析）
-   - **純文字**：`.txt`, `.md`, `.csv`（多國語系編碼自適應）
+   - **PowerPoint**：新版 `.pptx`（python-pptx）與 舊版 `.ppt`（純 Python OLE 串流解析，盡力擷取：全部投影片合併為單一區段）
+   - **純文字**：`.txt`, `.md`, `.csv`（依 BOM 辨識 UTF-8／UTF-16／UTF-32，並偵測無 BOM 的 UTF-16；其餘依序嘗試 UTF-8、Big5、GBK。無 BOM 的 GBK 可能被誤判為 Big5）
+   - 加密、損毀、空白或無法讀取的文件會記錄原因並略過，不會中斷整批索引；僅設定擁有者密碼（限制列印／複製）的 PDF 仍可擷取文字。
 3. **輕量極速，無 OCR 負擔**：
    - 專注於文件內嵌文字流抽取，無需昂貴 GPU 或笨重 OCR 影像模型，幾秒內即可為數百至數千份文件建立完備索引。
 4. **SQLite FTS5 + jieba 中英文全文檢索**：

@@ -3,6 +3,8 @@
 #   - Uses olefile to read OLE2 Compound Document streams (e.g. WordDocument).
 #   - Decodes 16-bit Unicode (UTF-16LE) and multi-byte text runs.
 #   - Provides pure-Python extraction without requiring Microsoft Word or external binaries.
+#   - Best-effort: text is recovered heuristically from raw streams and may include noise
+#     (style/font names, mis-decoded runs); formatting and document structure are not parsed.
 # Usage notes, dependencies, or assumptions:
 #   - Requires olefile.
 #   - Cross-platform for Windows and macOS.
@@ -10,7 +12,7 @@
 import os
 import re
 from typing import List
-from .base import BaseParser, ExtractedDoc, PageSegment
+from .base import BaseParser, ExtractedDoc, PageSegment, ParseStatus
 
 
 class DocParser(BaseParser):
@@ -23,10 +25,8 @@ class DocParser(BaseParser):
         try:
             import olefile
         except ImportError:
-            return ExtractedDoc(
-                file_path=abs_path,
-                file_type="doc",
-                error="olefile is not installed."
+            return ExtractedDoc.failed(
+                abs_path, "doc", ParseStatus.DEPENDENCY_MISSING, "olefile is not installed."
             )
 
         if not olefile.isOleFile(abs_path):
@@ -43,10 +43,8 @@ class DocParser(BaseParser):
                         segments=[PageSegment(segment_id="1", segment_type="section", text=text)]
                     )
             except Exception as ex:
-                return ExtractedDoc(
-                    file_path=abs_path,
-                    file_type="doc",
-                    error=f"Not a valid OLE file or readable document: {str(ex)}"
+                return ExtractedDoc.from_exception(
+                    abs_path, "doc", "Not a valid OLE file or readable document", ex
                 )
 
         try:
@@ -89,11 +87,7 @@ class DocParser(BaseParser):
                 segments=segments
             )
         except Exception as e:
-            return ExtractedDoc(
-                file_path=abs_path,
-                file_type="doc",
-                error=f"Error parsing .doc file: {str(e)}"
-            )
+            return ExtractedDoc.from_exception(abs_path, "doc", "Error parsing .doc file", e)
 
     def _extract_raw_strings(self, data: bytes, min_len: int = 3) -> str:
         """Extract continuous UTF-16LE and UTF-8/Latin-1 readable strings from binary stream."""

@@ -9,7 +9,7 @@
 
 import os
 from typing import List
-from .base import BaseParser, ExtractedDoc, PageSegment
+from .base import BaseParser, ExtractedDoc, PageSegment, ParseStatus
 
 
 class PptxParser(BaseParser):
@@ -22,20 +22,14 @@ class PptxParser(BaseParser):
         try:
             import pptx
         except ImportError:
-            return ExtractedDoc(
-                file_path=abs_path,
-                file_type="pptx",
-                error="python-pptx is not installed."
+            return ExtractedDoc.failed(
+                abs_path, "pptx", ParseStatus.DEPENDENCY_MISSING, "python-pptx is not installed."
             )
 
         try:
             prs = pptx.Presentation(abs_path)
         except Exception as e:
-            return ExtractedDoc(
-                file_path=abs_path,
-                file_type="pptx",
-                error=f"Cannot open pptx file: {str(e)}"
-            )
+            return ExtractedDoc.from_exception(abs_path, "pptx", "Cannot open pptx file", e)
 
         try:
             total_slides = len(prs.slides)
@@ -78,8 +72,4 @@ class PptxParser(BaseParser):
                 segments=segments
             )
         except Exception as e:
-            return ExtractedDoc(
-                file_path=abs_path,
-                file_type="pptx",
-                error=f"Error reading pptx content: {str(e)}"
-            )
+            return ExtractedDoc.from_exception(abs_path, "pptx", "Error reading pptx content", e)

@@ -3,6 +3,8 @@
 #   - Coordinates parsing, tokenization, and metadata storage including mtime/ctime.
 #   - Supports progress reporting plus cooperative pause, resume, and cancellation controls.
 #   - Implements incremental updates and deletion handling.
+#   - A document that fails to parse is stored with its error and counted as failed; it never
+#     stops the batch.
 # Usage notes, dependencies, or assumptions:
 #   - Integrates parsers, database, and doc_searcher.search.text_helper.
 
@@ -10,7 +12,7 @@ import os
 import threading
 from typing import Callable, Optional, List, Dict
 
-from doc_searcher.parsers import get_parser
+from doc_searcher.parsers import ParseStatus, parse_file
 from doc_searcher.search.text_helper import tokenize_for_fts
 from doc_searcher.storage.database import Database
 
@@ -60,10 +62,6 @@ class DocumentIndexer:
             self.db.delete_document(abs_path)
             return False
 
-        parser = get_parser(abs_path)
-        if parser is None:
-            return False
-
         try:
             st = os.stat(abs_path)
             file_size = st.st_size
@@ -74,19 +72,9 @@ class DocumentIndexer:
             print(f"[Indexer] Cannot stat {abs_path}: {e}")
             return False
 
-        # Run parser
-        try:
-            extracted = parser.parse(abs_path)
-        except Exception as ex:
-            self.db.save_document_index(
-                file_path=abs_path,
-                file_type=ext,
-                file_size=file_size,
-                mtime=mtime,
-                ctime=ctime,
-                segments=[],
-                error=f"Parser exception: {str(ex)}"
-            )
+        # parse_file never raises for document problems; a bad file becomes an error record.
+        extracted = parse_file(abs_path)
+        if extracted.status is ParseStatus.UNSUPPORTED:
             return False
 
         if extracted.error:
