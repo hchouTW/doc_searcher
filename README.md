@@ -91,6 +91,8 @@ doc_searcher/
 │   └── generate_icon.py      # 產生應用程式圖示 (.ico / .png)
 ├── assets/                   # 應用程式圖示
 ├── main.py                   # 程式進入點 (支援 GUI 與 CLI 兩種模式)
+├── install.bat               # Windows 一鍵安裝（Python、VC++ 運行庫、venv、桌面捷徑）
+├── run_windows.bat           # Windows 啟動器（未安裝時自動呼叫 install.bat）
 ├── doc_searcher.spec         # Windows 單一檔案 .exe 的 PyInstaller 設定
 ├── doc_searcher_mac.spec     # macOS .app 的 PyInstaller 設定
 ├── build_mac.sh              # macOS 建置腳本
@@ -121,6 +123,8 @@ source venv/bin/activate
 # 安裝所需套件
 pip install -r requirements.txt
 ```
+
+> Windows 也可直接雙擊 `install.bat`：自動安裝 Python（若尚未安裝）、Visual C++ 運行庫、虛擬環境與套件，並建立桌面捷徑；之後以 `run_windows.bat` 啟動。
 
 ### 2. 啟動桌面圖形介面 (GUI)
 
@@ -156,7 +160,7 @@ python main.py --dir /path/to/documents --search "專案預算" --type excel
 | 平台 | 建置指令 | 輸出 |
 | --- | --- | --- |
 | macOS（依建置機器架構：arm64 / x86_64） | `./build_mac.sh` | `dist/DocSearcher.app`、`dist/DocSearcher-macOS-<arch>.zip` |
-| Windows 10 / 11 | `powershell -ExecutionPolicy Bypass -File .\build_win.ps1`（或 `build_exe.bat`） | `dist\DocSearcher.exe`（單一可攜執行檔） |
+| Windows 10 / 11 | `powershell -ExecutionPolicy Bypass -File .\build_win.ps1` | `dist\DocSearcher.exe`（單一可攜執行檔） |
 
 - macOS 使用 `doc_searcher_mac.spec`（onedir `.app`，PyInstaller 6 已不建議在 `.app` 內使用 onefile）；Windows 使用 `doc_searcher.spec`（onefile、無主控台視窗）。
 - GitHub Actions：`build_windows.yml` 與 `build_macos.yml`（Apple Silicon 與 Intel）會自動上傳建置成品。

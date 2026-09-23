@@ -5,7 +5,6 @@
 # Usage notes, dependencies, or assumptions:
 #   - powershell -ExecutionPolicy Bypass -File .\build_win.ps1
 #   - Needs Python 3 on the build machine only; output dist\DocSearcher.exe runs without install.
-#   - PowerShell counterpart of build_exe.bat.
 
 $ErrorActionPreference = 'Stop'
 Set-Location -Path $PSScriptRoot
