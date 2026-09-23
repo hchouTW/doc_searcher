@@ -265,7 +265,8 @@ class DocumentSearcher:
             for path in normalized_paths:
                 escaped = cls._escape_like(path.rstrip("/\\"))
                 path_clauses.append("(d.path = ? OR d.path LIKE ? ESCAPE '\\')")
-                params.extend([path.rstrip("/\\"), f"{escaped}{os.sep}%"])
+                # Escape the separator too: on Windows it is "\\", the LIKE escape character.
+                params.extend([path.rstrip("/\\"), f"{escaped}{cls._escape_like(os.sep)}%"])
             clauses.append("(" + " OR ".join(path_clauses) + ")")
 
         for raw_pattern in exclude_patterns or []:
