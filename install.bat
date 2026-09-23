@@ -140,7 +140,7 @@ echo.
 echo [*] 正在安裝跨平台依賴套件 (PySide6, PyMuPDF, python-docx, openpyxl, jieba 等)...
 call "venv\Scripts\activate.bat"
 python -m pip install --upgrade pip --quiet
-pip install -r requirements.txt --quiet
+pip install -e . --quiet
 if %errorlevel% neq 0 (
     echo [X] 套件安裝失敗，請檢查網路連線。
     pause
@@ -152,7 +152,7 @@ echo.
 :: ==========================================
 :: 6. 生成 %OS_TAG% 專屬高解析度圖示
 :: ==========================================
-if not exist "assets\app_icon.ico" (
+if not exist "src\doc_searcher\assets\app_icon.ico" (
     echo [*] 正在產生應用程式圖示...
     python scripts\generate_icon.py
 )
@@ -163,15 +163,14 @@ if not exist "assets\app_icon.ico" (
 echo [*] 正在為 %OS_TAG% 建立桌面捷徑...
 
 set "TARGET_EXE=%APP_DIR%venv\Scripts\pythonw.exe"
-set "SCRIPT_PATH=%APP_DIR%main.py"
-set "ICON_PATH=%APP_DIR%assets\app_icon.ico"
+set "ICON_PATH=%APP_DIR%src\doc_searcher\assets\app_icon.ico"
 set "SHORTCUT_PATH=%USERPROFILE%\Desktop\DocSearcher.lnk"
 
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "$WshShell = New-Object -ComObject WScript.Shell; " ^
   "$Shortcut = $WshShell.CreateShortcut('%SHORTCUT_PATH%'); " ^
   "$Shortcut.TargetPath = '%TARGET_EXE%'; " ^
-  "$Shortcut.Arguments = '\"%SCRIPT_PATH%\"'; " ^
+  "$Shortcut.Arguments = '-m doc_searcher'; " ^
   "$Shortcut.WorkingDirectory = '%APP_DIR%'; " ^
   "$Shortcut.IconLocation = '%ICON_PATH%'; " ^
   "$Shortcut.Description = 'DocSearcher 本機多格式文件內文檢索系統 (%OS_TAG%)'; " ^

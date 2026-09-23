@@ -9,18 +9,15 @@
 
 import os
 import sqlite3
-import sys
 import tempfile
 import threading
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from core.database import Database
-from core.config import AppConfig
-from core.scanner import FileScanner
-from core.indexer import DocumentIndexer
-from ui.worker import IndexWorker
+from doc_searcher.storage.database import Database
+from doc_searcher.config import AppConfig
+from doc_searcher.indexing.scanner import FileScanner
+from doc_searcher.indexing.indexer import DocumentIndexer
+from doc_searcher.desktop.worker import IndexWorker
 
 SAMPLE_DIR = Path(__file__).parent / "sample_files"
 

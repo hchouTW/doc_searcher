@@ -14,6 +14,7 @@ def requirement_lines(name):
     return {line.strip() for line in lines if line.strip() and not line.startswith(("#", "-r"))}
 
 
+@pytest.mark.skipif(not (ROOT / "pyproject.toml").is_file(), reason="needs the source checkout")
 def test_requirement_files_match_pyproject():
     project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]
     assert requirement_lines("requirements.txt") == set(project["dependencies"])

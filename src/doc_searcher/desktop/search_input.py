@@ -13,7 +13,7 @@ from PySide6.QtCore import Qt, Signal, QSize
 from PySide6.QtGui import QColor, QFont, QSyntaxHighlighter, QTextCharFormat
 from PySide6.QtWidgets import QPlainTextEdit
 
-from ui.theme import ThemeColors
+from doc_searcher.desktop.theme import ThemeColors
 
 
 class QuerySyntaxHighlighter(QSyntaxHighlighter):

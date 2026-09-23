@@ -4,8 +4,8 @@ import os
 from pathlib import Path
 from unittest.mock import patch
 
-from utils.os_detector import detect_os
-from utils.platform_helper import open_file_with_default_app, reveal_in_file_manager
+from doc_searcher.platform.os_detector import detect_os
+from doc_searcher.platform.platform_helper import open_file_with_default_app, reveal_in_file_manager
 
 
 def test_detects_and_normalizes_supported_operating_systems():
@@ -43,7 +43,7 @@ def test_native_open_command_adapts_to_macos(tmp_path: Path):
     document.touch()
     macos = detect_os("Darwin", machine="arm64", mac_version="15.0")
 
-    with patch("utils.platform_helper.subprocess.run") as run:
+    with patch("doc_searcher.platform.platform_helper.subprocess.run") as run:
         assert open_file_with_default_app(str(document), macos)
 
     run.assert_called_once_with(["open", os.path.abspath(document)], check=True)
@@ -54,7 +54,7 @@ def test_native_open_uses_windows_shell(tmp_path: Path):
     document.touch()
     windows = detect_os("Windows", release="11", machine="AMD64", windows_build=22631)
 
-    with patch("utils.platform_helper.os.startfile", create=True) as startfile:
+    with patch("doc_searcher.platform.platform_helper.os.startfile", create=True) as startfile:
         assert open_file_with_default_app(str(document), windows)
 
     startfile.assert_called_once_with(os.path.abspath(document))
@@ -65,7 +65,7 @@ def test_native_reveal_command_adapts_to_linux(tmp_path: Path):
     document.touch()
     linux = detect_os("Linux", release="6.8.0", machine="x86_64")
 
-    with patch("utils.platform_helper.subprocess.run") as run:
+    with patch("doc_searcher.platform.platform_helper.subprocess.run") as run:
         assert reveal_in_file_manager(str(document), linux)
 
     run.assert_called_once_with(["xdg-open", os.path.dirname(os.path.abspath(document))], check=True)
@@ -76,7 +76,7 @@ def test_unknown_system_fails_safely_without_launching(tmp_path: Path):
     document.touch()
     unknown = detect_os("FreeBSD", release="14.1", machine="amd64")
 
-    with patch("utils.platform_helper.subprocess.run") as run:
+    with patch("doc_searcher.platform.platform_helper.subprocess.run") as run:
         assert not open_file_with_default_app(str(document), unknown)
         assert not reveal_in_file_manager(str(document), unknown)
 

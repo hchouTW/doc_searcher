@@ -8,7 +8,7 @@
 #   - Provides a manual theme toggle button (Auto / Dark / Light).
 #   - Ensures high-contrast readability with no system-color mismatches.
 # Usage notes, dependencies, or assumptions:
-#   - PySide6.QtWidgets, ui.theme.
+#   - PySide6.QtWidgets, doc_searcher.desktop.theme.
 
 import os
 import re
@@ -27,14 +27,14 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QTimer, QDate
 from PySide6.QtGui import QIcon, QKeySequence, QShortcut, QTextDocument
 
-from core.config import AppConfig
-from core.database import Database
-from core.searcher import SearchResultItem
-from core.scanner import FileScanner
-from core.i18n import tr
-from core.version import APP_VERSION, CHANGELOG
-from ui.theme import ThemeColors, get_active_theme
-from utils.resource_path import resource_path
+from doc_searcher.config import AppConfig
+from doc_searcher.storage.database import Database
+from doc_searcher.search.searcher import SearchResultItem
+from doc_searcher.indexing.scanner import FileScanner
+from doc_searcher.desktop.i18n import tr
+from doc_searcher.version import APP_VERSION, CHANGELOG
+from doc_searcher.desktop.theme import ThemeColors, get_active_theme
+from doc_searcher.platform.resource_path import resource_path
 from .result_table import ResultTable
 from .preview_panel import PreviewPanel
 from .worker import IndexWorker, SearchWorker

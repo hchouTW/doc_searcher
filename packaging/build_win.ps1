@@ -28,7 +28,7 @@ Write-Host '[*] Installing dependencies...'
 Invoke-Checked $py @('-m', 'pip', 'install', '--quiet', '--upgrade', 'pip')
 Invoke-Checked $py @('-m', 'pip', 'install', '--quiet', '-r', 'requirements.txt', 'pyinstaller', 'Pillow')
 
-if (-not (Test-Path 'assets\app_icon.ico')) {
+if (-not (Test-Path 'src\doc_searcher\assets\app_icon.ico')) {
     Write-Host '[*] Generating icon...'
     Invoke-Checked $py @('scripts\generate_icon.py')
 }

@@ -6,13 +6,9 @@
 # Usage notes, dependencies, or assumptions:
 #   - Run via pytest.
 
-import sys
 from pathlib import Path
 
-# Ensure project root is in sys.path
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from parsers import (
+from doc_searcher.parsers import (
     is_supported,
     PdfParser,
     DocxParser,

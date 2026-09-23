@@ -5,7 +5,7 @@
 #define MyAppName "DocSearcher"
 #define MyAppPublisher "Antigravity"
 #define MyAppExeName "DocSearcher.exe"
-; Version comes from the built exe's version resource (set from core/version.py by
+; Version comes from the built exe's version resource (set from src/doc_searcher/version.py by
 ; packaging/doc_searcher_win.spec), so build DocSearcher.exe before compiling this script.
 #define MyAppExePath AddBackslash(SourcePath) + "..\dist\" + MyAppExeName
 #if !FileExists(MyAppExePath)
@@ -23,7 +23,7 @@ DefaultDirName={autopf}\{#MyAppName}
 DisableProgramGroupPage=yes
 OutputDir=setup_output
 OutputBaseFilename=DocSearcher_Setup_Win10_Win11
-SetupIconFile=assets\app_icon.ico
+SetupIconFile=src\doc_searcher\assets\app_icon.ico
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
@@ -40,7 +40,7 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 
 [Files]
 Source: "dist\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
-Source: "assets\*"; DestDir: "{app}\assets"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "src\doc_searcher\assets\*"; DestDir: "{app}\assets"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\assets\app_icon.ico"

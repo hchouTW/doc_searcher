@@ -54,5 +54,6 @@ def generate_app_icon(output_dir: str):
 
 
 if __name__ == "__main__":
-    target_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets")
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    target_dir = os.path.join(project_root, "src", "doc_searcher", "assets")
     generate_app_icon(target_dir)

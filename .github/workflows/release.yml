@@ -1,6 +1,6 @@
 # Purpose: Build and publish native DocSearcher binaries from a version tag or published release.
 # What the code does: Tests, packages, and uploads Windows and both macOS architectures to one release.
-# Usage notes: Push v<APP_VERSION> or publish that tag as a release; the tag must match core/version.py.
+# Usage notes: Push v<APP_VERSION> or publish that tag as a release; the tag must match src/doc_searcher/version.py.
 name: Build and publish release
 
 on:
@@ -50,10 +50,10 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -r requirements-dev.txt -r requirements-mcp.txt pyinstaller Pillow
+          python -m pip install -e ".[dev,mcp]" pyinstaller Pillow
 
       - name: Check tag matches application version
-        run: python -c "import os; from core.version import APP_VERSION; assert os.environ['RELEASE_TAG'] == 'v' + APP_VERSION, 'Release tag must match core/version.py'"
+        run: python -c "import os; from doc_searcher.version import APP_VERSION; assert os.environ['RELEASE_TAG'] == 'v' + APP_VERSION, 'Release tag must match src/doc_searcher/version.py'"
 
       - name: Run tests
         run: python -m pytest -q

@@ -4,10 +4,10 @@
 #   - Tools: search_documents, get_index_status, reindex_directory.
 #   - Resource template docsearcher://document/{path}: stored text of an indexed document
 #     (path is percent-encoded and decoded by the SDK; search results include ready-made URIs).
-#   - Delegates all logic to core.search_service.SearchService; this file only maps it to MCP.
+#   - Delegates all logic to doc_searcher.search.search_service.SearchService; this file only maps it to MCP.
 # Usage notes, dependencies, or assumptions:
-#   - pip install -r requirements-mcp.txt   (mcp 2.x, Python >= 3.10)
-#   - python mcp_server.py (or the doc-searcher-mcp console script) serves over stdio;
+#   - pip install '.[mcp]'   (mcp 2.x, Python >= 3.10)
+#   - doc-searcher-mcp (or python -m doc_searcher.integrations.mcp_server) serves over stdio;
 #     clients launch it, so it is not run by hand.
 #   - Shares ~/.doc_searcher/index.db and config.json with the GUI (override with
 #     DOC_SEARCHER_DATA_DIR). Search folders are managed in the GUI.
@@ -21,8 +21,8 @@ from mcp.server.mcpserver.exceptions import ResourceNotFoundError, ToolError
 from mcp.types import ToolAnnotations
 from pydantic import Field
 
-from core.search_service import DOCUMENT_URI_PREFIX, MAX_SEARCH_LIMIT, SearchService
-from core.version import APP_VERSION
+from doc_searcher.search.search_service import DOCUMENT_URI_PREFIX, MAX_SEARCH_LIMIT, SearchService
+from doc_searcher.version import APP_VERSION
 
 FormatGroup = Literal["pdf", "word", "excel", "ppt", "text"]
 

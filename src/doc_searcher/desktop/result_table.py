@@ -4,7 +4,7 @@
 #   - Synchronizes selection with preview panel.
 #   - Supports Enter / double-click to open file and right-click context menu.
 # Usage notes, dependencies, or assumptions:
-#   - PySide6.QtWidgets (QTableWidget, QHeaderView, QMenu), ui.theme.ThemeColors.
+#   - PySide6.QtWidgets (QTableWidget, QHeaderView, QMenu), doc_searcher.desktop.theme.ThemeColors.
 
 from typing import List, Optional
 import re
@@ -16,10 +16,10 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QFont
 
-from core.searcher import SearchResultItem
-from utils.platform_helper import open_file_with_default_app, reveal_in_file_manager, format_file_size, format_timestamp
-from ui.theme import ThemeColors, get_active_theme
-from core.i18n import tr
+from doc_searcher.search.searcher import SearchResultItem
+from doc_searcher.platform.platform_helper import open_file_with_default_app, reveal_in_file_manager, format_file_size, format_timestamp
+from doc_searcher.desktop.theme import ThemeColors, get_active_theme
+from doc_searcher.desktop.i18n import tr
 
 
 SORT_ROLE = Qt.UserRole + 1

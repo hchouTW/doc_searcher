@@ -1,13 +1,13 @@
-# Purpose: Main entry point for Document Searcher application.
+# Purpose: Main GUI/CLI entry point for Document Searcher (console script `doc-searcher`).
 # What the code does:
 #   - Supports both GUI mode (default) and CLI mode for automation/testing.
 #   - In CLI mode: scans one directory, reconciles only that directory's index entries (other
 #     roots are never touched), runs a search, and prints results.
 #   - In GUI mode: launches PySide6 desktop interface.
 # Usage notes, dependencies, or assumptions:
-#   - GUI: python main.py
-#   - CLI: python main.py --dir /path/to/folder --search "關鍵字"
-#   - Installed console script: doc-searcher [--help | --version | --dir ... --search ...]
+#   - GUI: doc-searcher   (or python -m doc_searcher)
+#   - CLI: doc-searcher --dir /path/to/folder --search "關鍵字"
+#   - Also: doc-searcher --help | --version (neither starts the GUI)
 #   - CLI exit codes: 0 success, 1 directory unavailable (index left unchanged), 2 usage error.
 
 import sys
@@ -22,11 +22,11 @@ TYPE_FILTERS = ("all", "pdf", "word", "doc", "excel", "xls", "ppt", "powerpoint"
 
 def run_cli_mode(folder: str, query: str, type_filter: str = "all") -> int:
     """Run headless search via terminal for quick testing or scripts; returns an exit code."""
-    from core.config import AppConfig
-    from core.database import Database
-    from core.scanner import FileScanner
-    from core.indexer import DocumentIndexer
-    from core.searcher import DocumentSearcher
+    from doc_searcher.config import AppConfig
+    from doc_searcher.storage.database import Database
+    from doc_searcher.indexing.scanner import FileScanner
+    from doc_searcher.indexing.indexer import DocumentIndexer
+    from doc_searcher.search.searcher import DocumentSearcher
 
     abs_dir = os.path.abspath(folder)
     print(f"[*] 掃描目錄：{abs_dir}")
@@ -87,7 +87,7 @@ def run_cli_mode(folder: str, query: str, type_filter: str = "all") -> int:
 
 
 def main(argv=None) -> int:
-    from core.version import APP_VERSION
+    from doc_searcher.version import APP_VERSION
 
     parser = argparse.ArgumentParser(description="本機多格式文件內文關鍵字檢索系統")
     parser.add_argument("--version", action="version", version=f"DocSearcher {APP_VERSION}")
@@ -106,7 +106,7 @@ def main(argv=None) -> int:
         return run_cli_mode(args.dir, args.search, args.type)
 
     # Launch PySide6 GUI
-    from ui.app import run_app
+    from doc_searcher.desktop.app import run_app
     run_app()
     return EXIT_OK
 

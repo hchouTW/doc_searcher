@@ -1,4 +1,4 @@
-"""Protocol-level tests for mcp_server.py (skipped when the optional mcp SDK is missing)."""
+"""Protocol-level tests for doc_searcher.integrations.mcp_server (skipped when the optional mcp SDK is missing)."""
 
 import json
 import shutil
@@ -13,14 +13,12 @@ pytest.importorskip("mcp.server.mcpserver")  # mcp 2.x only
 from mcp import Client, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
+from doc_searcher.integrations import mcp_server
+from doc_searcher.config import AppConfig
+from doc_searcher.search.search_service import SearchService, document_uri
 
-import mcp_server
-from core.config import AppConfig
-from core.search_service import SearchService, document_uri
-
-ROOT = Path(__file__).parent.parent
 SAMPLE_DIR = Path(__file__).parent / "sample_files"
+SRC_DIR = Path(__file__).parent.parent / "src"
 
 
 @pytest.fixture
@@ -94,7 +92,7 @@ def test_invalid_input_is_reported_as_tool_error(indexed_service):
 def test_unindexed_document_resource_is_not_found(indexed_service):
     async def scenario(client):
         with pytest.raises(Exception, match="not in the index"):
-            await client.read_resource(document_uri(str(ROOT / "mcp_server.py")))
+            await client.read_resource(document_uri(mcp_server.__file__))
 
     run_client(scenario)
 
@@ -106,8 +104,8 @@ def test_stdio_server_round_trip_survives_stray_prints(tmp_path):
     (data_dir / "config.json").write_text("{not json", encoding="utf-8")
     params = StdioServerParameters(
         command=sys.executable,
-        args=[str(ROOT / "mcp_server.py")],
-        env={"DOC_SEARCHER_DATA_DIR": str(data_dir)},
+        args=["-m", "doc_searcher.integrations.mcp_server"],
+        env={"DOC_SEARCHER_DATA_DIR": str(data_dir), "PYTHONPATH": str(SRC_DIR)},
         cwd=str(tmp_path),
     )
 

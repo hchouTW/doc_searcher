@@ -8,18 +8,15 @@
 #   - Run via pytest.
 
 import os
-import sys
 import tempfile
 import threading
 from pathlib import Path
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from core.database import Database
-from core.scanner import FileScanner
-from core.indexer import DocumentIndexer
-from core.searcher import DocumentSearcher, SearchQueryError
+from doc_searcher.storage.database import Database
+from doc_searcher.indexing.scanner import FileScanner
+from doc_searcher.indexing.indexer import DocumentIndexer
+from doc_searcher.search.searcher import DocumentSearcher, SearchQueryError
 
 SAMPLE_DIR = Path(__file__).parent / "sample_files"
 

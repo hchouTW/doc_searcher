@@ -4,7 +4,7 @@
 #   - Adapts snippet background, border, text color, and highlight marks to dark/light theme.
 #   - Re-renders the active match with a distinct focus color and applies reliable CSS zoom.
 # Usage notes, dependencies, or assumptions:
-#   - PySide6.QtWidgets, ui.theme.ThemeColors.
+#   - PySide6.QtWidgets, doc_searcher.desktop.theme.ThemeColors.
 
 import re
 from PySide6.QtWidgets import (
@@ -12,10 +12,10 @@ from PySide6.QtWidgets import (
     QPushButton, QFrame, QApplication
 )
 from PySide6.QtCore import QTimer
-from core.searcher import SearchResultItem
-from utils.platform_helper import open_file_with_default_app, reveal_in_file_manager, format_file_size, format_timestamp
-from ui.theme import ThemeColors, get_active_theme
-from core.i18n import tr
+from doc_searcher.search.searcher import SearchResultItem
+from doc_searcher.platform.platform_helper import open_file_with_default_app, reveal_in_file_manager, format_file_size, format_timestamp
+from doc_searcher.desktop.theme import ThemeColors, get_active_theme
+from doc_searcher.desktop.i18n import tr
 
 
 class PreviewPanel(QWidget):

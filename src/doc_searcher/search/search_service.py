@@ -1,5 +1,5 @@
 # Purpose: Headless, UI-independent facade over the search and indexing core for integrations
-#          such as the MCP server (mcp_server.py).
+#          such as the MCP server (doc_searcher.integrations.mcp_server).
 # What the code does:
 #   - Runs searches across one or more format groups and returns plain, JSON-ready dicts with
 #     Markdown-bold snippets instead of the GUI's HTML <mark> markup.
@@ -21,12 +21,12 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 from urllib.parse import quote
 
-from core.config import AppConfig
-from core.database import Database
-from core.indexer import DocumentIndexer
-from core.scanner import FileScanner
-from core.searcher import DocumentSearcher, SearchQueryError, SearchResultItem
-from core.version import APP_VERSION
+from doc_searcher.config import AppConfig
+from doc_searcher.storage.database import Database
+from doc_searcher.indexing.indexer import DocumentIndexer
+from doc_searcher.indexing.scanner import FileScanner
+from doc_searcher.search.searcher import DocumentSearcher, SearchQueryError, SearchResultItem
+from doc_searcher.version import APP_VERSION
 
 FORMAT_GROUPS = ("pdf", "word", "excel", "ppt", "text")
 MAX_SEARCH_LIMIT = 100

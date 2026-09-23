@@ -4,15 +4,15 @@
 #   - Supports progress reporting plus cooperative pause, resume, and cancellation controls.
 #   - Implements incremental updates and deletion handling.
 # Usage notes, dependencies, or assumptions:
-#   - Integrates parsers, database, and utils.text_helper.
+#   - Integrates parsers, database, and doc_searcher.search.text_helper.
 
 import os
 import threading
 from typing import Callable, Optional, List, Dict
 
-from parsers import get_parser
-from utils.text_helper import tokenize_for_fts
-from core.database import Database
+from doc_searcher.parsers import get_parser
+from doc_searcher.search.text_helper import tokenize_for_fts
+from doc_searcher.storage.database import Database
 
 
 class DocumentIndexer:

@@ -1,16 +1,13 @@
 """Tests for the headless SearchService used by the MCP server."""
 
 import shutil
-import sys
 import threading
 from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from core.config import AppConfig
-from core.search_service import SearchService, document_uri
+from doc_searcher.config import AppConfig
+from doc_searcher.search.search_service import SearchService, document_uri
 
 SAMPLE_DIR = Path(__file__).parent / "sample_files"
 

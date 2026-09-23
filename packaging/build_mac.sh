@@ -23,7 +23,7 @@ echo "[*] Installing dependencies..."
 venv/bin/python -m pip install --quiet --upgrade pip
 venv/bin/python -m pip install --quiet -r requirements.txt pyinstaller Pillow
 
-if [[ ! -f assets/app_icon.png ]]; then
+if [[ ! -f src/doc_searcher/assets/app_icon.png ]]; then
     echo "[*] Generating icon..."
     venv/bin/python scripts/generate_icon.py
 fi

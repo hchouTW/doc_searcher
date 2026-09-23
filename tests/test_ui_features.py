@@ -19,15 +19,15 @@ from PySide6.QtWidgets import QApplication, QDialog, QDialogButtonBox, QFileDial
 
 import pytest
 
-from core.config import AppConfig
-from core.i18n import tr
-from core.searcher import SearchResultItem, SegmentMatch
-from ui.main_window import MainWindow, ContentWidthComboBox
-from ui.preview_panel import PreviewPanel
-from ui.result_table import ResultTable
-from ui.search_input import SyntaxSearchInput
-from ui.theme import DARK_PALETTE, LIGHT_PALETTE
-from core.version import APP_VERSION
+from doc_searcher.config import AppConfig
+from doc_searcher.desktop.i18n import tr
+from doc_searcher.search.searcher import SearchResultItem, SegmentMatch
+from doc_searcher.desktop.main_window import MainWindow, ContentWidthComboBox
+from doc_searcher.desktop.preview_panel import PreviewPanel
+from doc_searcher.desktop.result_table import ResultTable
+from doc_searcher.desktop.search_input import SyntaxSearchInput
+from doc_searcher.desktop.theme import DARK_PALETTE, LIGHT_PALETTE
+from doc_searcher.version import APP_VERSION
 
 
 def _app():
@@ -570,7 +570,7 @@ def test_status_bar_shows_version_and_no_longer_duplicates_top_bar(tmp_path):
     assert idle_text.startswith(f"v{APP_VERSION}")
     assert "6,429" in idle_text
     # The old duplicate "index up to date | N documents" keys must be retired.
-    from core import i18n
+    from doc_searcher.desktop import i18n
     assert "index_current" not in i18n.TRANSLATIONS["zh-TW"]
     assert "status_ready" not in i18n.TRANSLATIONS["zh-TW"]
     window.close()

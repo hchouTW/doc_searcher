@@ -16,13 +16,15 @@ from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
 # SPECPATH is injected by PyInstaller; this spec lives in <root>/packaging.
 ROOT = os.path.dirname(SPECPATH)
-sys.path.insert(0, ROOT)  # so collect_submodules can import the project packages
+SRC = os.path.join(ROOT, 'src')
+PACKAGE = os.path.join(SRC, 'doc_searcher')
+sys.path.insert(0, SRC)  # build-time only: lets collect_submodules import doc_searcher
 
-with open(os.path.join(ROOT, 'core', 'version.py'), encoding='utf-8') as f:
+with open(os.path.join(PACKAGE, 'version.py'), encoding='utf-8') as f:
     APP_VERSION = re.search(r'APP_VERSION\s*=\s*"([^"]+)"', f.read()).group(1)
 
 datas = [
-    (os.path.join(ROOT, 'assets'), 'assets'),
+    (os.path.join(PACKAGE, 'assets'), 'assets'),
 ]
 datas += collect_data_files('jieba')
 
@@ -36,14 +38,14 @@ hiddenimports = [
     'jieba',
     'sqlite3',
 ]
-hiddenimports += collect_submodules('core')
-hiddenimports += collect_submodules('parsers')
-hiddenimports += collect_submodules('ui')
-hiddenimports += collect_submodules('utils')
+# The MCP server is a separate entry point and is not bundled into the desktop app.
+hiddenimports += collect_submodules(
+    'doc_searcher', filter=lambda name: not name.startswith('doc_searcher.integrations')
+)
 
 a = Analysis(
-    [os.path.join(ROOT, 'main.py')],
-    pathex=[ROOT],
+    [os.path.join(PACKAGE, '__main__.py')],
+    pathex=[SRC],
     binaries=[],
     datas=datas,
     hiddenimports=hiddenimports,
@@ -85,7 +87,7 @@ coll = COLLECT(
 app = BUNDLE(
     coll,
     name='DocSearcher.app',
-    icon=os.path.join(ROOT, 'assets', 'app_icon.png'),
+    icon=os.path.join(PACKAGE, 'assets', 'app_icon.png'),
     bundle_identifier='com.antigravity.docsearcher',
     version=APP_VERSION,
     info_plist={

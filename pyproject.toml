@@ -40,15 +40,19 @@ mcp = ["mcp>=2.2,<3"]
 dev = ["pytest>=8.0.0", "build>=1.0"]
 
 [project.scripts]
-doc-searcher = "main:main"
-doc-searcher-mcp = "mcp_server:main"
+doc-searcher = "doc_searcher.cli:main"
+doc-searcher-mcp = "doc_searcher.integrations.mcp_server:main"
 
-[tool.setuptools]
-py-modules = ["main", "mcp_server"]
-packages = ["core", "parsers", "ui", "utils"]
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+doc_searcher = ["assets/*"]
 
 [tool.setuptools.dynamic]
-version = { attr = "core.version.APP_VERSION" }
+version = { attr = "doc_searcher.version.APP_VERSION" }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Lets a plain checkout run the suite; an installed copy of the package also works.
+pythonpath = ["src"]

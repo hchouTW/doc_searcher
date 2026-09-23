@@ -8,7 +8,7 @@
 #   - Executes FTS queries against tokenized and raw content with BM25 ranking.
 #   - Generates snippet contexts with highlighted HTML <mark> tags and location indicators.
 # Usage notes, dependencies, or assumptions:
-#   - Uses SQLite FTS5 functions and utils.text_helper.
+#   - Uses SQLite FTS5 functions and doc_searcher.search.text_helper.
 
 import os
 import html
@@ -17,9 +17,9 @@ from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional
 import jieba
 
-from core.database import Database
-from core.scanner import is_absolute_pattern
-from utils.text_helper import (
+from doc_searcher.storage.database import Database
+from doc_searcher.indexing.scanner import is_absolute_pattern
+from doc_searcher.search.text_helper import (
     extract_keywords_from_query, generate_highlighted_snippets,
     generate_regex_highlighted_snippets,
 )

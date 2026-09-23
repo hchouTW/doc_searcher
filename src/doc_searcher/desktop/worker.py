@@ -9,10 +9,10 @@ import time
 from typing import List, Dict, Any
 from PySide6.QtCore import QThread, Signal
 
-from core.database import Database
-from core.scanner import FileScanner
-from core.indexer import DocumentIndexer
-from core.searcher import DocumentSearcher
+from doc_searcher.storage.database import Database
+from doc_searcher.indexing.scanner import FileScanner
+from doc_searcher.indexing.indexer import DocumentIndexer
+from doc_searcher.search.searcher import DocumentSearcher
 
 
 class IndexWorker(QThread):

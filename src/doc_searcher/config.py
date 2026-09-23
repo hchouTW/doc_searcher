@@ -46,8 +46,8 @@ def get_default_data_dir() -> Path:
         test_file.unlink()
         return home_candidate
     except (PermissionError, OSError):
-        # Fallback to project-local data directory
-        local_candidate = Path(__file__).resolve().parent.parent / ".data"
+        # Fallback to the source checkout's .data directory (src/doc_searcher/config.py -> root)
+        local_candidate = Path(__file__).resolve().parents[2] / ".data"
         local_candidate.mkdir(parents=True, exist_ok=True)
         return local_candidate
 

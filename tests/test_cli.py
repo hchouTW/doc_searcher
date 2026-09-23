@@ -1,15 +1,10 @@
-"""Regression tests for the headless CLI (main.py --dir/--search)."""
-
-import sys
-from pathlib import Path
+"""Regression tests for the headless CLI (doc-searcher --dir/--search)."""
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-import main
-from core.config import AppConfig
-from core.database import Database
+from doc_searcher import cli as main
+from doc_searcher.config import AppConfig
+from doc_searcher.storage.database import Database
 
 
 @pytest.fixture

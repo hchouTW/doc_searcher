@@ -58,40 +58,51 @@
 
 ```
 doc_searcher/
-├── core/
+├── src/doc_searcher/
+│   ├── __main__.py           # python -m doc_searcher 進入點
+│   ├── cli.py                # GUI 與 CLI 進入點（doc-searcher 指令）
+│   ├── version.py            # 應用程式版本號與更新紀錄（唯一版本來源）
 │   ├── config.py             # 設定檔持久化 (記錄已選目錄、UI 偏好)
-│   ├── i18n.py               # 繁中／英文執行期語系資源
-│   ├── database.py           # SQLite3 連線與 FTS5 虛擬全文資料表
-│   ├── indexer.py            # 文件解析調度、jieba 分詞與批次索引寫入
-│   ├── scanner.py            # 資料夾遞迴掃描、過濾暫存檔 (~$*)、增量比對
-│   ├── searcher.py           # 查詢語法剖析、FTS5 檢索與 Snippet 摘要高亮
-│   ├── search_service.py     # 不依賴介面的搜尋／索引服務（供 MCP 伺服器使用）
-│   └── version.py            # 應用程式版本號與更新紀錄（唯一版本來源）
-├── parsers/
-│   ├── base.py               # DocumentParser 抽象介面與 PageSegment 資料結構
-│   ├── pdf_parser.py         # PyMuPDF PDF 提取器
-│   ├── docx_parser.py        # python-docx 提取器
-│   ├── doc_parser.py         # 舊版 Word 97-2003 (.doc) 純 Python OLE 提取器
-│   ├── pptx_parser.py        # python-pptx 投影片與備忘錄提取器
-│   ├── ppt_parser.py         # 舊版 PPT 97-2003 (.ppt) OLE 提取器
-│   ├── xlsx_parser.py        # openpyxl 唯讀工作表文字提取器
-│   ├── xls_parser.py         # 舊版 Excel 97-2003 (.xls) xlrd 提取器
-│   └── text_parser.py        # 純文字與 Markdown 編碼自適應提取器
-├── ui/
-│   ├── app.py                # PySide6 Application 初始化與高解析度縮放設定
-│   ├── main_window.py        # 主視窗（目錄選擇、搜尋列、過濾標籤、分割檢視）
-│   ├── search_input.py       # 即時搜尋語法著色輸入框
-│   ├── result_table.py       # 搜尋結果表格（自定義格式圖示、快捷鍵操作）
-│   ├── preview_panel.py      # 右側內文摘要預覽面板 (HTML 標記高亮)
-│   ├── theme.py              # 深淺色主題與依作業系統調整字型、圓角
-│   └── worker.py             # QThread 非同步背景任務 (索引與搜尋不凍結視窗)
-├── utils/
-│   ├── os_detector.py        # 作業系統版本與硬體架構偵測
-│   ├── platform_helper.py    # 跨平台開檔與 Finder/檔案總管呼叫
-│   ├── resource_path.py      # 打包後 (sys._MEIPASS) 與原始碼執行皆可用的資源路徑解析
-│   └── text_helper.py        # jieba 分詞預處理、HTML 標籤過濾與 Snippet 生成
+│   ├── assets/               # 應用程式圖示（套件資料）
+│   ├── indexing/
+│   │   ├── scanner.py        # 資料夾遞迴掃描、過濾暫存檔 (~$*)、增量比對
+│   │   └── indexer.py        # 文件解析調度、jieba 分詞與批次索引寫入
+│   ├── search/
+│   │   ├── searcher.py       # 查詢語法剖析、FTS5 檢索與 Snippet 摘要高亮
+│   │   ├── search_service.py # 不依賴介面的搜尋／索引服務（供 MCP 伺服器使用）
+│   │   └── text_helper.py    # jieba 分詞預處理、HTML 標籤過濾與 Snippet 生成
+│   ├── storage/
+│   │   └── database.py       # SQLite3 連線與 FTS5 虛擬全文資料表
+│   ├── parsers/
+│   │   ├── base.py           # DocumentParser 抽象介面與 PageSegment 資料結構
+│   │   ├── pdf_parser.py     # PyMuPDF PDF 提取器
+│   │   ├── docx_parser.py    # python-docx 提取器
+│   │   ├── doc_parser.py     # 舊版 Word 97-2003 (.doc) 純 Python OLE 提取器
+│   │   ├── pptx_parser.py    # python-pptx 投影片與備忘錄提取器
+│   │   ├── ppt_parser.py     # 舊版 PPT 97-2003 (.ppt) OLE 提取器
+│   │   ├── xlsx_parser.py    # openpyxl 唯讀工作表文字提取器
+│   │   ├── xls_parser.py     # 舊版 Excel 97-2003 (.xls) xlrd 提取器
+│   │   └── text_parser.py    # 純文字與 Markdown 編碼自適應提取器
+│   ├── desktop/
+│   │   ├── app.py            # PySide6 Application 初始化與高解析度縮放設定
+│   │   ├── main_window.py    # 主視窗（目錄選擇、搜尋列、過濾標籤、分割檢視）
+│   │   ├── i18n.py           # 繁中／英文執行期語系資源
+│   │   ├── search_input.py   # 即時搜尋語法著色輸入框
+│   │   ├── result_table.py   # 搜尋結果表格（自定義格式圖示、快捷鍵操作）
+│   │   ├── preview_panel.py  # 右側內文摘要預覽面板 (HTML 標記高亮)
+│   │   ├── theme.py          # 深淺色主題與依作業系統調整字型、圓角
+│   │   └── worker.py         # QThread 非同步背景任務 (索引與搜尋不凍結視窗)
+│   ├── integrations/
+│   │   └── mcp_server.py     # MCP 伺服器（stdio），供 Claude Code／Claude Desktop 使用
+│   └── platform/
+│       ├── os_detector.py    # 作業系統版本與硬體架構偵測
+│       ├── platform_helper.py # 跨平台開檔與 Finder/檔案總管呼叫
+│       └── resource_path.py  # 打包後 (sys._MEIPASS) 與原始碼執行皆可用的資源路徑解析
 ├── tests/
 │   ├── sample_generator.py   # 自動產生各格式測試檔案之腳本
+│   ├── fixtures/             # 合成的舊版資料庫／設定檔（遷移測試用）
+│   ├── test_cli.py           # CLI 結束代碼與跨目錄索引保護
+│   ├── test_imports.py       # 匯入邊界（輕量模組不載入 Qt／jieba）
 │   ├── test_parsers.py       # 各格式解析器單元測試
 │   ├── test_indexer.py       # 增量索引與 SQLite FTS5 測試
 │   ├── test_searcher.py      # 查詢語法、格式過濾與高亮測試
@@ -102,9 +113,6 @@ doc_searcher/
 │   └── sample_files/         # 各格式測試樣本文件
 ├── scripts/
 │   └── generate_icon.py      # 產生應用程式圖示 (.ico / .png)
-├── assets/                   # 應用程式圖示
-├── main.py                   # 程式進入點 (支援 GUI 與 CLI 兩種模式)
-├── mcp_server.py             # MCP 伺服器（stdio），供 Claude Code／Claude Desktop 使用
 ├── install.bat               # Windows 一鍵安裝（Python、VC++ 運行庫、venv、桌面捷徑）
 ├── run_windows.bat           # Windows 啟動器（未安裝時自動呼叫 install.bat）
 ├── packaging/
@@ -113,7 +121,7 @@ doc_searcher/
 │   ├── doc_searcher_mac.spec # macOS .app 的 PyInstaller 設定
 │   ├── doc_searcher_win.spec # Windows 單一檔案 .exe 的 PyInstaller 設定
 │   └── installer_inno.iss    # Windows 安裝程式 (Inno Setup 6) 腳本
-├── docs/screenshots/         # README 介面截圖
+├── docs/                     # 基準紀錄 (baseline.md) 與 README 介面截圖
 ├── pyproject.toml            # 專案中繼資料、依賴（含 dev／mcp 選項）與指令進入點
 ├── requirements.txt          # 相容用：建置腳本仍使用的執行期依賴清單
 ├── requirements-dev.txt      # 相容用：開發與測試用依賴 (pytest)
@@ -145,16 +153,18 @@ pip install .
 pip install -e '.[dev,mcp]'
 ```
 
+> **自 1.2.0 原始碼升級**：程式碼已移至 `src/doc_searcher/`，`main.py` 與 `mcp_server.py` 已移除。請在既有虛擬環境執行一次 `pip install -e .`（Windows 可重新執行 `install.bat`，會一併更新桌面捷徑），並將 MCP 用戶端設定改為 `venv/bin/doc-searcher-mcp`。設定檔與索引位置不變。
+
 > **Python 支援政策**：3.10（mcp、PyMuPDF、PySide6 的最低需求）至 3.14（PySide6 目前上限）。CI 會驗證此範圍。安裝後可使用 `doc-searcher`（GUI／CLI，`--version`、`--help` 不會開啟視窗）與 `doc-searcher-mcp` 指令。
 
 > Windows 也可直接雙擊 `install.bat`：自動安裝 Python（若尚未安裝）、Visual C++ 運行庫、虛擬環境與套件，並建立桌面捷徑；之後以 `run_windows.bat` 啟動。
 
 ### 2. 啟動桌面圖形介面 (GUI)
 
-直接執行 `main.py` 即可啟動桌面視窗：
+安裝後執行 `doc-searcher`（或 `python -m doc_searcher`）即可啟動桌面視窗：
 
 ```bash
-python main.py
+doc-searcher
 ```
 
 - 展開上方 **「設定」**，點選 **「➕ 選擇資料夾...」** 指定要檢索的文件目錄（可多選）。
@@ -170,10 +180,10 @@ python main.py
 
 ```bash
 # 基本檢索
-python main.py --dir /path/to/documents --search "專案預算"
+doc-searcher --dir /path/to/documents --search "專案預算"
 
 # 依格式篩選 (支援: pdf, word, excel, ppt, text)
-python main.py --dir /path/to/documents --search "專案預算" --type excel
+doc-searcher --dir /path/to/documents --search "專案預算" --type excel
 ```
 
 CLI 只會更新 `--dir` 目錄內的索引，其他目錄的索引不受影響。`--dir` 與 `--search` 必須同時指定。結束代碼：`0` 成功、`1` 目錄無法存取（既有索引保留不變）、`2` 參數錯誤。
@@ -191,8 +201,8 @@ CLI 只會更新 `--dir` 目錄內的索引，其他目錄的索引不受影響�
 - macOS 使用 `packaging/doc_searcher_mac.spec`（onedir `.app`，PyInstaller 6 已不建議在 `.app` 內使用 onefile）；Windows 使用 `packaging/doc_searcher_win.spec`（onefile、無主控台視窗）。
 - 若需 Windows 安裝程式，先建置 `DocSearcher.exe`，再以 Inno Setup 6 編譯 `packaging/installer_inno.iss`，輸出至 `setup_output/`。
 - GitHub Actions：`tests.yml` 於 Linux／Windows／macOS 執行 pytest；`build_windows.yml` 與 `build_macos.yml`（Apple Silicon 與 Intel）會自動上傳建置成品。
-- 發布版本時，先確認 `core/version.py` 的 `APP_VERSION`，再推送相同版本的 `vX.Y.Z` 標籤，或在 GitHub 發布該標籤的 Release。`release.yml` 會在 macOS Apple Silicon、macOS Intel 與 Windows 原生 runner 上測試並建置，全部成功後將兩個 `.app.zip` 與一個 `.exe` 上傳至 GitHub Release。標籤與程式版本不一致時會停止發布。
-- 版本號只需修改 `core/version.py` 的 `APP_VERSION`：macOS `.app`、Windows `.exe` 檔案資訊與 Inno Setup 安裝程式皆自動沿用。
+- 發布版本時，先確認 `src/doc_searcher/version.py` 的 `APP_VERSION`，再推送相同版本的 `vX.Y.Z` 標籤，或在 GitHub 發布該標籤的 Release。`release.yml` 會在 macOS Apple Silicon、macOS Intel 與 Windows 原生 runner 上測試並建置，全部成功後將兩個 `.app.zip` 與一個 `.exe` 上傳至 GitHub Release。標籤與程式版本不一致時會停止發布。
+- 版本號只需修改 `src/doc_searcher/version.py` 的 `APP_VERSION`：macOS `.app`、Windows `.exe` 檔案資訊與 Inno Setup 安裝程式皆自動沿用。
 - 程式內讀取打包資源請使用 `utils.resource_path.resource_path("assets/...")`，它會在打包後自動改用 `sys._MEIPASS`。
 
 #### macOS Gatekeeper（未簽署版本）
@@ -209,7 +219,7 @@ Windows 若出現 SmartScreen 提示，請點選「其他資訊」→「仍要�
 
 ## 🤖 MCP 伺服器（Claude Code／Claude Desktop 整合）
 
-`mcp_server.py` 以 [Model Context Protocol](https://modelcontextprotocol.io) 將本機索引提供給 AI 用戶端，與桌面程式共用 `~/.doc_searcher` 內的索引與設定（可用 `DOC_SEARCHER_DATA_DIR` 覆寫）。請先在桌面程式加入檢索資料夾並完成索引。
+`doc-searcher-mcp`（`src/doc_searcher/integrations/mcp_server.py`）以 [Model Context Protocol](https://modelcontextprotocol.io) 將本機索引提供給 AI 用戶端，與桌面程式共用 `~/.doc_searcher` 內的索引與設定（可用 `DOC_SEARCHER_DATA_DIR` 覆寫）。請先在桌面程式加入檢索資料夾並完成索引。
 
 | 類型 | 名稱 | 說明 |
 | --- | --- | --- |
@@ -227,10 +237,10 @@ pip install '.[mcp]'
 ### 2. 加入 Claude Code
 
 ```bash
-claude mcp add docsearcher -- /絕對路徑/doc_searcher/venv/bin/python /絕對路徑/doc_searcher/mcp_server.py
+claude mcp add docsearcher -- /絕對路徑/doc_searcher/venv/bin/doc-searcher-mcp
 ```
 
-Windows 請改用 `venv\Scripts\python.exe`。加入後在 Claude Code 輸入 `/mcp` 確認連線狀態。
+Windows 請改用 `venv\Scripts\doc-searcher-mcp.exe`。加入後在 Claude Code 輸入 `/mcp` 確認連線狀態。
 
 ### 3. 加入 Claude Desktop
 
@@ -240,24 +250,23 @@ Windows 請改用 `venv\Scripts\python.exe`。加入後在 Claude Code 輸入 `/
 {
   "mcpServers": {
     "docsearcher": {
-      "command": "/絕對路徑/doc_searcher/venv/bin/python",
-      "args": ["/絕對路徑/doc_searcher/mcp_server.py"]
+      "command": "/絕對路徑/doc_searcher/venv/bin/doc-searcher-mcp"
     }
   }
 }
 ```
 
-Windows 範例：`"command": "C:\\path\\to\\doc_searcher\\venv\\Scripts\\python.exe"`、`"args": ["C:\\path\\to\\doc_searcher\\mcp_server.py"]`。
+Windows 範例：`"command": "C:\\path\\to\\doc_searcher\\venv\\Scripts\\doc-searcher-mcp.exe"`。
 
 ### 4. 以 MCP Inspector 測試
 
 ```bash
 # 網頁介面：列出工具、呼叫工具、讀取資源
-npx @modelcontextprotocol/inspector venv/bin/python mcp_server.py
+npx @modelcontextprotocol/inspector venv/bin/doc-searcher-mcp
 
 # 命令列：伺服器指令需放在選項之前
-npx @modelcontextprotocol/inspector --cli venv/bin/python mcp_server.py --method tools/list
-npx @modelcontextprotocol/inspector --cli venv/bin/python mcp_server.py \
+npx @modelcontextprotocol/inspector --cli venv/bin/doc-searcher-mcp --method tools/list
+npx @modelcontextprotocol/inspector --cli venv/bin/doc-searcher-mcp \
   --method tools/call --tool-name search_documents --tool-arg 'query=預算' 'limit=5'
 ```
 

@@ -2,7 +2,7 @@
 # Purpose: PyInstaller specification for the portable single-file DocSearcher.exe (Windows 10/11).
 # What the code does:
 #   - Builds a onefile, windowed .exe with assets, jieba dictionaries, and all project packages.
-#   - Embeds a Windows version resource from core/version.py; packaging/installer_inno.iss
+#   - Embeds a Windows version resource from src/doc_searcher/version.py; packaging/installer_inno.iss
 #     reads the installer version back from it.
 # Usage notes, dependencies, or assumptions:
 #   - Run via packaging/build_win.ps1, or from the project root:
@@ -19,9 +19,11 @@ from PyInstaller.utils.win32.versioninfo import (
 
 # SPECPATH is injected by PyInstaller; this spec lives in <root>/packaging.
 ROOT = os.path.dirname(SPECPATH)
-sys.path.insert(0, ROOT)  # so collect_submodules can import the project packages
+SRC = os.path.join(ROOT, 'src')
+PACKAGE = os.path.join(SRC, 'doc_searcher')
+sys.path.insert(0, SRC)  # build-time only: lets collect_submodules import doc_searcher
 
-with open(os.path.join(ROOT, 'core', 'version.py'), encoding='utf-8') as f:
+with open(os.path.join(PACKAGE, 'version.py'), encoding='utf-8') as f:
     APP_VERSION = re.search(r'APP_VERSION\s*=\s*"([^"]+)"', f.read()).group(1)
 
 version_tuple = tuple(int(part) for part in APP_VERSION.split('.'))
@@ -45,7 +47,7 @@ version_info = VSVersionInfo(
 
 # Collect all jieba dictionaries and assets
 datas = [
-    (os.path.join(ROOT, 'assets'), 'assets'),
+    (os.path.join(PACKAGE, 'assets'), 'assets'),
 ]
 datas += collect_data_files('jieba')
 
@@ -62,14 +64,14 @@ hiddenimports = [
     'jieba',
     'sqlite3',
 ]
-hiddenimports += collect_submodules('core')
-hiddenimports += collect_submodules('parsers')
-hiddenimports += collect_submodules('ui')
-hiddenimports += collect_submodules('utils')
+# The MCP server is a separate entry point and is not bundled into the desktop app.
+hiddenimports += collect_submodules(
+    'doc_searcher', filter=lambda name: not name.startswith('doc_searcher.integrations')
+)
 
 a = Analysis(
-    [os.path.join(ROOT, 'main.py')],
-    pathex=[ROOT],
+    [os.path.join(PACKAGE, '__main__.py')],
+    pathex=[SRC],
     binaries=[],
     datas=datas,
     hiddenimports=hiddenimports,
@@ -101,6 +103,6 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=[os.path.join(ROOT, 'assets', 'app_icon.ico')],
+    icon=[os.path.join(PACKAGE, 'assets', 'app_icon.ico')],
     version=version_info,
 )
