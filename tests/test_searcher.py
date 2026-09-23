@@ -292,3 +292,24 @@ def test_advanced_search_modes_paths_and_creation_time(tmp_path):
     with pytest.raises(SearchQueryError, match="Regex"):
         searcher.search("[", regex=True)
     db.close()
+
+
+def test_include_path_filter_matches_windows_separators(monkeypatch):
+    """On Windows os.sep is the LIKE escape character; the subfolder pattern must escape it."""
+    import sqlite3
+
+    monkeypatch.setattr(os, "sep", "\\")
+    monkeypatch.setattr(os.path, "abspath", lambda path: path)
+    clause, params = DocumentSearcher._build_filter_clause(
+        "all", None, None, None, None, include_paths=[r"C:\Docs\team"]
+    )
+    conn = sqlite3.connect(":memory:")
+
+    def included(path):
+        sql = "SELECT 1 FROM (SELECT ? AS path) d WHERE 1 " + clause
+        return conn.execute(sql, [path, *params]).fetchone() is not None
+
+    assert included(r"C:\Docs\team\cat.txt")
+    assert included(r"C:\Docs\team\sub\dog.txt")
+    assert not included(r"C:\Docs\teammate\cat.txt")
+    assert not included(r"C:\Docs\other\cat.txt")
