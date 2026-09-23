@@ -1,0 +1,41 @@
+name: Build Windows 11 Executable
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+    - name: Check out repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python 3.12
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pyinstaller Pillow
+
+    - name: Generate Windows 11 App Icons
+      run: |
+        python scripts/generate_icon.py
+
+    - name: Build Windows Executable with PyInstaller
+      run: |
+        pyinstaller doc_searcher.spec --clean -y
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: DocSearcher-Win11-x64
+        path: dist/DocSearcher.exe

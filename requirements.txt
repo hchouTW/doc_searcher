@@ -1,0 +1,19 @@
+# Document Searcher (本機多格式文件內文關鍵字檢索系統)
+# 適用環境：Python 3.8+ (Windows, macOS, Linux)
+
+# 核心介面 (跨平台純 Python GUI)
+PySide6>=6.6.0
+
+# 文件內容提取函式庫 (無 OCR，輕量快速)
+pymupdf>=1.24.0
+python-docx>=1.1.0
+python-pptx>=1.0.0
+openpyxl>=3.1.0
+xlrd>=2.0.1
+olefile>=0.46
+
+# 中文/英文混合分詞
+jieba>=0.42.1
+
+# 單元與整合測試
+pytest>=8.0.0

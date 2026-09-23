@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+venv/
+.venv/
+
+# Build output
+build/
+dist/
+
+# Local search index
+.data/index.db
+
+# OS
+.DS_Store
