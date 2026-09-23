@@ -21,7 +21,9 @@ from mcp.server.mcpserver.exceptions import ResourceNotFoundError, ToolError
 from mcp.types import ToolAnnotations
 from pydantic import Field
 
+from doc_searcher.config import ConfigError
 from doc_searcher.search.search_service import DOCUMENT_URI_PREFIX, MAX_SEARCH_LIMIT, SearchService
+from doc_searcher.storage.errors import StorageError
 from doc_searcher.version import APP_VERSION
 
 FormatGroup = Literal["pdf", "word", "excel", "ppt", "text"]
@@ -61,7 +63,10 @@ def get_service() -> SearchService:
     """Create the service lazily so importing this module has no side effects."""
     global _service
     if _service is None:
-        _service = SearchService()
+        try:
+            _service = SearchService()
+        except (ConfigError, StorageError) as exc:
+            raise ToolError(str(exc)) from exc
     return _service
 
 

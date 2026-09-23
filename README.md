@@ -172,7 +172,7 @@ doc-searcher
 - 在搜尋框輸入關鍵字（例如 `預算`、`"保密協定"`、`專案 AND 2026`），即刻於左側瀏覽結果，右側查看高亮內文！
 - 點選「進階篩選」可設定日期、大小、包含子資料夾、排除規則與匹配模式。排除規則變更後會自動重新掃描。
 
-> 設定檔 `config.json` 與索引 `index.db` 預設存放於 `~/.doc_searcher`（可用 `DOC_SEARCHER_DATA_DIR` 覆寫）；家目錄無法寫入時改用作業系統的使用者資料夾。設定檔以原子方式寫入，格式錯誤的欄位會個別還原為預設值，無法解析的檔案會先備份為 `config.json.corrupt-<時間>`。詳見 [ADR 0001](docs/adr/0001-data-directory.md)。
+> 設定檔 `config.json` 與索引 `index.db` 預設存放於 `~/.doc_searcher`（可用 `DOC_SEARCHER_DATA_DIR` 覆寫）；家目錄無法寫入時改用作業系統的使用者資料夾。設定檔以原子方式寫入，格式錯誤的欄位會個別還原為預設值，無法解析的檔案會先備份為 `config.json.corrupt-<時間>`。詳見 [ADR 0001](docs/adr/0001-data-directory.md)。索引資料庫具版本號（`PRAGMA user_version`）：升級前會先備份為 `index.db.pre-migration.bak`，升級失敗會完整回復；遇到被鎖定、唯讀、損毀或較新版本建立的索引時，程式會顯示原因與處理方式，不會自動刪除或重建。
 
 > 建立日期優先使用作業系統提供的檔案出生時間；若平台未提供，使用檔案狀態變更時間。舊索引會在資料庫升級時回填此欄位。
 

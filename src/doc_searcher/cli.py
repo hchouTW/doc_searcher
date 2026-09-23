@@ -9,7 +9,7 @@
 #   - CLI: doc-searcher --dir /path/to/folder --search "關鍵字"
 #   - Also: doc-searcher --help | --version (neither starts the GUI)
 #   - CLI exit codes: 0 success, 1 directory unavailable (index left unchanged), 2 usage error,
-#     3 no writable data folder (see docs/adr/0001-data-directory.md).
+#     3 data folder or index.db unusable (no writable folder, locked/corrupt/too-new index).
 
 import sys
 import os
@@ -18,7 +18,7 @@ import re
 
 EXIT_OK = 0
 EXIT_UNAVAILABLE = 1
-EXIT_CONFIG = 3
+EXIT_DATA = 3
 TYPE_FILTERS = ("all", "pdf", "word", "doc", "excel", "xls", "ppt", "powerpoint", "text")
 
 
@@ -26,6 +26,7 @@ def run_cli_mode(folder: str, query: str, type_filter: str = "all") -> int:
     """Run headless search via terminal for quick testing or scripts; returns an exit code."""
     from doc_searcher.config import AppConfig, ConfigError
     from doc_searcher.storage.database import Database
+    from doc_searcher.storage.errors import StorageError
     from doc_searcher.indexing.scanner import FileScanner
     from doc_searcher.indexing.indexer import DocumentIndexer
     from doc_searcher.search.searcher import DocumentSearcher
@@ -37,7 +38,7 @@ def run_cli_mode(folder: str, query: str, type_filter: str = "all") -> int:
         config = AppConfig()
     except ConfigError as exc:
         print(f"[!] {exc}", file=sys.stderr)
-        return EXIT_CONFIG
+        return EXIT_DATA
     scanner = FileScanner()
 
     available_directories, _ = scanner.partition_directories([abs_dir])
@@ -45,7 +46,11 @@ def run_cli_mode(folder: str, query: str, type_filter: str = "all") -> int:
         print(f"[!] 檢索目錄目前無法存取：{abs_dir}；既有索引已保留，未進行變更。", file=sys.stderr)
         return EXIT_UNAVAILABLE
 
-    db = Database(config.db_path)
+    try:
+        db = Database(config.db_path)
+    except StorageError as exc:
+        print(f"[!] {exc}", file=sys.stderr)
+        return EXIT_DATA
     try:
         indexer = DocumentIndexer(db)
         scan_errors = []

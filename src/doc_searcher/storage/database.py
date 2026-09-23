@@ -1,9 +1,9 @@
 # Purpose: SQLite database connection and FTS5 full-text search schema management.
 # What the code does:
-#   - Initializes and migrates document metadata (including creation time), segments, and FTS.
+#   - Opens index.db, checks FTS5, and applies versioned migrations (storage.migrations).
 #   - Manages per-thread connections, transactions, index updates, deletions, and querying.
 # Usage notes, dependencies, or assumptions:
-#   - Requires sqlite3 with FTS5 enabled (standard in Python 3.8+).
+#   - Requires sqlite3 with FTS5; environmental failures raise storage.errors.StorageError.
 #   - Enables foreign keys and WAL mode for high concurrency.
 
 import os
@@ -11,6 +11,9 @@ import sqlite3
 import threading
 import time
 from typing import Optional, Dict, Any, List, Tuple
+
+from doc_searcher.storage.errors import classify
+from doc_searcher.storage.migrations import migrate
 
 
 class Database:
@@ -20,6 +23,7 @@ class Database:
         self.db_path = os.path.abspath(db_path)
         os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
         self._thread_state = threading.local()
+        self.applied_migrations: List[int] = []
         self.init_db()
 
     def get_connection(self) -> sqlite3.Connection:
@@ -44,64 +48,22 @@ class Database:
             self._thread_state.connection = None
 
     def init_db(self):
-        """Initialize database tables and FTS5 virtual table."""
-        conn = self.get_connection()
-        with conn:
-            # 1. Documents metadata table
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS documents (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    path TEXT UNIQUE NOT NULL,
-                    filename TEXT NOT NULL,
-                    file_type TEXT NOT NULL,
-                    file_size INTEGER NOT NULL,
-                    mtime REAL NOT NULL,
-                    ctime REAL NOT NULL DEFAULT 0,
-                    indexed_at REAL NOT NULL,
-                    total_segments INTEGER DEFAULT 0,
-                    error TEXT
-                );
-            """)
+        """Open the database, verify FTS5, and apply pending schema migrations.
 
-            columns = {row[1] for row in conn.execute("PRAGMA table_info(documents)")}
-            if "ctime" not in columns:
-                conn.execute("ALTER TABLE documents ADD COLUMN ctime REAL NOT NULL DEFAULT 0")
-                for row in conn.execute("SELECT id, path, mtime FROM documents").fetchall():
-                    try:
-                        stat = os.stat(row["path"])
-                        creation_time = getattr(stat, "st_birthtime", stat.st_ctime)
-                    except OSError:
-                        creation_time = row["mtime"]
-                    conn.execute(
-                        "UPDATE documents SET ctime = ? WHERE id = ?",
-                        (creation_time, row["id"]),
-                    )
-
-            # 2. Document segments table
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS doc_segments (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    doc_id INTEGER NOT NULL,
-                    segment_id TEXT NOT NULL,
-                    segment_type TEXT NOT NULL,
-                    content TEXT NOT NULL,
-                    FOREIGN KEY(doc_id) REFERENCES documents(id) ON DELETE CASCADE
-                );
-            """)
-
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_doc_segments_doc_id ON doc_segments(doc_id);")
-
-            # 3. FTS5 Virtual Table for full-text search
-            conn.execute("""
-                CREATE VIRTUAL TABLE IF NOT EXISTS doc_fts USING fts5(
-                    doc_id UNINDEXED,
-                    segment_id UNINDEXED,
-                    segment_type UNINDEXED,
-                    content,
-                    tokenized_content,
-                    tokenize='unicode61'
-                );
-            """)
+        Raises a StorageError subclass for locked, read-only, corrupt, too-new, or
+        FTS5-less databases; programming errors propagate unchanged.
+        """
+        try:
+            conn = self.get_connection()
+            conn.execute("CREATE VIRTUAL TABLE temp._fts5_probe USING fts5(x)")
+            conn.execute("DROP TABLE temp._fts5_probe")
+            self.applied_migrations = migrate(conn, self.db_path)
+        except Exception as exc:
+            self.close()
+            storage_error = classify(exc, self.db_path)
+            if storage_error is None or storage_error is exc:
+                raise
+            raise storage_error from exc
 
     def get_document_by_path(self, file_path: str) -> Optional[Dict[str, Any]]:
         """Retrieve document metadata by absolute path."""

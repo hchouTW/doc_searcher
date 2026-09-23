@@ -77,3 +77,12 @@ def test_invalid_type_filter_is_usage_error(data_dir, roots):
     with pytest.raises(SystemExit) as exc:
         run("--dir", str(roots[0]), "--search", "x", "--type", "bogus")
     assert exc.value.code == 2
+
+
+def test_corrupt_index_is_reported_without_touching_it(data_dir, roots, capsys):
+    data_dir.mkdir()
+    garbage = b"not a database" * 100
+    (data_dir / "index.db").write_bytes(garbage)
+    assert run("--dir", str(roots[0]), "--search", "keyword") == 3
+    assert "damaged" in capsys.readouterr().err
+    assert (data_dir / "index.db").read_bytes() == garbage

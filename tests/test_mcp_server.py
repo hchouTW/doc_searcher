@@ -124,3 +124,18 @@ def test_stdio_server_round_trip_survives_stray_prints(tmp_path):
     assert status.structured_content["total_documents"] == 0
     assert status.structured_content["index_path"] == str(data_dir / "index.db")
     json.dumps(status.structured_content)  # JSON-ready payload
+
+
+def test_unusable_index_becomes_a_tool_error(tmp_path, monkeypatch):
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    (data_dir / "index.db").write_bytes(b"not a database" * 100)
+    monkeypatch.setenv("DOC_SEARCHER_DATA_DIR", str(data_dir))
+    monkeypatch.setattr(mcp_server, "_service", None)
+
+    async def scenario(client):
+        return await client.call_tool("get_index_status", {})
+
+    result = run_client(scenario)
+    assert result.is_error
+    assert "damaged" in result.content[0].text
