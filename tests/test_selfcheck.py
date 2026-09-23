@@ -102,3 +102,16 @@ def test_verify_build_rejects_unfrozen_and_wrong_arch(tmp_path, monkeypatch):
     assert any("not a frozen" in p for p in problems)
     assert any("architecture" in p for p in problems)
     assert not any("version" in p for p in problems)
+
+
+def test_release_tag_check_runs_without_site_packages():
+    script = Path(__file__).resolve().parents[1] / "scripts" / "check_release_tag.py"
+    ok = subprocess.run(
+        [sys.executable, "-S", str(script), f"v{APP_VERSION}"], capture_output=True, text=True
+    )
+    bad = subprocess.run(
+        [sys.executable, "-S", str(script), "v0.0.0-mismatch"], capture_output=True, text=True
+    )
+    assert ok.returncode == 0, ok.stderr
+    assert bad.returncode == 1
+    assert f"expected tag 'v{APP_VERSION}'" in bad.stderr

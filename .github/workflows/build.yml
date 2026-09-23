@@ -1,0 +1,98 @@
+# Purpose: Build and verify the native DocSearcher apps; the same job serves branch builds and releases.
+# What the code does: On macOS arm64, macOS x86_64, and Windows x64 runners, checks the runner
+#                     architecture, runs packaging/build_mac.sh or build_win.ps1 (hashed lock install,
+#                     PyInstaller, scripts/verify_build.py self-check), and uploads one artifact per
+#                     platform under its release file name.
+# Usage notes: release.yml calls this with `ref` set to the release tag. Artifact names match the
+#              release asset names: DocSearcher-macOS-arm64.zip, DocSearcher-macOS-x86_64.zip,
+#              DocSearcher-Windows-x64.exe.
+name: Build native apps
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      ref:
+        description: Git ref to build (defaults to the triggering ref).
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: build (${{ matrix.asset }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-latest   # Apple Silicon
+            arch: arm64
+            asset: DocSearcher-macOS-arm64
+            file: DocSearcher-macOS-arm64.zip
+          - runner: macos-15-intel # Intel
+            arch: x86_64
+            asset: DocSearcher-macOS-x86_64
+            file: DocSearcher-macOS-x86_64.zip
+          - runner: windows-latest
+            arch: x86_64
+            asset: DocSearcher-Windows-x64
+            file: DocSearcher-Windows-x64.exe
+    runs-on: ${{ matrix.runner }}
+
+    steps:
+    - name: Check out repository
+      uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      with:
+        ref: ${{ inputs.ref }}
+
+    - name: Set up Python 3.12
+      uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+      with:
+        python-version: '3.12'
+
+    - name: Check runner architecture
+      shell: bash
+      env:
+        EXPECTED_ARCH: ${{ matrix.arch }}
+      run: |
+        actual="$(python -c "import platform; m = platform.machine().lower(); print({'amd64': 'x86_64', 'aarch64': 'arm64'}.get(m, m))")"
+        if [ "$actual" != "$EXPECTED_ARCH" ]; then
+          echo "Runner architecture is $actual, expected $EXPECTED_ARCH"
+          exit 1
+        fi
+
+    - name: Locate pip cache
+      id: pip-cache
+      shell: bash
+      run: echo "dir=$(python -m pip cache dir)" >> "$GITHUB_OUTPUT"
+
+    - name: Cache pip downloads
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+      with:
+        path: ${{ steps.pip-cache.outputs.dir }}
+        key: pip-${{ runner.os }}-${{ runner.arch }}-py3.12-${{ hashFiles('constraints/ci.txt') }}
+
+    - name: Build and verify DocSearcher.app
+      if: runner.os == 'macOS'
+      run: packaging/build_mac.sh
+
+    - name: Build and verify DocSearcher.exe
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        ./packaging/build_win.ps1
+        Copy-Item dist/DocSearcher.exe dist/${{ matrix.file }}
+
+    - name: Upload ${{ matrix.file }}
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      with:
+        name: ${{ matrix.asset }}
+        path: dist/${{ matrix.file }}
+        if-no-files-found: error
+        compression-level: 0
