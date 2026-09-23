@@ -274,7 +274,9 @@ def test_advanced_search_modes_paths_and_creation_time(tmp_path):
     assert {r.path for r in searcher.search("cat", include_paths=[str(tmp_path / "team")])} == {
         str(tmp_path / "team/cat.txt")
     }
-    assert {r.path for r in searcher.search("cat", exclude_patterns=["temp"])} == {
+    assert {r.path for r in searcher.search(
+        "cat", exclude_patterns=["temp"], search_roots=[str(tmp_path)]
+    )} == {
         str(tmp_path / "team/cat.txt")
     }
     assert {r.path for r in searcher.search("cat", date_field="ctime", modified_after=500)} == {
@@ -313,3 +315,27 @@ def test_include_path_filter_matches_windows_separators(monkeypatch):
     assert included(r"C:\Docs\team\sub\dog.txt")
     assert not included(r"C:\Docs\teammate\cat.txt")
     assert not included(r"C:\Docs\other\cat.txt")
+
+
+def test_exclusions_ignore_folders_above_search_roots(tmp_path):
+    """A search folder under e.g. %TEMP% or ~/temp must not be hidden by the "temp" rule."""
+    root = tmp_path / "Temp" / "temp" / "docs"
+    db = Database(str(tmp_path / "exclusions.db"))
+    for relative in ("report.txt", "temp/scratch.txt", "private/secret.txt"):
+        db.save_document_index(
+            file_path=str(root / relative), file_type="txt", file_size=10, mtime=1,
+            segments=[{"segment_id": "1", "segment_type": "text",
+                       "content": "budget", "tokenized_content": "budget"}],
+        )
+    searcher = DocumentSearcher(db)
+
+    def found(**filters):
+        return {Path(r.path).relative_to(root).as_posix() for r in searcher.search("budget", **filters)}
+
+    roots = [str(root)]
+    assert found(exclude_patterns=["temp"], search_roots=roots) == {"report.txt", "private/secret.txt"}
+    absolute = (root / "private").as_posix() + "/*"
+    assert found(exclude_patterns=[absolute], search_roots=roots) == {"report.txt", "temp/scratch.txt"}
+    # Without roots the whole path is matched (legacy callers).
+    assert found(exclude_patterns=["temp"]) == set()
+    db.close()

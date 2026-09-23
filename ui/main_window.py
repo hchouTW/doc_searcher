@@ -1251,6 +1251,7 @@ class MainWindow(QMainWindow):
                 path.strip() for path in self.include_path_input.text().split(";") if path.strip()
             ],
             "exclude_patterns": self.config.exclude_patterns,
+            "search_roots": self.config.directories,
             "match_case": self.match_case.isChecked(),
             "whole_word": self.whole_word.isChecked(),
             "regex": self.regex_mode.isChecked(),
