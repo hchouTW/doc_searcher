@@ -7,7 +7,8 @@
 # Usage notes, dependencies, or assumptions:
 #   - GUI: doc-searcher   (or python -m doc_searcher)
 #   - CLI: doc-searcher --dir /path/to/folder --search "關鍵字"
-#   - Also: doc-searcher --help | --version (neither starts the GUI)
+#   - Also: doc-searcher --help | --version | --self-check [--report FILE] (none starts the GUI;
+#     see doc_searcher.selfcheck).
 #   - CLI exit codes: 0 success, 1 directory unavailable (index left unchanged), 2 usage error,
 #     3 data folder or index.db unusable (no writable folder, locked/corrupt/too-new index).
 
@@ -105,6 +106,12 @@ def main(argv=None) -> int:
     parser.add_argument("--dir", help="指定要檢索的資料夾目錄路徑 (CLI 模式)")
     parser.add_argument("--search", help="搜尋關鍵字 (CLI 模式)")
     parser.add_argument(
+        "--self-check",
+        action="store_true",
+        help="檢查執行環境（解析器、FTS5、資源檔）後結束，不開啟視窗",
+    )
+    parser.add_argument("--report", metavar="FILE", help="將 --self-check 結果另存至檔案")
+    parser.add_argument(
         "--type",
         default="all",
         type=str.lower,
@@ -113,6 +120,13 @@ def main(argv=None) -> int:
     )
 
     args = parser.parse_args(argv)
+
+    if args.self_check:
+        from doc_searcher.selfcheck import run_self_check
+
+        return run_self_check(args.report)
+    if args.report:
+        parser.error("--report 只能與 --self-check 一起使用")
 
     if args.dir is not None or args.search is not None:
         if not (args.dir and args.search):

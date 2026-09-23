@@ -20,7 +20,7 @@ jobs:
       with:
         python-version: '3.12'
 
-    - name: Build DocSearcher.exe
+    - name: Build and verify DocSearcher.exe
       shell: pwsh
       run: ./packaging/build_win.ps1
 
@@ -29,3 +29,4 @@ jobs:
       with:
         name: DocSearcher-Win11-x64
         path: dist/DocSearcher.exe
+        if-no-files-found: error

@@ -203,6 +203,7 @@ CLI 只會更新 `--dir` 目錄內的索引，其他目錄的索引不受影響�
 
 - 請在專案根目錄執行建置腳本；輸出位於根目錄的 `dist/`。
 - macOS 使用 `packaging/doc_searcher_mac.spec`（onedir `.app`，PyInstaller 6 已不建議在 `.app` 內使用 onefile）；Windows 使用 `packaging/doc_searcher_win.spec`（onefile、無主控台視窗）。
+- 建置腳本會在打包後執行 `scripts/verify_build.py`：於成品內執行 `--self-check`（解析器、jieba 詞典、SQLite FTS5、Qt、圖示資源），並確認版本與 CPU 架構，失敗即中止、不產生壓縮檔。亦可手動執行：`DocSearcher.app/Contents/MacOS/DocSearcher --self-check`，或在 Windows 上 `DocSearcher.exe --self-check --report check.txt`（無主控台視窗，結果寫入檔案）。
 - 若需 Windows 安裝程式，先建置 `DocSearcher.exe`，再以 Inno Setup 6 編譯 `packaging/installer_inno.iss`，輸出至 `setup_output/`。
 - GitHub Actions：`tests.yml` 於 Linux／Windows／macOS 執行 pytest；`build_windows.yml` 與 `build_macos.yml`（Apple Silicon 與 Intel）會自動上傳建置成品。
 - 發布版本時，先確認 `src/doc_searcher/version.py` 的 `APP_VERSION`，再推送相同版本的 `vX.Y.Z` 標籤，或在 GitHub 發布該標籤的 Release。`release.yml` 會在 macOS Apple Silicon、macOS Intel 與 Windows 原生 runner 上測試並建置，全部成功後將兩個 `.app.zip` 與一個 `.exe` 上傳至 GitHub Release。標籤與程式版本不一致時會停止發布。

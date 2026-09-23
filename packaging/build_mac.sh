@@ -3,7 +3,8 @@
 # What the code does:
 #   - Creates/reuses ./venv, installs the hashed lock (constraints/ci.txt, which includes
 #     PyInstaller + Pillow), generates the icon if missing, runs doc_searcher_mac.spec, and zips
-#     the bundle with ditto for distribution.
+#     the bundle with ditto for distribution once scripts/verify_build.py has run the bundle's
+#     --self-check and confirmed its version and architecture.
 # Usage notes, dependencies, or assumptions:
 #   - packaging/build_mac.sh   (needs python3 on the build machine only)
 #   - Output: dist/DocSearcher.app and dist/DocSearcher-macOS-<arch>.zip
@@ -33,6 +34,9 @@ echo "[*] Building DocSearcher.app..."
 venv/bin/python -m PyInstaller packaging/doc_searcher_mac.spec --clean -y
 
 arch="$(uname -m)"
+echo "[*] Verifying the bundle (self-check, version, ${arch})..."
+venv/bin/python scripts/verify_build.py dist/DocSearcher.app/Contents/MacOS/DocSearcher --arch "$arch"
+
 zip_path="dist/DocSearcher-macOS-${arch}.zip"
 rm -f "$zip_path"
 ditto -c -k --sequesterRsrc --keepParent dist/DocSearcher.app "$zip_path"

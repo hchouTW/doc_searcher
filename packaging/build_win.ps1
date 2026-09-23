@@ -1,7 +1,8 @@
 # Purpose: Build the portable single-file DocSearcher.exe for Windows 10/11 from PowerShell.
 # What the code does:
 #   - Creates/reuses .\venv, installs the hashed lock (constraints\ci.txt, incl. PyInstaller + Pillow), generates the icon
-#     if missing, and runs packaging\doc_searcher_win.spec (onefile, windowed).
+#     if missing, runs packaging\doc_searcher_win.spec (onefile, windowed), and gates the result
+#     with scripts\verify_build.py (self-check, version, architecture).
 # Usage notes, dependencies, or assumptions:
 #   - powershell -ExecutionPolicy Bypass -File .\packaging\build_win.ps1
 #   - Needs Python 3 on the build machine only; output dist\DocSearcher.exe runs without install.
@@ -35,6 +36,10 @@ if (-not (Test-Path 'src\doc_searcher\assets\app_icon.ico')) {
 
 Write-Host '[*] Building DocSearcher.exe (1-2 minutes)...'
 Invoke-Checked $py @('-m', 'PyInstaller', 'packaging\doc_searcher_win.spec', '--clean', '-y')
+
+$arch = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'arm64' } else { 'x86_64' }
+Write-Host "[*] Verifying DocSearcher.exe (self-check, version, $arch)..."
+Invoke-Checked $py @('scripts\verify_build.py', 'dist\DocSearcher.exe', '--arch', $arch)
 
 Write-Host ''
 Write-Host '[OK] Build succeeded'

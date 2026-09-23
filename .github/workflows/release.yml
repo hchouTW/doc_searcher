@@ -27,10 +27,13 @@ jobs:
       matrix:
         include:
           - runner: macos-latest
+            arch: arm64
             asset: DocSearcher-macOS-arm64
           - runner: macos-15-intel
+            arch: x86_64
             asset: DocSearcher-macOS-x86_64
           - runner: windows-latest
+            arch: x86_64
             asset: DocSearcher-Windows-x64
     env:
       RELEASE_TAG: ${{ github.event.release.tag_name || github.ref_name }}
@@ -65,6 +68,7 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           python -m PyInstaller packaging/doc_searcher_mac.spec --clean --noconfirm
+          python scripts/verify_build.py dist/DocSearcher.app/Contents/MacOS/DocSearcher --arch ${{ matrix.arch }}
           ditto -c -k --sequesterRsrc --keepParent dist/DocSearcher.app dist/${{ matrix.asset }}.zip
 
       - name: Build Windows executable
@@ -72,6 +76,9 @@ jobs:
         shell: pwsh
         run: |
           python -m PyInstaller packaging/doc_searcher_win.spec --clean --noconfirm
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python scripts/verify_build.py dist/DocSearcher.exe --arch ${{ matrix.arch }}
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Copy-Item dist/DocSearcher.exe dist/${{ matrix.asset }}.exe
 
       - name: Upload macOS build
