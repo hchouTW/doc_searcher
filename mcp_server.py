@@ -7,7 +7,8 @@
 #   - Delegates all logic to core.search_service.SearchService; this file only maps it to MCP.
 # Usage notes, dependencies, or assumptions:
 #   - pip install -r requirements-mcp.txt   (mcp 2.x, Python >= 3.10)
-#   - python mcp_server.py   serves over stdio; clients launch it, so it is not run by hand.
+#   - python mcp_server.py (or the doc-searcher-mcp console script) serves over stdio;
+#     clients launch it, so it is not run by hand.
 #   - Shares ~/.doc_searcher/index.db and config.json with the GUI (override with
 #     DOC_SEARCHER_DATA_DIR). Search folders are managed in the GUI.
 
@@ -126,5 +127,10 @@ def read_document(path: str) -> str:
         raise ResourceNotFoundError(str(exc)) from exc
 
 
-if __name__ == "__main__":
+def main() -> None:
+    """Console-script entry point (doc-searcher-mcp): serve over stdio."""
     mcp.run("stdio")
+
+
+if __name__ == "__main__":
+    main()

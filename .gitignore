@@ -8,6 +8,7 @@ venv/
 # Build output
 build/
 dist/
+*.egg-info/
 
 # Local runtime data (search index, config)
 .data/

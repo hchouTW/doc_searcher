@@ -114,9 +114,10 @@ doc_searcher/
 │   ├── doc_searcher_win.spec # Windows 單一檔案 .exe 的 PyInstaller 設定
 │   └── installer_inno.iss    # Windows 安裝程式 (Inno Setup 6) 腳本
 ├── docs/screenshots/         # README 介面截圖
-├── requirements.txt          # 執行期依賴套件清單
-├── requirements-dev.txt      # 開發與測試用依賴 (pytest)
-└── requirements-mcp.txt      # MCP 伺服器依賴 (mcp，需 Python 3.10+)
+├── pyproject.toml            # 專案中繼資料、依賴（含 dev／mcp 選項）與指令進入點
+├── requirements.txt          # 相容用：建置腳本仍使用的執行期依賴清單
+├── requirements-dev.txt      # 相容用：開發與測試用依賴 (pytest)
+└── requirements-mcp.txt      # 相容用：MCP 伺服器依賴 (mcp)
 ```
 
 ---
@@ -129,7 +130,7 @@ doc_searcher/
 # 複製或進入專案資料夾
 cd doc_searcher
 
-# 建立虛擬環境 (建議 Python 3.8 ~ 3.14)
+# 建立虛擬環境 (支援 Python 3.10 ~ 3.14)
 python3 -m venv venv
 
 # 啟用虛擬環境
@@ -138,9 +139,13 @@ source venv/bin/activate
 # Windows (PowerShell):
 # .\venv\Scripts\Activate.ps1
 
-# 安裝所需套件
-pip install -r requirements.txt
+# 安裝所需套件（pyproject.toml 為依賴的唯一來源）
+pip install .
+# 開發者：可編輯安裝，並加入測試與 MCP 依賴
+pip install -e '.[dev,mcp]'
 ```
+
+> **Python 支援政策**：3.10（mcp、PyMuPDF、PySide6 的最低需求）至 3.14（PySide6 目前上限）。CI 會驗證此範圍。安裝後可使用 `doc-searcher`（GUI／CLI，`--version`、`--help` 不會開啟視窗）與 `doc-searcher-mcp` 指令。
 
 > Windows 也可直接雙擊 `install.bat`：自動安裝 Python（若尚未安裝）、Visual C++ 運行庫、虛擬環境與套件，並建立桌面捷徑；之後以 `run_windows.bat` 啟動。
 
@@ -216,7 +221,7 @@ Windows 若出現 SmartScreen 提示，請點選「其他資訊」→「仍要�
 ### 1. 安裝（需 Python 3.10+）
 
 ```bash
-pip install -r requirements-mcp.txt
+pip install '.[mcp]'
 ```
 
 ### 2. 加入 Claude Code
@@ -265,8 +270,8 @@ npx @modelcontextprotocol/inspector --cli venv/bin/python mcp_server.py \
 專案內建完備的單元與整合測試，包含 sample 檔案產生器：
 
 ```bash
-# 0. 安裝測試用依賴（加上 requirements-mcp.txt 才會執行 MCP 測試，否則自動略過）
-pip install -r requirements-dev.txt -r requirements-mcp.txt
+# 0. 安裝測試用依賴（加上 mcp 選項才會執行 MCP 測試，否則自動略過）
+pip install -e '.[dev,mcp]'
 
 # 1. 產生測試用多格式文件
 python -m tests.sample_generator

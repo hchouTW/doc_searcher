@@ -7,6 +7,7 @@
 # Usage notes, dependencies, or assumptions:
 #   - GUI: python main.py
 #   - CLI: python main.py --dir /path/to/folder --search "關鍵字"
+#   - Installed console script: doc-searcher [--help | --version | --dir ... --search ...]
 #   - CLI exit codes: 0 success, 1 directory unavailable (index left unchanged), 2 usage error.
 
 import sys
@@ -86,7 +87,10 @@ def run_cli_mode(folder: str, query: str, type_filter: str = "all") -> int:
 
 
 def main(argv=None) -> int:
+    from core.version import APP_VERSION
+
     parser = argparse.ArgumentParser(description="本機多格式文件內文關鍵字檢索系統")
+    parser.add_argument("--version", action="version", version=f"DocSearcher {APP_VERSION}")
     parser.add_argument("--dir", help="指定要檢索的資料夾目錄路徑 (CLI 模式)")
     parser.add_argument("--search", help="搜尋關鍵字 (CLI 模式)")
     parser.add_argument(
