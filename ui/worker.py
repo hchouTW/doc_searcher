@@ -1,6 +1,6 @@
 # Purpose: Background QThread workers for non-blocking indexing and searching.
 # What the code does:
-#   - IndexWorker: Runs pausable/stoppable scanning and indexing in background, emitting progress.
+#   - IndexWorker: Runs pausable/stoppable scanning, indexing, or index clearing in background.
 #   - SearchWorker: Executes filtered full-text queries asynchronously, preventing UI lockups.
 # Usage notes, dependencies, or assumptions:
 #   - Requires PySide6.QtCore (QThread, Signal).
@@ -30,12 +30,14 @@ class IndexWorker(QThread):
         directories: List[str],
         include_subdirectories: bool = True,
         exclude_patterns: List[str] = None,
+        clear_index: bool = False,
     ):
         super().__init__()
         self.db = db
         self.directories = directories
         self.include_subdirectories = include_subdirectories
         self.exclude_patterns = exclude_patterns or []
+        self.clear_index = clear_index
         self.indexer = DocumentIndexer(db)
         self.scanner = FileScanner()
         self._active_state = "scanning"
@@ -57,6 +59,16 @@ class IndexWorker(QThread):
             self.db.close()
 
     def _run_indexing(self):
+        if self.clear_index:
+            self.state_changed.emit("indexing")
+            paths = list(self.db.get_all_indexed_paths())
+            stats = self.indexer.run_batch_indexing(
+                [], paths, progress_callback=lambda current, total, path:
+                self.progress.emit(current, total, path), reset_cancellation=False,
+            )
+            self.state_changed.emit("idle" if stats["cancelled"] else "completed")
+            self.indexing_finished.emit(stats)
+            return
         self.state_changed.emit("scanning")
         self._active_state = "scanning"
         self.status_changed.emit("正在掃描資料夾檔案...")
@@ -66,10 +78,23 @@ class IndexWorker(QThread):
             self.scanner.partition_directories(self.directories)
         )
         if not available_directories:
+            indexed_files = self.db.get_all_indexed_paths()
+            _, to_delete = self.scanner.calculate_changes(
+                [], indexed_files, preserved_directories=unavailable_directories,
+            )
+            if to_delete:
+                stats = self.indexer.run_batch_indexing(
+                    [], to_delete, progress_callback=lambda current, total, path:
+                    self.progress.emit(current, total, path), reset_cancellation=False,
+                )
+                if stats["cancelled"]:
+                    stats["unavailable_directories"] = unavailable_directories
+                    self.indexing_finished.emit(stats)
+                    return
             self.status_changed.emit("所有檢索目錄目前皆無法存取，已保留既有索引。")
             self.indexing_finished.emit({
                 "indexed": 0,
-                "deleted": 0,
+                "deleted": len(to_delete),
                 "failed": 0,
                 "skipped": True,
                 "unavailable_directories": unavailable_directories,

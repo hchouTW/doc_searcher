@@ -1,0 +1,115 @@
+# Purpose: Build and publish native DocSearcher binaries from a version tag or published release.
+# What the code does: Tests, packages, and uploads Windows and both macOS architectures to one release.
+# Usage notes: Push v<APP_VERSION> or publish that tag as a release; the tag must match core/version.py.
+name: Build and publish release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.event.release.tag_name || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    if: startsWith(github.event.release.tag_name || github.ref_name, 'v')
+    name: Build ${{ matrix.asset }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-latest
+            asset: DocSearcher-macOS-arm64
+          - runner: macos-15-intel
+            asset: DocSearcher-macOS-x86_64
+          - runner: windows-latest
+            asset: DocSearcher-Windows-x64
+    env:
+      RELEASE_TAG: ${{ github.event.release.tag_name || github.ref_name }}
+      QT_QPA_PLATFORM: offscreen
+
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Check tag matches application version
+        run: python -c "import os; from core.version import APP_VERSION; assert os.environ['RELEASE_TAG'] == 'v' + APP_VERSION, 'Release tag must match core/version.py'"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt -r requirements-mcp.txt pyinstaller Pillow
+
+      - name: Run tests
+        run: python -m pytest -q
+
+      - name: Clean prior build outputs
+        run: python -c "import shutil; from pathlib import Path; [shutil.rmtree(path, ignore_errors=True) for path in (Path('build'), Path('dist'))]"
+
+      - name: Build macOS application
+        if: runner.os == 'macOS'
+        run: |
+          python -m PyInstaller packaging/doc_searcher_mac.spec --clean --noconfirm
+          ditto -c -k --sequesterRsrc --keepParent dist/DocSearcher.app dist/${{ matrix.asset }}.zip
+
+      - name: Build Windows executable
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          python -m PyInstaller packaging/doc_searcher_win.spec --clean --noconfirm
+          Copy-Item dist/DocSearcher.exe dist/${{ matrix.asset }}.exe
+
+      - name: Upload macOS build
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: dist/${{ matrix.asset }}.zip
+          if-no-files-found: error
+          compression-level: 0
+
+      - name: Upload Windows build
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: dist/${{ matrix.asset }}.exe
+          if-no-files-found: error
+          compression-level: 0
+
+  publish:
+    name: Publish release assets
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all native builds
+        uses: actions/download-artifact@v4
+        with:
+          pattern: DocSearcher-*
+          path: release-assets
+          merge-multiple: true
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.release.tag_name || github.ref_name }}
+          files: release-assets/*
+          fail_on_unmatched_files: true
+          generate_release_notes: ${{ github.event_name == 'push' }}

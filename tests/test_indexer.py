@@ -249,6 +249,89 @@ def test_include_subdirectories_config_defaults_to_enabled_and_persists(tmp_path
     assert reloaded_config.include_subdirectories is False
 
 
+def test_index_worker_reconciles_replacement_roots_and_recursive_toggle(tmp_path):
+    first = tmp_path / "first"
+    second = tmp_path / "second"
+    nested = second / "nested"
+    first.mkdir()
+    nested.mkdir(parents=True)
+    old_file = first / "old.txt"
+    top_file = second / "top.txt"
+    deep_file = nested / "deep.txt"
+    for path in (old_file, top_file, deep_file):
+        path.write_text("searchable", encoding="utf-8")
+    db = Database(str(tmp_path / "index.db"))
+
+    IndexWorker(db, [str(first)])._run_indexing()
+    assert set(db.get_all_indexed_paths()) == {str(old_file)}
+
+    IndexWorker(db, [str(second)], include_subdirectories=True)._run_indexing()
+    assert set(db.get_all_indexed_paths()) == {str(top_file), str(deep_file)}
+
+    IndexWorker(db, [str(second)], include_subdirectories=False)._run_indexing()
+    assert set(db.get_all_indexed_paths()) == {str(top_file)}
+    db.close()
+
+
+def test_index_worker_keeps_missing_root_but_prunes_removed_selected_root(tmp_path):
+    available = tmp_path / "available"
+    missing = tmp_path / "missing"
+    available.mkdir()
+    db = Database(str(tmp_path / "index.db"))
+    retained = str(missing / "retained.txt")
+    removed = str(tmp_path / "unselected" / "removed.txt")
+    for path in (retained, removed):
+        db.save_document_index(
+            file_path=path, file_type="txt", file_size=1, mtime=1.0, segments=[]
+        )
+
+    IndexWorker(db, [str(available), str(missing)])._run_indexing()
+    assert set(db.get_all_indexed_paths()) == {retained}
+    IndexWorker(db, [], clear_index=True)._run_indexing()
+    assert db.get_all_indexed_paths() == {}
+    db.close()
+
+
+def test_index_worker_prunes_unselected_roots_when_every_selected_root_is_missing(tmp_path):
+    db = Database(str(tmp_path / "index.db"))
+    selected = str(tmp_path / "unmounted" / "keep.txt")
+    unselected = str(tmp_path / "old" / "remove.txt")
+    for path in (selected, unselected):
+        db.save_document_index(
+            file_path=path, file_type="txt", file_size=1, mtime=1.0, segments=[]
+        )
+
+    finished = []
+    worker = IndexWorker(db, [str(tmp_path / "unmounted")])
+    worker.indexing_finished.connect(finished.append)
+    worker._run_indexing()
+
+    assert set(db.get_all_indexed_paths()) == {selected}
+    assert finished[-1]["deleted"] == 1
+    assert finished[-1]["skipped"] is True
+    db.close()
+
+
+def test_partition_directories_reports_permission_denied(tmp_path, monkeypatch):
+    allowed = tmp_path / "allowed"
+    restricted = tmp_path / "restricted"
+    allowed.mkdir()
+    restricted.mkdir()
+    real_scandir = os.scandir
+
+    def scandir(path):
+        if str(path) == str(restricted):
+            raise PermissionError("read denied")
+        return real_scandir(path)
+
+    monkeypatch.setattr(os, "scandir", scandir)
+    available, unavailable = FileScanner().partition_directories(
+        [str(allowed), str(restricted)]
+    )
+    assert available == [str(allowed)]
+    assert unavailable == [str(restricted)]
+
+
 def test_indexer_can_pause_and_resume_at_safe_checkpoint(tmp_path):
     db = Database(str(tmp_path / "pause_test.db"))
     indexer = DocumentIndexer(db)

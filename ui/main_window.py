@@ -1,7 +1,8 @@
 # Purpose: Localized, filterable document-search workspace with background indexing controls.
 # What the code does:
-#   - Keeps directory and appearance settings in a compact collapsible panel.
+#   - Keeps directory selection, clearing, indexing, and search controls in a scrollable sidebar.
 #   - Provides metadata filters, query helpers, sortable results, and live index progress.
+#   - Shows a persisted last-update time in the bottom status bar.
 #   - Uses content-aware combo boxes whose popups escape card clipping and remain readable.
 #   - Listens to macOS/Windows system colorScheme changes and updates theme dynamically.
 #   - Provides a manual theme toggle button (Auto / Dark / Light).
@@ -12,17 +13,19 @@
 import os
 import re
 import time
+import math
 from datetime import datetime
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Callable, Dict, List, Optional, Tuple, Any
 
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QSplitter, QFileDialog, QProgressBar, QStatusBar,
     QButtonGroup, QCheckBox, QFrame, QMessageBox, QApplication, QComboBox,
-    QToolButton, QDateEdit, QDoubleSpinBox, QStyle, QDialog, QScrollArea
+    QToolButton, QDateEdit, QDoubleSpinBox, QStyle, QDialog, QScrollArea,
+    QSizePolicy, QTextBrowser, QDialogButtonBox
 )
 from PySide6.QtCore import Qt, QTimer, QDate
-from PySide6.QtGui import QIcon, QKeySequence, QShortcut
+from PySide6.QtGui import QIcon, QKeySequence, QShortcut, QTextDocument
 
 from core.config import AppConfig
 from core.database import Database
@@ -90,6 +93,7 @@ class MainWindow(QMainWindow):
         self.search_worker: Optional[SearchWorker] = None
         self.pending_search: Optional[Tuple[str, str, Dict[str, Any]]] = None
         self.pending_index_start = False
+        self._folder_dialog: Optional[QFileDialog] = None
         self.index_state = "idle"
         self.last_index_progress: Tuple[int, int, str] = (0, 0, "")
         self._restoring_filters = False
@@ -137,18 +141,32 @@ class MainWindow(QMainWindow):
         self.central_widget.setObjectName("central")
         self.setCentralWidget(self.central_widget)
         
-        main_layout = QVBoxLayout(self.central_widget)
+        main_layout = QHBoxLayout(self.central_widget)
         main_layout.setContentsMargins(16, 16, 16, 12)
         main_layout.setSpacing(12)
 
+        self.splitter = QSplitter(Qt.Horizontal)
+        main_layout.addWidget(self.splitter)
+        self.sidebar_scroll = QScrollArea()
+        self.sidebar_scroll.setWidgetResizable(True)
+        self.sidebar_scroll.setMinimumWidth(280)
+        self.sidebar_scroll.setMaximumWidth(360)
+        self.sidebar = QWidget()
+        sidebar_layout = QVBoxLayout(self.sidebar)
+        sidebar_layout.setContentsMargins(0, 0, 4, 0)
+        sidebar_layout.setSpacing(10)
+        self.sidebar_scroll.setWidget(self.sidebar)
+        self.splitter.addWidget(self.sidebar_scroll)
+
         # 1. Compact status/navigation bar and collapsible settings
         self.top_bar = QFrame()
-        top_layout = QHBoxLayout(self.top_bar)
+        top_layout = QVBoxLayout(self.top_bar)
         top_layout.setContentsMargins(10, 6, 10, 6)
         top_layout.setSpacing(8)
         self.index_summary_label = QLabel()
         top_layout.addWidget(self.index_summary_label)
-        top_layout.addStretch()
+        navigation_row = QHBoxLayout()
+        navigation_row.addStretch()
 
         # Segmented 繁中/EN control replaces the old dropdown (no standalone label;
         # the frame's tooltip carries the "Language" hint for accessibility instead).
@@ -169,17 +187,18 @@ class MainWindow(QMainWindow):
             self.language_group.addButton(button)
             language_seg_layout.addWidget(button)
         self.language_group.buttonClicked.connect(self._on_language_changed)
-        top_layout.addWidget(self.language_frame)
+        navigation_row.addWidget(self.language_frame)
 
         self.btn_settings = QToolButton()
         self.btn_settings.setCheckable(True)
         self.btn_settings.setToolButtonStyle(Qt.ToolButtonTextOnly)
         self.btn_settings.toggled.connect(self._toggle_settings)
-        top_layout.addWidget(self.btn_settings)
-        main_layout.addWidget(self.top_bar)
+        navigation_row.addWidget(self.btn_settings)
+        top_layout.addLayout(navigation_row)
+        sidebar_layout.addWidget(self.top_bar)
 
         self.settings_panel = QFrame()
-        settings_layout = QHBoxLayout(self.settings_panel)
+        settings_layout = QVBoxLayout(self.settings_panel)
         settings_layout.setContentsMargins(0, 0, 0, 0)
         settings_layout.setSpacing(12)
 
@@ -188,7 +207,7 @@ class MainWindow(QMainWindow):
         dir_layout.setContentsMargins(10, 8, 10, 8)
         dir_layout.setSpacing(6)
 
-        dir_header_layout = QHBoxLayout()
+        dir_header_layout = QVBoxLayout()
         dir_header_layout.setSpacing(10)
 
         self.dir_icon = QLabel("📁 檢索目錄：")
@@ -198,7 +217,8 @@ class MainWindow(QMainWindow):
         self.dir_label = QLabel()
         self.dir_label.setStyleSheet("font-size: 13px;")
         self._refresh_dir_label()
-        dir_header_layout.addWidget(self.dir_label, stretch=1)
+        self.dir_label.setWordWrap(True)
+        dir_header_layout.addWidget(self.dir_label)
 
         self.btn_add_dir = QPushButton("➕ 選擇資料夾...")
         self.btn_add_dir.clicked.connect(self._on_choose_directory)
@@ -209,6 +229,10 @@ class MainWindow(QMainWindow):
         self.btn_reset_dirs.clicked.connect(self._on_reset_directories)
         dir_header_layout.addWidget(self.btn_reset_dirs)
 
+        self.btn_clear_dirs = QPushButton()
+        self.btn_clear_dirs.clicked.connect(self._clear_directories)
+        dir_header_layout.addWidget(self.btn_clear_dirs)
+
         dir_layout.addLayout(dir_header_layout)
 
         self.chk_include_subdirectories = QCheckBox("包含所有下級資料夾")
@@ -218,7 +242,7 @@ class MainWindow(QMainWindow):
             self._on_include_subdirectories_toggled
         )
         dir_layout.addWidget(self.chk_include_subdirectories)
-        settings_layout.addWidget(self.dir_frame, stretch=1)
+        settings_layout.addWidget(self.dir_frame)
 
         self.appearance_frame = QFrame()
         appearance_layout = QVBoxLayout(self.appearance_frame)
@@ -234,37 +258,45 @@ class MainWindow(QMainWindow):
         self.btn_about.clicked.connect(self._show_about_dialog)
         appearance_layout.addWidget(self.btn_about)
         settings_layout.addWidget(self.appearance_frame)
-        main_layout.addWidget(self.settings_panel)
+        sidebar_layout.addWidget(self.settings_panel)
         self.settings_panel.setVisible(False)
 
         # 2. Index controls
         self.index_frame = QFrame()
-        index_layout = QHBoxLayout(self.index_frame)
+        index_layout = QVBoxLayout(self.index_frame)
         index_layout.setContentsMargins(10, 8, 10, 8)
         index_layout.setSpacing(10)
 
         self.index_label = QLabel()
         self.index_label.setStyleSheet("font-weight: bold;")
         index_layout.addWidget(self.index_label)
-        index_layout.addStretch()
-
         self.index_state_label = QLabel()
         index_layout.addWidget(self.index_state_label)
 
+        self.progress_text_label = QLabel()
+        self.progress_text_label.setVisible(False)
+        index_layout.addWidget(self.progress_text_label)
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setFixedHeight(10)
+        self.progress_bar.setTextVisible(False)
+        self.progress_bar.setVisible(False)
+        index_layout.addWidget(self.progress_bar)
+
         self.btn_reindex = QPushButton()
-        self.btn_reindex.clicked.connect(self._start_indexing)
+        self.btn_reindex.clicked.connect(self._on_manual_refresh)
         index_layout.addWidget(self.btn_reindex)
 
         self.btn_pause_index = QPushButton()
         self.btn_pause_index.setEnabled(False)
         self.btn_pause_index.clicked.connect(self._toggle_indexing_pause)
-        index_layout.addWidget(self.btn_pause_index)
-
         self.btn_stop_index = QPushButton()
         self.btn_stop_index.setEnabled(False)
         self.btn_stop_index.clicked.connect(self._stop_indexing)
-        index_layout.addWidget(self.btn_stop_index)
-        main_layout.addWidget(self.index_frame)
+        actions_row = QHBoxLayout()
+        actions_row.addWidget(self.btn_pause_index)
+        actions_row.addWidget(self.btn_stop_index)
+        index_layout.addLayout(actions_row)
+        sidebar_layout.addWidget(self.index_frame)
 
         # 3. Search & Filter Bar
         self.search_card = QFrame()
@@ -273,12 +305,13 @@ class MainWindow(QMainWindow):
         search_layout.setSpacing(10)
 
         # Search Input
-        input_row = QHBoxLayout()
         self.search_input = SyntaxSearchInput()
+        self.search_input.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Fixed)
         self.search_input.setClearButtonEnabled(True)
         self.search_input.textChangedWithText.connect(self._on_search_text_changed)
         self.search_input.returnPressed.connect(self._trigger_search)
-        input_row.addWidget(self.search_input, stretch=1)
+        search_layout.addWidget(self.search_input)
+        input_row = QHBoxLayout()
 
         self.btn_clear_search = QToolButton()
         self.btn_clear_search.setText("✕")
@@ -467,9 +500,8 @@ class MainWindow(QMainWindow):
         self.advanced_filter_frame.setMinimumHeight(212)
         self.advanced_scroll.setWidget(self.advanced_filter_frame)
 
-        self.active_filter_row = QHBoxLayout()
+        self.active_filter_row = QVBoxLayout()
         self.active_filter_row.setSpacing(6)
-        self.active_filter_row.addStretch()
         self.btn_reset_filters = QPushButton()
         self.btn_reset_filters.clicked.connect(self._reset_all_filters)
         self.active_filter_row.addWidget(self.btn_reset_filters)
@@ -482,11 +514,10 @@ class MainWindow(QMainWindow):
         results_status_row.addWidget(self.results_count_label)
 
         search_layout.addLayout(results_status_row)
-        main_layout.addWidget(self.search_card)
+        sidebar_layout.addWidget(self.search_card)
+        sidebar_layout.addStretch()
 
         # 3. Main Splitter: Results Table (Left) + Preview Panel (Right)
-        self.splitter = QSplitter(Qt.Horizontal)
-
         # Left Container
         left_widget = QWidget()
         left_layout = QVBoxLayout(left_widget)
@@ -502,31 +533,20 @@ class MainWindow(QMainWindow):
         self.preview = PreviewPanel()
         self.splitter.addWidget(self.preview)
 
-        self.splitter.setStretchFactor(0, 6)
-        self.splitter.setStretchFactor(1, 4)
-        main_layout.addWidget(self.splitter, stretch=1)
+        self.splitter.setStretchFactor(0, 0)
+        self.splitter.setStretchFactor(1, 6)
+        self.splitter.setStretchFactor(2, 4)
+        self.splitter.setSizes([300, 500, 380])
 
         # 4. Status Bar
         self.status_bar = QStatusBar()
         self.setStatusBar(self.status_bar)
 
-        self.progress_bar = QProgressBar()
-        self.progress_bar.setMaximumWidth(220)
-        self.progress_bar.setFixedHeight(14)
-        self.progress_bar.setTextVisible(False)
-        self.progress_bar.setVisible(False)
-        self.status_bar.addPermanentWidget(self.progress_bar)
-
-        self.progress_text_label = QLabel()
-        self.progress_text_label.setVisible(False)
-        self.status_bar.addPermanentWidget(self.progress_text_label)
-
-        from utils.os_detector import CURRENT_OS
-        self.os_label = QLabel(CURRENT_OS.display_badge)
-        self.status_bar.addPermanentWidget(self.os_label)
-
         self.status_label = QLabel()
-        self.status_bar.addWidget(self.status_label)
+        self.status_bar.addWidget(self.status_label, 1)
+        self.last_updated_label = QLabel()
+        self.last_updated_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.status_bar.addPermanentWidget(self.last_updated_label)
 
     def apply_theme(self, theme: ThemeColors):
         """Apply colors across the entire window and child widgets."""
@@ -579,7 +599,7 @@ class MainWindow(QMainWindow):
             }}
         """
         for button in (
-            self.btn_add_dir, self.btn_reset_dirs, self.btn_reindex,
+            self.btn_add_dir, self.btn_reset_dirs, self.btn_clear_dirs, self.btn_reindex,
             self.btn_pause_index, self.btn_stop_index, self.btn_theme_toggle,
             self.btn_about, self.btn_search_help, self.btn_choose_scope, *self.operator_buttons,
         ):
@@ -700,14 +720,14 @@ class MainWindow(QMainWindow):
 
         # Status
         self.status_label.setStyleSheet(f"color: {theme.text_muted}; font-size: 12px;")
+        self.last_updated_label.setStyleSheet(f"color: {theme.text_muted}; font-size: 12px;")
+        self.index_state_label.setStyleSheet(
+            f"color: {theme.text_secondary}; background: {theme.bg_subtle}; "
+            f"border: 1px solid {theme.border}; border-radius: {control_radius}px; "
+            "padding: 3px 8px;"
+        )
         self.progress_text_label.setStyleSheet(f"color: {theme.text_muted}; font-size: 11px;")
         self.index_summary_label.setStyleSheet(f"color: {theme.text_secondary}; font-weight: 600;")
-        self.os_label.setStyleSheet(f"""
-            font-size: 11px; padding: 2px 6px; border-radius: {max(2, control_radius - 3)}px;
-            background-color: {theme.bg_subtle}; color: {theme.text_secondary};
-            border: 1px solid {theme.border};
-        """)
-
         # Update child components
         self.table.apply_theme(theme)
         self.preview.apply_theme(theme)
@@ -734,6 +754,7 @@ class MainWindow(QMainWindow):
         self.btn_add_dir.setText(tr(self.language, "choose_folder"))
         self.btn_reset_dirs.setText(tr(self.language, "reset_folders"))
         self.btn_reset_dirs.setToolTip(tr(self.language, "reset_folders_tip"))
+        self.btn_clear_dirs.setText(tr(self.language, "clear_folders"))
         self.chk_include_subdirectories.setText(tr(self.language, "include_subdirectories"))
         self.chk_include_subdirectories.setToolTip(tr(self.language, "include_subdirectories_tip"))
         self.btn_theme_toggle.setText(self._get_theme_btn_text())
@@ -809,6 +830,8 @@ class MainWindow(QMainWindow):
                 self._on_indexing_progress(current, total, filename)
             else:
                 self.status_label.setText(tr(self.language, f"state_{self.index_state}"))
+                if self.index_state == "scanning":
+                    self.progress_text_label.setText(tr(self.language, "progress_scanning"))
         elif not self.search_worker:
             self.status_label.setText(self._idle_status_text())
 
@@ -876,20 +899,92 @@ class MainWindow(QMainWindow):
             )
             self.dir_label.setStyleSheet(f"color: {theme.text_primary}; font-weight: 500;")
 
+    def _open_folder_dialog(
+        self, title: str, on_selected: Callable[[List[str]], None], start_directory: str = ""
+    ):
+        """Open a native, window-modal picker without a nested Qt event loop."""
+        if self._folder_dialog is not None:
+            return
+        if self.btn_advanced_filters.isChecked():
+            self.btn_advanced_filters.setChecked(False)
+
+        dialog = QFileDialog(self)
+        dialog.setOption(QFileDialog.ShowDirsOnly, True)
+        dialog.setFileMode(QFileDialog.Directory)
+        dialog.setWindowTitle(title)
+        dialog.setWindowModality(Qt.WindowModal)
+        if start_directory:
+            dialog.setDirectory(start_directory)
+        self._folder_dialog = dialog
+
+        def finish(result: int):
+            selected = dialog.selectedFiles() if result == QDialog.Accepted else []
+            self._folder_dialog = None
+            dialog.deleteLater()
+
+            def apply_selection():
+                if not selected:
+                    self._restore_focus_after_folder_dialog()
+                    return
+                valid = []
+                for path in selected:
+                    try:
+                        with os.scandir(path):
+                            pass
+                        valid.append(path)
+                    except (OSError, PermissionError):
+                        pass
+                if len(valid) != len(selected):
+                    QMessageBox.warning(
+                        self, tr(self.language, "notice"),
+                        tr(self.language, "directory_unavailable"),
+                    )
+                if valid:
+                    on_selected(valid)
+                self._restore_focus_after_folder_dialog()
+
+            # Let the native sheet close before another modal warning or index work begins.
+            QTimer.singleShot(0, apply_selection)
+
+        dialog.finished.connect(finish)
+        dialog.open()
+
+    def _restore_focus_after_folder_dialog(self):
+        if self.isVisible() and self._folder_dialog is None:
+            self.raise_()
+            self.activateWindow()
+
     def _on_choose_directory(self):
-        folder = QFileDialog.getExistingDirectory(self, tr(self.language, "choose_folder_title"))
-        if folder:
-            if self.config.add_directory(folder):
-                self._refresh_dir_label()
-                self._start_indexing()
+        self._open_folder_dialog(
+            tr(self.language, "choose_folder_title"), self._add_directories
+        )
+
+    def _add_directories(self, folders: List[str]):
+        changed = False
+        for folder in folders:
+            changed = self.config.add_directory(folder) or changed
+        if changed:
+            self._refresh_dir_label()
+            self._invalidate_directory_results()
+            self._mark_last_updated()
+            self._start_indexing()
+
+    def _invalidate_directory_results(self):
+        self.table.set_results([])
+        self.preview.display_result(None)
+        self.results_count_label.setText(
+            tr(self.language, "search_waiting") if self.search_input.text().strip()
+            else tr(self.language, "ready_to_search")
+        )
 
     def _choose_scope_folder(self):
         starting_directory = self.config.directories[0] if self.config.directories else ""
-        folder = QFileDialog.getExistingDirectory(
-            self, tr(self.language, "choose_scope"), starting_directory
+        self._open_folder_dialog(
+            tr(self.language, "choose_scope"),
+            lambda folders: self._set_scope_folder(folders[0]), starting_directory
         )
-        if not folder:
-            return
+
+    def _set_scope_folder(self, folder: str):
         if not any(
             FileScanner.is_path_within_directory(folder, root)
             for root in self.config.directories
@@ -904,19 +999,47 @@ class MainWindow(QMainWindow):
             self.include_path_input.setText("; ".join(existing))
 
     def _on_reset_directories(self):
-        folder = QFileDialog.getExistingDirectory(self, tr(self.language, "reset_folder_title"))
-        if folder:
-            self.config.directories = [folder]
-            self._refresh_dir_label()
-            self._start_indexing()
+        self._open_folder_dialog(
+            tr(self.language, "reset_folder_title"),
+            lambda folders: self._reset_directories(folders[0])
+        )
+
+    def _reset_directories(self, folder: str):
+        if self.config.directories == [os.path.abspath(folder)]:
+            return
+        self.config.directories = [folder]
+        self._refresh_dir_label()
+        self._invalidate_directory_results()
+        self._mark_last_updated()
+        self._start_indexing()
+
+    def _clear_directories(self):
+        if not self.config.directories and not self.db.get_all_indexed_paths():
+            return
+        self.config.directories = []
+        self._refresh_dir_label()
+        self._mark_last_updated()
+        self._invalidate_directory_results()
+        if self.search_worker and self.search_worker.isRunning():
+            self.pending_search = (
+                self.search_input.text().strip(), self.active_type_filter,
+                self._current_search_filters(),
+            )
+        self._start_indexing(clear_index=True)
 
     def _on_include_subdirectories_toggled(self, enabled: bool):
         self.config.include_subdirectories = enabled
         if self.config.directories:
+            self._invalidate_directory_results()
             self._start_indexing()
 
-    def _start_indexing(self):
-        if not self.config.directories:
+    def _on_manual_refresh(self):
+        if self.config.directories:
+            self._mark_last_updated()
+        self._start_indexing()
+
+    def _start_indexing(self, clear_index: bool = False):
+        if not self.config.directories and not clear_index:
             QMessageBox.information(
                 self, tr(self.language, "notice"), tr(self.language, "choose_folder_first")
             )
@@ -933,6 +1056,7 @@ class MainWindow(QMainWindow):
         self.btn_reindex.setEnabled(False)
         self.btn_add_dir.setEnabled(False)
         self.btn_reset_dirs.setEnabled(False)
+        self.btn_clear_dirs.setEnabled(False)
         self.chk_include_subdirectories.setEnabled(False)
         self.btn_pause_index.setEnabled(True)
         self.btn_pause_index.setText(tr(self.language, "pause_index"))
@@ -949,9 +1073,9 @@ class MainWindow(QMainWindow):
             self.config.directories,
             self.config.include_subdirectories,
             self.config.exclude_patterns,
+            clear_index=clear_index,
         )
         self.index_worker.progress.connect(self._on_indexing_progress)
-        self.index_worker.status_changed.connect(self._on_indexing_status)
         self.index_worker.state_changed.connect(self._set_index_state)
         self.index_worker.indexing_finished.connect(self._on_indexing_finished)
         self.index_worker.finished.connect(self._after_index_worker_finished)
@@ -983,23 +1107,16 @@ class MainWindow(QMainWindow):
         self.progress_bar.setRange(0, total)
         self.progress_bar.setValue(current)
         percent = round((current / total) * 100) if total else 0
-        message = tr(
-            self.language, "progress_indexing", current=current, total=total,
-            percent=percent, filename=filename,
-        )
+        message = f"{current:,} / {total:,} · {percent}%"
         self.progress_text_label.setText(message)
-        self.status_label.setText(message)
-
-    def _on_indexing_status(self, msg: str):
-        # Detailed worker messages are diagnostic; stable localized state remains visible.
-        if self.language == "zh-TW":
-            self.status_label.setText(msg)
 
     def _set_index_state(self, state: str):
         self.index_state = state
         self.index_state_label.setText(tr(self.language, f"state_{state}"))
         if state == "scanning":
             self.progress_text_label.setText(tr(self.language, "progress_scanning"))
+        if state in ("scanning", "indexing", "paused", "stopping"):
+            self.status_label.setText(tr(self.language, f"state_{state}"))
 
     def _on_indexing_finished(self, stats: dict):
         self.progress_bar.setVisible(False)
@@ -1007,6 +1124,7 @@ class MainWindow(QMainWindow):
         self.btn_reindex.setEnabled(True)
         self.btn_add_dir.setEnabled(True)
         self.btn_reset_dirs.setEnabled(True)
+        self.btn_clear_dirs.setEnabled(True)
         self.chk_include_subdirectories.setEnabled(True)
         self.btn_pause_index.setEnabled(False)
         self.btn_pause_index.setText(tr(self.language, "pause_index"))
@@ -1022,6 +1140,8 @@ class MainWindow(QMainWindow):
                 tr(self.language, "index_failed", message=stats["error"])
             )
         else:
+            if not stats.get("skipped"):
+                self._mark_last_updated()
             self._set_index_state("completed")
             docs = self.db.get_stats().get("total_docs", 0)
             unavailable_count = len(stats.get("unavailable_directories", []))
@@ -1050,32 +1170,56 @@ class MainWindow(QMainWindow):
         """Resume queued index/search work after the index thread actually exits."""
         if self.pending_index_start:
             self.pending_index_start = False
-            self._start_indexing()
+            self._start_indexing(clear_index=not self.config.directories)
             return
         if self.pending_search and self.pending_search[0]:
             self._trigger_search()
 
     def _idle_status_text(self, stats: Optional[dict] = None) -> str:
-        """Compose the lower-left status text: version | last updated | indexed count.
+        """Compose the lower-left status text: version and indexed count.
 
         Replaces the old "index up to date | N documents" message, which duplicated
         the top bar's "N documents indexed" summary.
         """
         stats = stats or self.db.get_stats()
         docs = stats.get("total_docs", 0)
-        last_indexed_at = stats.get("last_indexed_at")
-        if not last_indexed_at:
+        if not self._last_updated_at(stats):
             return tr(self.language, "status_bar_never", version=APP_VERSION)
-        updated = datetime.fromtimestamp(last_indexed_at).strftime("%Y-%m-%d %H:%M")
         return tr(
             self.language, "status_bar_format",
-            version=APP_VERSION, updated=updated, docs=docs,
+            version=APP_VERSION, docs=docs,
         )
+
+    def _last_updated_at(self, stats: Optional[dict] = None) -> Optional[float]:
+        value = self.config.data.get("last_updated_at") or (stats or self.db.get_stats()).get("last_indexed_at")
+        try:
+            return float(value) if value else None
+        except (TypeError, ValueError):
+            return None
+
+    def _refresh_last_updated_label(self, stats: Optional[dict] = None):
+        stamp = self._last_updated_at(stats)
+        if stamp:
+            updated = datetime.fromtimestamp(stamp).strftime("%Y-%m-%d %H:%M")
+            self.last_updated_label.setText(tr(self.language, "last_updated", updated=updated))
+        else:
+            self.last_updated_label.setText(tr(self.language, "last_updated_never"))
+        font = self.last_updated_label.fontMetrics()
+        self.last_updated_label.setMinimumWidth(max(
+            font.horizontalAdvance("最後更新：0000-00-00 00:00"),
+            font.horizontalAdvance("Last Updated: 0000-00-00 00:00"),
+        ))
+
+    def _mark_last_updated(self):
+        self.config.data["last_updated_at"] = time.time()
+        self.config.save()
+        self._refresh_last_updated_label()
 
     def _update_db_status(self, update_main_status: bool = True):
         stats = self.db.get_stats()
         docs = stats.get("total_docs", 0)
         self.index_summary_label.setText(tr(self.language, "indexed_summary", count=docs))
+        self._refresh_last_updated_label(stats)
         if update_main_status:
             self.status_label.setText(self._idle_status_text(stats))
 
@@ -1162,7 +1306,7 @@ class MainWindow(QMainWindow):
         self._on_metadata_filter_changed()
 
     def _refresh_filter_badges(self):
-        while self.active_filter_row.count() > 2:
+        while self.active_filter_row.count() > 1:
             item = self.active_filter_row.takeAt(0)
             widget = item.widget()
             if widget:
@@ -1191,14 +1335,15 @@ class MainWindow(QMainWindow):
             if control.isChecked():
                 badges.append((key, control.text() + " ✕"))
         for key, label in badges:
-            badge = QPushButton(label)
+            badge = QPushButton()
+            badge.setText(badge.fontMetrics().elidedText(label, Qt.ElideRight, 230))
             badge.setToolTip(label)
             badge.setStyleSheet(
                 f"background: {self.theme.bg_subtle}; color: {self.theme.text_secondary}; "
                 f"border: 1px solid {self.theme.border}; border-radius: 10px; padding: 3px 8px;"
             )
             badge.clicked.connect(lambda _=False, target=key: self._clear_filter(target))
-            self.active_filter_row.insertWidget(self.active_filter_row.count() - 2, badge)
+            self.active_filter_row.insertWidget(self.active_filter_row.count() - 1, badge)
         self.btn_reset_filters.setVisible(bool(badges) or self.active_type_filter != "all")
 
     def _clear_filter(self, target: str):
@@ -1310,6 +1455,8 @@ class MainWindow(QMainWindow):
             self.match_case.isChecked(),
             self.whole_word.isChecked(),
             self.regex_mode.isChecked(),
+            tuple(self.config.directories),
+            self.config.include_subdirectories,
         )
 
     def _insert_query_syntax(self, insertion: str):
@@ -1345,12 +1492,10 @@ class MainWindow(QMainWindow):
         about_box.exec()
 
     def _show_search_help(self):
-        help_box = QMessageBox(self)
+        help_box = QDialog(self)
         help_box.setWindowTitle(tr(self.language, "help_title"))
-        help_box.setIcon(QMessageBox.Information)
-        help_box.setTextFormat(Qt.RichText)
         if self.language == "zh-TW":
-            help_html = """
+            help_html = r"""
             <h3>搜尋語法</h3>
             <ul>
               <li><b>多個關鍵字：</b><code>年度 預算</code>（預設為 AND）</li>
@@ -1370,9 +1515,25 @@ class MainWindow(QMainWindow):
               <li>點擊表頭排序；篩選徽章可單獨移除，或一鍵重設所有篩選。</li>
               <li>為避免資料庫競爭，索引期間輸入的搜尋會在索引結束後執行。</li>
             </ul>
+            <h3>正規表示式模式（Python Regex 語法）</h3>
+            <p>支援 Python <code>re</code> 語法；預設不區分大小寫。啟用「正規表示式」後可使用：</p>
+            <ul>
+              <li><b>文字與選項：</b><code>report</code> 搜尋文字；
+                  <code>cat|dog|bird</code> 匹配任一詞；
+                  <code>(?i)error</code> 忽略大小寫。</li>
+              <li><b>數字與格式：</b><code>\d+</code> 匹配連續數字，
+                  <code>\d{4}</code> 匹配四位數（如 2026）；
+                  <code>\d{4}-\d{2}-\d{2}</code> 匹配日期；
+                  <code>\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}</code> 匹配 IPv4 形式。</li>
+              <li><b>邊界與位置：</b><code>^IMPORT</code> 匹配索引文字段落開頭；
+                  <code>END$</code> 匹配段落結尾；
+                  <code>\btest\b</code> 匹配完整單字。</li>
+              <li><b>靈活組合：</b><code>LOG.*ERROR</code> 匹配同一行內的前後文字；
+                  <code>\b\w+\.(pdf|docx|txt)\b</code> 匹配副檔名引用。</li>
+            </ul>
             """
         else:
-            help_html = """
+            help_html = r"""
             <h3>Query syntax</h3>
             <ul>
               <li><b>All words:</b> <code>annual budget</code> (implicit AND)</li>
@@ -1389,8 +1550,58 @@ class MainWindow(QMainWindow):
               <li><b>Enter</b> searches; <b>Cmd/Ctrl+F</b> focuses search; <b>Esc</b> clears it.</li>
               <li>Searches entered during indexing run automatically when indexing finishes.</li>
             </ul>
+            <h3>Python regular expression examples</h3>
+            <p>Enable Regex mode to use Python <code>re</code> syntax. Matching is case insensitive by default:</p>
+            <ul>
+              <li><b>Text:</b> <code>report</code>; alternatives <code>cat|dog|bird</code>;
+                  ignore case <code>(?i)error</code>.</li>
+              <li><b>Numbers and formats:</b> <code>\d+</code>, <code>\d{4}</code>,
+                  date <code>\d{4}-\d{2}-\d{2}</code>, IPv4 form
+                  <code>\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}</code>.</li>
+              <li><b>Boundaries:</b> <code>^IMPORT</code> at the start of an indexed text segment,
+                  <code>END$</code> at its end, <code>\btest\b</code> as a whole word.</li>
+              <li><b>Combinations:</b> <code>LOG.*ERROR</code> on one line;
+                  <code>\b\w+\.(pdf|docx|txt)\b</code> for file extension references.</li>
+            </ul>
             """
-        help_box.setText(help_html)
+        layout = QVBoxLayout(help_box)
+        layout.setContentsMargins(20, 16, 20, 16)
+        content = QTextBrowser(help_box)
+        content.setHtml(help_html)
+        content.setOpenExternalLinks(False)
+        content.setLineWrapMode(QTextBrowser.WidgetWidth)
+        content.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        content.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        layout.addWidget(content)
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok, parent=help_box)
+        buttons.accepted.connect(help_box.accept)
+        layout.addWidget(buttons)
+
+        screen = help_box.screen() or QApplication.primaryScreen()
+        available = screen.availableGeometry()
+        margins = layout.contentsMargins()
+        minimum_width = buttons.sizeHint().width() + margins.left() + margins.right()
+        outer_width = min(int(available.width() * 0.9),
+                          max(minimum_width, int(self.width() * 0.9)))
+        measure = QTextDocument()
+        measure.setDefaultFont(content.font())
+        measure.setHtml(content.toHtml())
+        measure.setTextWidth(-1)
+        browser_chrome = content.frameWidth() * 2 + measure.documentMargin() * 2
+        natural_width = math.ceil(measure.idealWidth() + browser_chrome)
+        dialog_width = min(outer_width, max(minimum_width,
+                                            natural_width + margins.left() + margins.right()))
+        content_width = dialog_width - margins.left() - margins.right() - content.frameWidth() * 2
+        measure.setTextWidth(content_width)
+        controls_height = (margins.top() + margins.bottom() + buttons.sizeHint().height()
+                           + layout.spacing())
+        minimum_height = controls_height + content.fontMetrics().lineSpacing() * 3
+        outer_height = min(int(available.height() * 0.8),
+                           max(minimum_height, int(self.height() * 0.8)))
+        dialog_height = min(outer_height,
+                            math.ceil(measure.size().height()
+                                      + content.frameWidth() * 2 + controls_height))
+        help_box.resize(dialog_width, dialog_height)
         help_box.exec()
 
     def _on_filter_changed(self, button):
@@ -1506,7 +1717,7 @@ class MainWindow(QMainWindow):
         self.search_worker = None
         if self.pending_index_start:
             self.pending_index_start = False
-            self._start_indexing()
+            self._start_indexing(clear_index=not self.config.directories)
             return
         pending = self.pending_search
         self.pending_search = None

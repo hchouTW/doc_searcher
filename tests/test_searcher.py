@@ -296,6 +296,38 @@ def test_advanced_search_modes_paths_and_creation_time(tmp_path):
     db.close()
 
 
+@pytest.mark.parametrize("expression, content", [
+    ("report", "annual report"),
+    ("cat|dog|bird", "a bird appeared"),
+    ("(?i)error", "ERROR found"),
+    (r"\d+", "number 2026"),
+    (r"\d{4}", "year 2026"),
+    (r"\d{4}-\d{2}-\d{2}", "2026-09-23"),
+    (r"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}", "192.168.1.42"),
+    ("^IMPORT", "IMPORT records"),
+    ("END$", "records END"),
+    (r"\btest\b", "a test case"),
+    ("LOG.*ERROR", "LOG: ERROR occurred"),
+    (r"\b\w+\.(pdf|docx|txt)\b", "see report.pdf"),
+])
+def test_help_regex_examples_execute_in_search(expression, content, tmp_path):
+    db = Database(str(tmp_path / "regex_examples.db"))
+    db.save_document_index(
+        file_path=str(tmp_path / "example.txt"), file_type="txt",
+        file_size=len(content), mtime=100.0, ctime=100.0,
+        segments=[{
+            "segment_id": "1", "segment_type": "text", "content": content,
+            "tokenized_content": content,
+        }],
+    )
+    try:
+        assert [result.filename for result in DocumentSearcher(db).search(
+            expression, regex=True, match_case=True
+        )] == ["example.txt"]
+    finally:
+        db.close()
+
+
 def test_include_path_filter_matches_windows_separators(monkeypatch):
     """On Windows os.sep is the LIKE escape character; the subfolder pattern must escape it."""
     import sqlite3

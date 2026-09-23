@@ -1,6 +1,6 @@
 # Purpose: Application configuration management and persistence.
 # What the code does:
-#   - Loads and saves locale, directories, theme, exclusion rules, and active search filters.
+#   - Loads and saves locale, directories, theme, exclusion rules, search filters, and update time.
 #   - Dynamically determines storage directory (home dir ~/.doc_searcher or project local fallback).
 # Usage notes, dependencies, or assumptions:
 #   - Uses standard library json and pathlib.
@@ -69,6 +69,7 @@ class AppConfig:
             "theme": "light",
             "language": "zh-TW",
             "search_debounce_ms": 300,
+            "last_updated_at": None,
             "exclude_patterns": DEFAULT_EXCLUDE_PATTERNS.copy(),
             "search_filters": DEFAULT_SEARCH_FILTERS.copy(),
         }
