@@ -20,6 +20,25 @@ from .xlsx_parser import XlsxParser
 from .xls_parser import XlsParser
 from .text_parser import TextParser
 
+__all__ = [
+    "BaseParser",
+    "ExtractedDoc",
+    "PageSegment",
+    "ParseStatus",
+    "PdfParser",
+    "DocxParser",
+    "DocParser",
+    "PptxParser",
+    "PptParser",
+    "XlsxParser",
+    "XlsParser",
+    "TextParser",
+    "SUPPORTED_EXTENSIONS",
+    "get_parser",
+    "is_supported",
+    "parse_file",
+]
+
 _PARSERS: Dict[str, BaseParser] = {
     ".pdf": PdfParser(),
     ".docx": DocxParser(),

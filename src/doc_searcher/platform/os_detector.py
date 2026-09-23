@@ -46,7 +46,7 @@ def _normalize_arch(machine: str) -> str:
 def _windows_build(version_text: str) -> int:
     """Extract a Windows build number when the native API is unavailable."""
     try:
-        return int(sys.getwindowsversion().build)
+        return int(sys.getwindowsversion().build)  # type: ignore[attr-defined,unused-ignore]
     except (AttributeError, OSError):
         numbers = [int(value) for value in re.findall(r"\d+", version_text)]
         return max(numbers, default=0)

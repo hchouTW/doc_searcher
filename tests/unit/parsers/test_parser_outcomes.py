@@ -8,10 +8,10 @@ from pathlib import Path
 import pytest
 
 from doc_searcher.parsers import ParseStatus, get_parser, parse_file
+from fixtures.platform import RUNNING_AS_ROOT
 
 FIXTURES = Path(__file__).resolve().parents[2] / "fixtures" / "files"
 SAMPLES = Path(__file__).resolve().parents[2] / "sample_files"
-POSIX_NON_ROOT = sys.platform != "win32" and os.geteuid() != 0
 
 
 # ---------------------------------------------------------------- builders
@@ -196,7 +196,8 @@ def test_missing_file_is_unreadable(tmp_path):
         assert parse_file(str(tmp_path / name)).status is ParseStatus.UNREADABLE
 
 
-@pytest.mark.skipif(not POSIX_NON_ROOT, reason="needs POSIX permissions as non-root")
+@pytest.mark.posix
+@pytest.mark.skipif(RUNNING_AS_ROOT, reason="root ignores file permissions")
 @pytest.mark.parametrize("name, build", [("locked.docx", make_docx), ("locked.pdf", make_pdf)])
 def test_permission_denied_is_unreadable(tmp_path, name, build):
     path = build(tmp_path / name, "text")

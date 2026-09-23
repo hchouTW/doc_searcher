@@ -18,7 +18,7 @@ import re
 import threading
 import time
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence
 from urllib.parse import quote
 
 from doc_searcher.config import AppConfig
@@ -69,7 +69,7 @@ class SearchService:
     def search(
         self,
         query: str,
-        formats: Optional[List[str]] = None,
+        formats: Optional[Sequence[str]] = None,
         limit: int = 20,
     ) -> Dict[str, Any]:
         """Search the index; formats limits results to format groups (all when empty)."""

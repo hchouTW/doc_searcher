@@ -46,7 +46,7 @@ class DocxParser(BaseParser):
                 for row in table.rows:
                     row_data = [cell.text.strip() for cell in row.cells if cell.text.strip()]
                     # Deduplicate repeated cells from merged columns
-                    unique_cells = []
+                    unique_cells: List[str] = []
                     for c in row_data:
                         if not unique_cells or unique_cells[-1] != c:
                             unique_cells.append(c)

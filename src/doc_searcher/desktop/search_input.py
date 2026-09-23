@@ -28,11 +28,11 @@ class QuerySyntaxHighlighter(QSyntaxHighlighter):
 
     def set_theme(self, theme: ThemeColors):
         self.operator_format.setForeground(QColor("#fb923c" if theme.is_dark else "#c2410c"))
-        self.operator_format.setFontWeight(QFont.Bold)
+        self.operator_format.setFontWeight(QFont.Weight.Bold)
         self.phrase_format.setForeground(QColor("#86efac" if theme.is_dark else "#15803d"))
         self.symbol_format.setForeground(QColor("#c4b5fd" if theme.is_dark else "#7c3aed"))
         self.field_format.setForeground(QColor("#38bdf8" if theme.is_dark else "#0369a1"))
-        self.field_format.setFontWeight(QFont.Bold)
+        self.field_format.setFontWeight(QFont.Weight.Bold)
         self.rehighlight()
 
     def highlightBlock(self, text: str):

@@ -1,7 +1,6 @@
 """A bad document, page, or parser never stops batch indexing (Task 2.3)."""
 
 import os
-import sys
 
 import pytest
 
@@ -9,6 +8,7 @@ from doc_searcher.indexing.indexer import DocumentIndexer
 from doc_searcher.parsers import get_parser
 from doc_searcher.search.searcher import DocumentSearcher
 from doc_searcher.storage.database import Database
+from fixtures.platform import RUNNING_AS_ROOT
 
 
 def make_pdf(path, pages, **save_kwargs):
@@ -64,9 +64,8 @@ def test_mixed_batch_indexes_good_files_and_records_failures(tmp_path, db, monke
     assert db.get_document_by_path(str(vanished)) is None
 
 
-@pytest.mark.skipif(
-    sys.platform == "win32" or os.geteuid() == 0, reason="needs POSIX permissions as non-root"
-)
+@pytest.mark.posix
+@pytest.mark.skipif(RUNNING_AS_ROOT, reason="root ignores file permissions")
 def test_permission_denied_file_does_not_stop_batch(tmp_path, db):
     readable = tmp_path / "ok.txt"
     readable.write_text("gamma budget", encoding="utf-8")

@@ -22,12 +22,9 @@ class PdfParser(BaseParser):
         try:
             import pymupdf
         except ImportError:
-            try:
-                import fitz as pymupdf
-            except ImportError:
-                return ExtractedDoc.failed(
-                    abs_path, "pdf", ParseStatus.DEPENDENCY_MISSING, "pymupdf is not installed."
-                )
+            return ExtractedDoc.failed(
+                abs_path, "pdf", ParseStatus.DEPENDENCY_MISSING, "pymupdf is not installed."
+            )
 
         try:
             doc = pymupdf.open(abs_path)

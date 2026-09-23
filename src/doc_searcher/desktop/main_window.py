@@ -364,10 +364,10 @@ class MainWindow(QMainWindow):
         # the search bar, per the compact-layout requirement).
         self.btn_advanced_filters = QToolButton()
         self.btn_advanced_filters.setCheckable(True)
-        self.btn_advanced_filters.setArrowType(Qt.RightArrow)
+        self.btn_advanced_filters.setArrowType(Qt.ArrowType.RightArrow)
         self.btn_advanced_filters.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
         self.btn_advanced_filters.toggled.connect(self._toggle_advanced_filters)
-        search_layout.addWidget(self.btn_advanced_filters, alignment=Qt.AlignLeft)
+        search_layout.addWidget(self.btn_advanced_filters, alignment=Qt.AlignmentFlag.AlignLeft)
 
         self.advanced_dialog = QDialog(self, Qt.Tool)
         self.advanced_dialog.setModal(False)
@@ -578,7 +578,9 @@ class MainWindow(QMainWindow):
         self.status_label = QLabel()
         self.status_bar.addWidget(self.status_label, 1)
         self.last_updated_label = QLabel()
-        self.last_updated_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.last_updated_label.setAlignment(
+            Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+        )
         self.status_bar.addPermanentWidget(self.last_updated_label)
 
     def apply_theme(self, theme: ThemeColors):
@@ -876,6 +878,7 @@ class MainWindow(QMainWindow):
                 "operator_not_tip",
                 "operator_exact_tip",
             ),
+            strict=True,
         ):
             button.setToolTip(tr(self.language, key))
         if not self.search_input.text().strip() and not self.search_worker:
@@ -929,7 +932,9 @@ class MainWindow(QMainWindow):
             self.advanced_dialog.raise_()
         else:
             self.advanced_dialog.hide()
-        self.btn_advanced_filters.setArrowType(Qt.DownArrow if visible else Qt.RightArrow)
+        self.btn_advanced_filters.setArrowType(
+            Qt.ArrowType.DownArrow if visible else Qt.ArrowType.RightArrow
+        )
 
     def _toggle_theme_mode(self):
         modes = ["auto", "dark", "light"]
@@ -969,16 +974,16 @@ class MainWindow(QMainWindow):
             self.btn_advanced_filters.setChecked(False)
 
         dialog = QFileDialog(self)
-        dialog.setOption(QFileDialog.ShowDirsOnly, True)
-        dialog.setFileMode(QFileDialog.Directory)
+        dialog.setOption(QFileDialog.Option.ShowDirsOnly, True)
+        dialog.setFileMode(QFileDialog.FileMode.Directory)
         dialog.setWindowTitle(title)
-        dialog.setWindowModality(Qt.WindowModal)
+        dialog.setWindowModality(Qt.WindowModality.WindowModal)
         if start_directory:
             dialog.setDirectory(start_directory)
         self._folder_dialog = dialog
 
         def finish(result: int):
-            selected = dialog.selectedFiles() if result == QDialog.Accepted else []
+            selected = dialog.selectedFiles() if result == QDialog.DialogCode.Accepted else []
             self._folder_dialog = None
             dialog.deleteLater()
 
@@ -1584,7 +1589,7 @@ class MainWindow(QMainWindow):
         about_box = QMessageBox(self)
         about_box.setWindowTitle(tr(self.language, "about_title"))
         about_box.setIcon(QMessageBox.Information)
-        about_box.setTextFormat(Qt.RichText)
+        about_box.setTextFormat(Qt.TextFormat.RichText)
         lines = [
             f"<h3>{tr(self.language, 'about_current_version', version=APP_VERSION)}</h3>",
             f"<h4>{tr(self.language, 'about_changelog_heading')}</h4>",

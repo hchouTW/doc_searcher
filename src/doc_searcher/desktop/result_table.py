@@ -34,7 +34,7 @@ from doc_searcher.desktop.theme import ThemeColors, get_active_theme
 from doc_searcher.desktop.i18n import tr
 
 
-SORT_ROLE = Qt.UserRole + 1
+SORT_ROLE = Qt.ItemDataRole.UserRole + 1
 
 
 class SortableTableItem(QTableWidgetItem):
@@ -101,7 +101,7 @@ class ResultTable(QTableWidget):
         header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(5, QHeaderView.Stretch)
-        header.setDefaultAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        header.setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         header.setSortIndicatorShown(True)
 
         self.itemSelectionChanged.connect(self._on_selection_changed)
@@ -165,7 +165,7 @@ class ResultTable(QTableWidget):
             # 1. Type
             type_tag = self.TYPE_ICONS.get(item.file_type.lower(), f"📁 {item.file_type.upper()}")
             it_type = SortableTableItem(type_tag)
-            it_type.setTextAlignment(Qt.AlignCenter | Qt.AlignVCenter)
+            it_type.setTextAlignment(Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignVCenter)
             it_type.setForeground(QColor(c.text_secondary))
 
             # 2. Filename with a highlighted one-to-two-line excerpt underneath.
@@ -180,12 +180,14 @@ class ResultTable(QTableWidget):
 
             # 3. Matches count (light-mode blue darkened to #0a58ca for WCAG AA on alternating rows)
             it_matches = SortableTableItem(f"{item.total_matches} {tr(self.language, 'hit_unit')}")
-            it_matches.setTextAlignment(Qt.AlignCenter | Qt.AlignVCenter)
+            it_matches.setTextAlignment(
+                Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignVCenter
+            )
             it_matches.setForeground(QColor("#60a5fa" if c.is_dark else "#0a58ca"))
 
             # 4. File size
             it_size = SortableTableItem(format_file_size(item.file_size))
-            it_size.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            it_size.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
             it_size.setForeground(QColor(c.text_muted))
 
             # 5. Modified time
@@ -204,7 +206,7 @@ class ResultTable(QTableWidget):
                 (it_time, item.mtime),
                 (it_path, item.path.casefold()),
             ):
-                table_item.setData(Qt.UserRole, item)
+                table_item.setData(Qt.ItemDataRole.UserRole, item)
                 table_item.setData(SORT_ROLE, sort_value)
 
             self.setItem(row, 0, it_type)
@@ -219,7 +221,7 @@ class ResultTable(QTableWidget):
             )
             snippet = re.sub(r"\s+", " ", snippet).strip()
             name_container = QWidget()
-            name_container.setAttribute(Qt.WA_TransparentForMouseEvents)
+            name_container.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
             name_container.setProperty("snippet_html", snippet)
             name_container.setProperty("result_filename", item.filename)
             name_container.setStyleSheet("background: transparent;")
@@ -228,17 +230,17 @@ class ResultTable(QTableWidget):
             name_layout.setSpacing(1)
             name_label = QLabel(item.filename)
             name_label.setObjectName("resultNameLabel")
-            name_label.setAttribute(Qt.WA_TransparentForMouseEvents)
+            name_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
             name_label.setFixedHeight(18)
             name_label.setStyleSheet(
                 f"color: {c.text_primary}; font-weight: bold; background: transparent;"
             )
             snippet_label = QLabel(snippet)
             snippet_label.setObjectName("resultSnippetLabel")
-            snippet_label.setAttribute(Qt.WA_TransparentForMouseEvents)
+            snippet_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
             snippet_label.setWordWrap(True)
             snippet_label.setFixedHeight(38)
-            snippet_label.setTextFormat(Qt.RichText)
+            snippet_label.setTextFormat(Qt.TextFormat.RichText)
             snippet_label.setToolTip(re.sub(r"<[^>]+>", "", snippet))
             snippet_label.setStyleSheet(
                 f"color: {c.text_secondary}; font-size: 11px; background: transparent;"
@@ -298,7 +300,7 @@ class ResultTable(QTableWidget):
             return None
         row = selected[0].row()
         first_item = self.item(row, 0)
-        return first_item.data(Qt.UserRole) if first_item else None
+        return first_item.data(Qt.ItemDataRole.UserRole) if first_item else None
 
     def _on_selection_changed(self):
         item = self.get_selected_item()

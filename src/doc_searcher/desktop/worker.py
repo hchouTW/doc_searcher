@@ -6,7 +6,7 @@
 #   - Requires PySide6.QtCore (QThread, Signal).
 
 import time
-from typing import List, Dict, Any
+from typing import Any, Dict, List, Optional, Tuple
 from PySide6.QtCore import QThread, Signal
 
 from doc_searcher.storage.database import Database
@@ -29,7 +29,7 @@ class IndexWorker(QThread):
         db: Database,
         directories: List[str],
         include_subdirectories: bool = True,
-        exclude_patterns: List[str] = None,
+        exclude_patterns: Optional[List[str]] = None,
         clear_index: bool = False,
     ):
         super().__init__()
@@ -222,7 +222,7 @@ class SearchWorker(QThread):
         db: Database,
         query: str,
         type_filter: str = "all",
-        search_filters: Dict[str, Any] = None,
+        search_filters: Optional[Dict[str, Any]] = None,
     ):
         super().__init__()
         self.db = db
@@ -230,6 +230,8 @@ class SearchWorker(QThread):
         self.type_filter = type_filter
         self.search_filters = search_filters or {}
         self.searcher = DocumentSearcher(db)
+        # Set by MainWindow to detect results made stale by a filter change.
+        self.filter_signature: Tuple[Any, ...] = ()
 
     def run(self):
         try:

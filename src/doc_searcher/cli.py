@@ -53,7 +53,7 @@ def run_cli_mode(folder: str, query: str, type_filter: str = "all") -> int:
         return EXIT_DATA
     try:
         indexer = DocumentIndexer(db)
-        scan_errors = []
+        scan_errors: list[str] = []
         files = scanner.scan_directories(available_directories, error_callback=scan_errors.append)
         print(f"[*] 找到 {len(files)} 個支援的文件檔案，開始建立/更新索引...")
 

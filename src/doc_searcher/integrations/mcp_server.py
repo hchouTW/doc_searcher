@@ -70,7 +70,7 @@ def get_service() -> SearchService:
     return _service
 
 
-@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False))
+@mcp.tool(annotations=ToolAnnotations(read_only_hint=True, open_world_hint=False))
 def search_documents(
     query: Annotated[
         str,
@@ -106,7 +106,7 @@ def search_documents(
         raise ToolError(str(exc)) from exc
 
 
-@mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False))
+@mcp.tool(annotations=ToolAnnotations(read_only_hint=True, open_world_hint=False))
 def get_index_status() -> dict[str, Any]:
     """Report index size, last update time, app version, configured search folders, and the
     state of the most recent reindex_directory run."""
@@ -114,7 +114,7 @@ def get_index_status() -> dict[str, Any]:
 
 
 @mcp.tool(
-    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True)
+    annotations=ToolAnnotations(read_only_hint=False, destructive_hint=False, idempotent_hint=True)
 )
 def reindex_directory(
     directory: Annotated[

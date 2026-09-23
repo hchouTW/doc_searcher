@@ -6,3 +6,5 @@
 #     doc_searcher.integrations.mcp_server:main (MCP stdio server).
 
 from doc_searcher.version import APP_VERSION as __version__
+
+__all__ = ["__version__"]

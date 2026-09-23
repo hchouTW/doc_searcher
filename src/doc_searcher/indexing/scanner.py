@@ -141,9 +141,9 @@ class FileScanner:
             if not os.path.isdir(abs_dir):
                 continue
 
-            def _on_walk_error(error: OSError):
+            def _on_walk_error(error: OSError, root_dir: str = abs_dir):
                 if error_callback:
-                    error_callback(error.filename or abs_dir)
+                    error_callback(error.filename or root_dir)
 
             for root, child_directories, files in os.walk(
                 abs_dir,

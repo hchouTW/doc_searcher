@@ -3,7 +3,6 @@
 import os
 import shutil
 import sqlite3
-import sys
 
 import pytest
 
@@ -19,6 +18,7 @@ from doc_searcher.storage.errors import (
     SchemaTooNewError,
     StorageError,
 )
+from fixtures.platform import RUNNING_AS_ROOT
 from fixtures.legacy_data import LEGACY_DOCUMENTS, write_legacy_db
 
 
@@ -173,9 +173,8 @@ class _NoBusyWait:
             setattr(self._conn, name, value)
 
 
-@pytest.mark.skipif(
-    sys.platform == "win32" or os.geteuid() == 0, reason="needs POSIX permissions as non-root"
-)
+@pytest.mark.posix
+@pytest.mark.skipif(RUNNING_AS_ROOT, reason="root ignores file permissions")
 def test_read_only_database_is_reported(tmp_path):
     folder = tmp_path / "ro"
     folder.mkdir()
@@ -243,3 +242,23 @@ def test_backup_is_a_consistent_copy(tmp_path):
     conn = sqlite3.connect(str(copy))
     assert conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
     conn.close()
+
+
+def test_failed_open_does_not_leak_the_connection(tmp_path, monkeypatch):
+    opened = []
+    real_connect = sqlite3.connect
+
+    def tracking_connect(*args, **kwargs):
+        conn = real_connect(*args, **kwargs)
+        opened.append(conn)
+        return conn
+
+    monkeypatch.setattr(sqlite3, "connect", tracking_connect)
+    path = tmp_path / "index.db"
+    path.write_bytes(b"not a database" * 100)
+    with pytest.raises(DatabaseCorruptError):
+        Database(str(path))
+    assert opened
+    for conn in opened:
+        with pytest.raises(sqlite3.ProgrammingError, match="closed"):
+            conn.execute("SELECT 1")

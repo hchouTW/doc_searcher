@@ -291,4 +291,10 @@ python -m tests.sample_generator
 
 # 2. 執行全套 pytest 測試
 pytest tests/ -v
+
+# 3. 與 CI 相同的品質檢查（格式、lint、型別、覆蓋率下限見 pyproject.toml）
+ruff format --check . && ruff check . && python -m mypy
+pytest --cov=doc_searcher --cov-report=term-missing
 ```
+
+> 標記 `posix`／`windows`／`macos` 的測試只在對應平台執行，其他平台會顯示略過原因。

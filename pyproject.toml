@@ -38,7 +38,14 @@ dependencies = [
 
 [project.optional-dependencies]
 mcp = ["mcp>=2.2,<3"]
-dev = ["pytest>=8.0.0", "build>=1.0", "uv>=0.5"]  # uv regenerates constraints/ci.txt
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=5.0",
+    "build>=1.0",
+    "ruff>=0.16",
+    "mypy>=1.10",
+    "uv>=0.5",  # regenerates constraints/ci.txt
+]
 package = ["pyinstaller>=6.0", "Pillow>=10.0"]
 
 [project.scripts]
@@ -56,9 +63,38 @@ version = { attr = "doc_searcher.version.APP_VERSION" }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = ["--strict-markers"]
+markers = [
+    "posix: needs POSIX semantics (permissions, symlinks); skipped on Windows",
+    "windows: needs native Windows semantics; skipped elsewhere",
+    "macos: needs native macOS semantics; skipped elsewhere",
+]
 # Lets a plain checkout run the suite; an installed copy of the package also works.
 pythonpath = ["src"]
 
 [tool.ruff]
 line-length = 100
 target-version = "py310"
+
+[tool.ruff.lint]
+# Correctness-focused: pyflakes, syntax/statement errors, and bugbear.
+select = ["E4", "E7", "E9", "F", "B"]
+
+[tool.mypy]
+python_version = "3.10"
+files = ["src/doc_searcher"]
+# jieba, olefile, xlrd, python-pptx, pymupdf ship without type information.
+ignore_missing_imports = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+
+[tool.coverage.run]
+source = ["doc_searcher"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+# Baseline measured 2026-09-24 on macOS arm64 / Python 3.13: 82.9% line+branch. CI enforces it on
+# Linux / Python 3.12. Raise it when coverage improves; lowering it needs a reviewed change.
+fail_under = 82

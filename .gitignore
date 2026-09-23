@@ -18,3 +18,9 @@ setup_output/
 
 # OS
 .DS_Store
+
+# Coverage output
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/

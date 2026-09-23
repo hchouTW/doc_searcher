@@ -31,12 +31,16 @@ class Database:
         conn = getattr(self._thread_state, "connection", None)
         if conn is None:
             conn = sqlite3.connect(self.db_path, timeout=5.0)
-            conn.row_factory = sqlite3.Row
-            conn.execute("PRAGMA busy_timeout=5000;")
-            # Enable WAL mode for smooth concurrent reads and writes
-            conn.execute("PRAGMA journal_mode=WAL;")
-            conn.execute("PRAGMA foreign_keys=ON;")
-            conn.execute("PRAGMA synchronous=NORMAL;")
+            try:
+                conn.row_factory = sqlite3.Row
+                conn.execute("PRAGMA busy_timeout=5000;")
+                # Enable WAL mode for smooth concurrent reads and writes
+                conn.execute("PRAGMA journal_mode=WAL;")
+                conn.execute("PRAGMA foreign_keys=ON;")
+                conn.execute("PRAGMA synchronous=NORMAL;")
+            except BaseException:
+                conn.close()  # e.g. a corrupt or locked file; otherwise the handle leaks
+                raise
             self._thread_state.connection = conn
         return conn
 

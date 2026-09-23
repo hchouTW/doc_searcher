@@ -14,7 +14,7 @@ import os
 import html
 import re
 from dataclasses import dataclass, field
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Iterable, Optional
 import jieba
 
 from doc_searcher.storage.database import Database
@@ -161,7 +161,7 @@ class DocumentSearcher:
 
     def _aggregate_rows(
         self,
-        rows: List[Any],
+        rows: Iterable[Any],
         keywords: List[str],
         limit: int,
         query: str,
@@ -573,7 +573,7 @@ class DocumentSearcher:
         operators = {"AND", "OR", "NOT"}
         if built_parts[0].upper() in operators or built_parts[-1].upper() in operators:
             raise SearchQueryError("AND、OR、NOT 前後都必須有搜尋詞。")
-        for previous, current in zip(built_parts, built_parts[1:]):
+        for previous, current in zip(built_parts, built_parts[1:], strict=False):
             if previous.upper() in operators and current.upper() in operators:
                 raise SearchQueryError("AND、OR、NOT 不可連續使用。")
 

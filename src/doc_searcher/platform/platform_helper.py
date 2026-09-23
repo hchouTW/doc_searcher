@@ -23,7 +23,7 @@ def open_file_with_default_app(file_path: str, os_info: Optional[OSInfo] = None)
     active_os = os_info or CURRENT_OS
     try:
         if active_os.is_windows:
-            os.startfile(abs_path)
+            os.startfile(abs_path)  # type: ignore[attr-defined,unused-ignore]
         elif active_os.is_macos:
             subprocess.run(["open", abs_path], check=True)
         elif active_os.is_linux:
