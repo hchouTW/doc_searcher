@@ -3,9 +3,15 @@
 ; Lives in packaging/; SourceDir points all relative paths at the project root.
 
 #define MyAppName "DocSearcher"
-#define MyAppVersion "1.1.0"
 #define MyAppPublisher "Antigravity"
 #define MyAppExeName "DocSearcher.exe"
+; Version comes from the built exe's version resource (set from core/version.py by
+; packaging/doc_searcher_win.spec), so build DocSearcher.exe before compiling this script.
+#define MyAppExePath AddBackslash(SourcePath) + "..\dist\" + MyAppExeName
+#if !FileExists(MyAppExePath)
+  #error dist\DocSearcher.exe not found - run packaging\build_win.ps1 first
+#endif
+#define MyAppVersion GetVersionNumbersString(MyAppExePath)
 
 [Setup]
 SourceDir=..

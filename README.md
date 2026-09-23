@@ -178,7 +178,8 @@ python main.py --dir /path/to/documents --search "專案預算" --type excel
 - 請在專案根目錄執行建置腳本；輸出位於根目錄的 `dist/`。
 - macOS 使用 `packaging/doc_searcher_mac.spec`（onedir `.app`，PyInstaller 6 已不建議在 `.app` 內使用 onefile）；Windows 使用 `packaging/doc_searcher_win.spec`（onefile、無主控台視窗）。
 - 若需 Windows 安裝程式，先建置 `DocSearcher.exe`，再以 Inno Setup 6 編譯 `packaging/installer_inno.iss`，輸出至 `setup_output/`。
-- GitHub Actions：`build_windows.yml` 與 `build_macos.yml`（Apple Silicon 與 Intel）會自動上傳建置成品。
+- GitHub Actions：`tests.yml` 於 Linux／Windows／macOS 執行 pytest；`build_windows.yml` 與 `build_macos.yml`（Apple Silicon 與 Intel）會自動上傳建置成品。
+- 版本號只需修改 `core/version.py` 的 `APP_VERSION`：macOS `.app`、Windows `.exe` 檔案資訊與 Inno Setup 安裝程式皆自動沿用。
 - 程式內讀取打包資源請使用 `utils.resource_path.resource_path("assets/...")`，它會在打包後自動改用 `sys._MEIPASS`。
 
 #### macOS Gatekeeper（未簽署版本）
