@@ -13,9 +13,9 @@ import fnmatch
 from typing import Callable, List, Dict, Optional, Set, Tuple
 
 try:
-    from parsers import is_supported, SUPPORTED_EXTENSIONS
+    from parsers import SUPPORTED_EXTENSIONS
 except (ImportError, ValueError):
-    from ..parsers import is_supported, SUPPORTED_EXTENSIONS
+    from ..parsers import SUPPORTED_EXTENSIONS
 
 
 class FileScanner:

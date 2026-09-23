@@ -6,7 +6,6 @@
 # Usage notes, dependencies, or assumptions:
 #   - Run via pytest.
 
-import os
 import sys
 from pathlib import Path
 
@@ -14,7 +13,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from parsers import (
-    get_parser,
     is_supported,
     PdfParser,
     DocxParser,
@@ -22,8 +20,6 @@ from parsers import (
     XlsxParser,
     XlsParser,
     TextParser,
-    DocParser,
-    PptParser
 )
 
 SAMPLE_DIR = Path(__file__).parent / "sample_files"

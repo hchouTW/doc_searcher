@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QTextBrowser,
     QPushButton, QFrame, QApplication
 )
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import QTimer
 from core.searcher import SearchResultItem
 from utils.platform_helper import open_file_with_default_app, reveal_in_file_manager, format_file_size, format_timestamp
 from ui.theme import ThemeColors, get_active_theme
@@ -228,7 +228,6 @@ class PreviewPanel(QWidget):
             self._set_empty_state()
             return
 
-        c = self.theme
         self.title_label.setText(item.filename)
         size_str = format_file_size(item.file_size)
         time_str = format_timestamp(item.mtime)

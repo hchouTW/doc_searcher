@@ -22,7 +22,7 @@ from PySide6.QtWidgets import (
     QToolButton, QDateEdit, QDoubleSpinBox, QStyle, QDialog, QScrollArea
 )
 from PySide6.QtCore import Qt, QTimer, QDate
-from PySide6.QtGui import QFont, QIcon, QKeySequence, QShortcut
+from PySide6.QtGui import QIcon, QKeySequence, QShortcut
 
 from core.config import AppConfig
 from core.database import Database
@@ -30,7 +30,7 @@ from core.searcher import SearchResultItem
 from core.scanner import FileScanner
 from core.i18n import tr
 from core.version import APP_VERSION, CHANGELOG
-from ui.theme import ThemeColors, get_active_theme, is_system_dark
+from ui.theme import ThemeColors, get_active_theme
 from utils.resource_path import resource_path
 from .result_table import ResultTable
 from .preview_panel import PreviewPanel
