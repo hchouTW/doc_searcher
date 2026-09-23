@@ -85,7 +85,7 @@ class MainWindow(QMainWindow):
         self.db = Database(self.config.db_path)
         self.language = self.config.language
         
-        self.theme_mode = self.config.data.get("theme_mode", "auto")  # 'auto', 'dark', 'light'
+        self.theme_mode = self.config.theme_mode  # 'auto', 'dark', 'light'
         self.theme: ThemeColors = get_active_theme(self.theme_mode)
         
         self.active_type_filter = "all"
@@ -874,8 +874,7 @@ class MainWindow(QMainWindow):
         modes = ["auto", "dark", "light"]
         curr_idx = modes.index(self.theme_mode) if self.theme_mode in modes else 0
         self.theme_mode = modes[(curr_idx + 1) % len(modes)]
-        self.config.data["theme_mode"] = self.theme_mode
-        self.config.save()
+        self.config.theme_mode = self.theme_mode
 
         self.theme = get_active_theme(self.theme_mode)
         self.apply_theme(self.theme)
@@ -1191,7 +1190,7 @@ class MainWindow(QMainWindow):
         )
 
     def _last_updated_at(self, stats: Optional[dict] = None) -> Optional[float]:
-        value = self.config.data.get("last_updated_at") or (stats or self.db.get_stats()).get("last_indexed_at")
+        value = self.config.last_updated_at or (stats or self.db.get_stats()).get("last_indexed_at")
         try:
             return float(value) if value else None
         except (TypeError, ValueError):
@@ -1211,8 +1210,7 @@ class MainWindow(QMainWindow):
         ))
 
     def _mark_last_updated(self):
-        self.config.data["last_updated_at"] = time.time()
-        self.config.save()
+        self.config.last_updated_at = time.time()
         self._refresh_last_updated_label()
 
     def _update_db_status(self, update_main_status: bool = True):

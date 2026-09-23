@@ -3,13 +3,14 @@
 #   - Configures QApplication with high-DPI scaling and platform attributes.
 #   - Applies typography and unified theme style sheets.
 #   - Launches MainWindow.
+#   - Shows a dialog and exits with code 3 when no writable data folder exists (ConfigError).
 # Usage notes, dependencies, or assumptions:
 #   - PySide6.QtWidgets (QApplication), doc_searcher.desktop.theme.
 
 import sys
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QMessageBox
 from PySide6.QtCore import Qt
-from doc_searcher.config import AppConfig
+from doc_searcher.config import AppConfig, ConfigError
 from doc_searcher.desktop.theme import get_active_theme, generate_qss
 from .main_window import MainWindow
 
@@ -31,8 +32,12 @@ def run_app():
     font.setPointSize(10)
     app.setFont(font)
 
-    config = AppConfig()
-    theme_mode = config.data.get("theme_mode", "auto")
+    try:
+        config = AppConfig()
+    except ConfigError as exc:
+        QMessageBox.critical(None, "DocSearcher", str(exc))
+        sys.exit(3)
+    theme_mode = config.theme_mode
     theme = get_active_theme(theme_mode)
     app.setStyleSheet(generate_qss(theme))
 

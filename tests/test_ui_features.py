@@ -59,7 +59,7 @@ def test_language_preference_persists_and_updates_window(tmp_path):
     app = _app()
     config_path = tmp_path / "config.json"
     config = AppConfig(config_path)
-    config.data["db_path"] = str(tmp_path / "index.db")
+    config.db_path = str(tmp_path / "index.db")
     window = MainWindow(config)
 
     window.btn_lang_en.click()
@@ -74,7 +74,7 @@ def test_language_preference_persists_and_updates_window(tmp_path):
 def test_sidebar_layout_and_compact_index_progress(tmp_path):
     app = _app()
     config = AppConfig(tmp_path / "config.json")
-    config.data["db_path"] = str(tmp_path / "index.db")
+    config.db_path = str(tmp_path / "index.db")
     window = MainWindow(config)
     window.show()
     app.processEvents()
@@ -109,7 +109,7 @@ def test_sidebar_layout_and_compact_index_progress(tmp_path):
 def test_search_help_shows_python_regex_examples(tmp_path, monkeypatch):
     _app()
     config = AppConfig(tmp_path / "config.json")
-    config.data["db_path"] = str(tmp_path / "index.db")
+    config.db_path = str(tmp_path / "index.db")
     window = MainWindow(config)
     shown = []
     def capture_help(dialog):
@@ -139,7 +139,7 @@ def test_search_help_shows_python_regex_examples(tmp_path, monkeypatch):
 def test_search_help_sizing_adapts_to_window_and_content(tmp_path, monkeypatch):
     app = _app()
     config = AppConfig(tmp_path / "config.json")
-    config.data["db_path"] = str(tmp_path / "index.db")
+    config.db_path = str(tmp_path / "index.db")
     window = MainWindow(config)
     window.show()
     app.processEvents()
@@ -188,7 +188,7 @@ def test_search_help_sizing_adapts_to_window_and_content(tmp_path, monkeypatch):
 def test_folder_picker_selection_and_cancel(tmp_path, monkeypatch, action):
     app = _app()
     config = AppConfig(tmp_path / "config.json")
-    config.data["db_path"] = str(tmp_path / "index.db")
+    config.db_path = str(tmp_path / "index.db")
     window = MainWindow(config)
     old_folder = tmp_path / "old"
     old_folder.mkdir()
@@ -238,7 +238,7 @@ def test_folder_picker_selection_and_cancel(tmp_path, monkeypatch, action):
 def test_folder_picker_batches_multiple_paths_and_skips_unavailable(tmp_path, monkeypatch):
     app = _app()
     config = AppConfig(tmp_path / "config.json")
-    config.data["db_path"] = str(tmp_path / "index.db")
+    config.db_path = str(tmp_path / "index.db")
     window = MainWindow(config)
     window.show()
     app.processEvents()
@@ -278,7 +278,7 @@ def test_folder_picker_batches_multiple_paths_and_skips_unavailable(tmp_path, mo
 def test_folder_picker_rejects_unreadable_selection_without_changing_state(tmp_path, monkeypatch):
     app = _app()
     config = AppConfig(tmp_path / "config.json")
-    config.data["db_path"] = str(tmp_path / "index.db")
+    config.db_path = str(tmp_path / "index.db")
     window = MainWindow(config)
     restricted = tmp_path / "restricted"
     restricted.mkdir()
@@ -309,7 +309,7 @@ def test_folder_picker_rejects_unreadable_selection_without_changing_state(tmp_p
 def test_clear_directories_updates_count_and_requests_index_clear(tmp_path, monkeypatch):
     _app()
     config = AppConfig(tmp_path / "config.json")
-    config.data["db_path"] = str(tmp_path / "index.db")
+    config.db_path = str(tmp_path / "index.db")
     folder = tmp_path / "docs"
     folder.mkdir()
     config.directories = [str(folder)]
@@ -330,7 +330,7 @@ def test_clear_directories_updates_count_and_requests_index_clear(tmp_path, monk
 def test_directory_controls_sync_ui_config_and_index(tmp_path):
     app = _app()
     config = AppConfig(tmp_path / "config.json")
-    config.data["db_path"] = str(tmp_path / "index.db")
+    config.db_path = str(tmp_path / "index.db")
     first = tmp_path / "first"
     nested = first / "nested"
     second = tmp_path / "second"
@@ -382,7 +382,7 @@ def test_directory_controls_sync_ui_config_and_index(tmp_path):
 def test_directory_change_clears_results_and_rejects_superseded_search(tmp_path, monkeypatch):
     _app()
     config = AppConfig(tmp_path / "config.json")
-    config.data["db_path"] = str(tmp_path / "index.db")
+    config.db_path = str(tmp_path / "index.db")
     old = tmp_path / "old"
     new = tmp_path / "new"
     old.mkdir()
@@ -473,7 +473,7 @@ def test_filter_preferences_and_syntax_input(tmp_path):
     app = _app()
     config_path = tmp_path / "config.json"
     config = AppConfig(config_path)
-    config.data["db_path"] = str(tmp_path / "index.db")
+    config.db_path = str(tmp_path / "index.db")
     window = MainWindow(config)
     assert isinstance(window.search_input, SyntaxSearchInput)
     window.search_input.setText('budget AND "annual report"')
@@ -517,7 +517,7 @@ def test_search_syntax_colors_operators_and_exact_phrases():
 def test_custom_size_units_and_reset_filters(tmp_path):
     _app()
     config = AppConfig(tmp_path / "config.json")
-    config.data["db_path"] = str(tmp_path / "index.db")
+    config.db_path = str(tmp_path / "index.db")
     window = MainWindow(config)
     window.size_preset_combo.setCurrentIndex(window.size_preset_combo.findData("custom"))
     window.min_size.setValue(50)
@@ -558,7 +558,7 @@ def _contrast_ratio(fg: str, bg: str) -> float:
 def test_status_bar_shows_version_and_no_longer_duplicates_top_bar(tmp_path):
     _app()
     config = AppConfig(tmp_path / "config.json")
-    config.data["db_path"] = str(tmp_path / "index.db")
+    config.db_path = str(tmp_path / "index.db")
     window = MainWindow(config)
 
     # No documents indexed yet: version shown, no duplicate document count.
@@ -580,7 +580,7 @@ def test_status_bar_timestamp_tracks_directory_changes_refresh_and_scan(tmp_path
     _app()
     config_path = tmp_path / "config.json"
     config = AppConfig(config_path)
-    config.data["db_path"] = str(tmp_path / "index.db")
+    config.db_path = str(tmp_path / "index.db")
     window = MainWindow(config)
     folder = tmp_path / "docs"
     replacement = tmp_path / "replacement"
@@ -589,21 +589,21 @@ def test_status_bar_timestamp_tracks_directory_changes_refresh_and_scan(tmp_path
     monkeypatch.setattr(window, "_start_indexing", lambda *args, **kwargs: None)
 
     window._add_directories([str(folder)])
-    first = config.data["last_updated_at"]
+    first = config.last_updated_at
     assert first > 0
-    assert AppConfig(config_path).data["last_updated_at"] == first
+    assert AppConfig(config_path).last_updated_at == first
     assert datetime.fromtimestamp(first).strftime("%Y-%m-%d %H:%M") in window.last_updated_label.text()
 
-    config.data["last_updated_at"] = 1.0
+    config.last_updated_at = 1.0
     window._reset_directories(str(replacement))
-    assert config.data["last_updated_at"] > 1.0
-    config.data["last_updated_at"] = 1.0
+    assert config.last_updated_at > 1.0
+    config.last_updated_at = 1.0
     window._on_manual_refresh()
-    assert config.data["last_updated_at"] > 1.0
-    config.data["last_updated_at"] = 1.0
+    assert config.last_updated_at > 1.0
+    config.last_updated_at = 1.0
     window._on_indexing_finished({"indexed": 0, "deleted": 0, "failed": 0})
-    assert config.data["last_updated_at"] > 1.0
-    assert AppConfig(config_path).data["last_updated_at"] == config.data["last_updated_at"]
+    assert config.last_updated_at > 1.0
+    assert AppConfig(config_path).last_updated_at == config.last_updated_at
     assert "最後更新：" in window.last_updated_label.text()
     window._set_index_state("scanning")
     assert "最後更新：" in window.last_updated_label.text()
@@ -613,16 +613,16 @@ def test_status_bar_timestamp_tracks_directory_changes_refresh_and_scan(tmp_path
     window.close()
 
     reloaded = AppConfig(config_path)
-    reloaded.data["directories"] = []
+    reloaded.settings.directories = []
     reopened = MainWindow(reloaded)
-    assert datetime.fromtimestamp(reloaded.data["last_updated_at"]).strftime("%Y-%m-%d %H:%M") in reopened.last_updated_label.text()
+    assert datetime.fromtimestamp(reloaded.last_updated_at).strftime("%Y-%m-%d %H:%M") in reopened.last_updated_label.text()
     reopened.close()
 
 
 def test_status_bar_omits_os_badge(tmp_path):
     _app()
     config = AppConfig(tmp_path / "config.json")
-    config.data["db_path"] = str(tmp_path / "index.db")
+    config.db_path = str(tmp_path / "index.db")
     window = MainWindow(config)
 
     assert not hasattr(window, "os_label")
@@ -634,7 +634,7 @@ def test_status_bar_omits_os_badge(tmp_path):
 def test_format_chips_live_inside_advanced_filters_panel(tmp_path):
     _app()
     config = AppConfig(tmp_path / "config.json")
-    config.data["db_path"] = str(tmp_path / "index.db")
+    config.db_path = str(tmp_path / "index.db")
     window = MainWindow(config)
 
     for button in window.filter_buttons:

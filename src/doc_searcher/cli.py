@@ -8,7 +8,8 @@
 #   - GUI: doc-searcher   (or python -m doc_searcher)
 #   - CLI: doc-searcher --dir /path/to/folder --search "關鍵字"
 #   - Also: doc-searcher --help | --version (neither starts the GUI)
-#   - CLI exit codes: 0 success, 1 directory unavailable (index left unchanged), 2 usage error.
+#   - CLI exit codes: 0 success, 1 directory unavailable (index left unchanged), 2 usage error,
+#     3 no writable data folder (see docs/adr/0001-data-directory.md).
 
 import sys
 import os
@@ -17,12 +18,13 @@ import re
 
 EXIT_OK = 0
 EXIT_UNAVAILABLE = 1
+EXIT_CONFIG = 3
 TYPE_FILTERS = ("all", "pdf", "word", "doc", "excel", "xls", "ppt", "powerpoint", "text")
 
 
 def run_cli_mode(folder: str, query: str, type_filter: str = "all") -> int:
     """Run headless search via terminal for quick testing or scripts; returns an exit code."""
-    from doc_searcher.config import AppConfig
+    from doc_searcher.config import AppConfig, ConfigError
     from doc_searcher.storage.database import Database
     from doc_searcher.indexing.scanner import FileScanner
     from doc_searcher.indexing.indexer import DocumentIndexer
@@ -31,7 +33,11 @@ def run_cli_mode(folder: str, query: str, type_filter: str = "all") -> int:
     abs_dir = os.path.abspath(folder)
     print(f"[*] 掃描目錄：{abs_dir}")
 
-    config = AppConfig()
+    try:
+        config = AppConfig()
+    except ConfigError as exc:
+        print(f"[!] {exc}", file=sys.stderr)
+        return EXIT_CONFIG
     scanner = FileScanner()
 
     available_directories, _ = scanner.partition_directories([abs_dir])
