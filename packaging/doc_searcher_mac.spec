@@ -5,17 +5,24 @@
 #     assets, jieba dictionaries, and all project packages embedded; no Python needed to run.
 #   - Converts assets/app_icon.png to .icns automatically (requires Pillow at build time).
 # Usage notes, dependencies, or assumptions:
-#   - Run via ./build_mac.sh, or: pyinstaller doc_searcher_mac.spec --clean -y
+#   - Run via packaging/build_mac.sh, or from the project root:
+#     pyinstaller packaging/doc_searcher_mac.spec --clean -y
 #   - Builds for the host architecture (arm64 or x86_64); output: dist/DocSearcher.app
 
+import os
 import re
+import sys
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
-with open('core/version.py', encoding='utf-8') as f:
+# SPECPATH is injected by PyInstaller; this spec lives in <root>/packaging.
+ROOT = os.path.dirname(SPECPATH)
+sys.path.insert(0, ROOT)  # so collect_submodules can import the project packages
+
+with open(os.path.join(ROOT, 'core', 'version.py'), encoding='utf-8') as f:
     APP_VERSION = re.search(r'APP_VERSION\s*=\s*"([^"]+)"', f.read()).group(1)
 
 datas = [
-    ('assets', 'assets'),
+    (os.path.join(ROOT, 'assets'), 'assets'),
 ]
 datas += collect_data_files('jieba')
 
@@ -35,8 +42,8 @@ hiddenimports += collect_submodules('ui')
 hiddenimports += collect_submodules('utils')
 
 a = Analysis(
-    ['main.py'],
-    pathex=['.'],
+    [os.path.join(ROOT, 'main.py')],
+    pathex=[ROOT],
     binaries=[],
     datas=datas,
     hiddenimports=hiddenimports,
@@ -78,7 +85,7 @@ coll = COLLECT(
 app = BUNDLE(
     coll,
     name='DocSearcher.app',
-    icon='assets/app_icon.png',
+    icon=os.path.join(ROOT, 'assets', 'app_icon.png'),
     bundle_identifier='com.antigravity.docsearcher',
     version=APP_VERSION,
     info_plist={

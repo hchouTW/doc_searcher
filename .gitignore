@@ -9,8 +9,11 @@ venv/
 build/
 dist/
 
-# Local search index
-.data/index.db
+# Local runtime data (search index, config)
+.data/
+
+# Inno Setup output
+setup_output/
 
 # OS
 .DS_Store

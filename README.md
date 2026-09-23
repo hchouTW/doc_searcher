@@ -44,6 +44,16 @@
 
 ---
 
+## 🖼️ 介面截圖
+
+| 淺色模式 | 深色模式 |
+| --- | --- |
+| ![淺色模式](docs/screenshots/doc_searcher_light.png) | ![深色模式](docs/screenshots/doc_searcher_dark.png) |
+
+![進階篩選面板](docs/screenshots/doc_searcher_advanced.png)
+
+---
+
 ## 📂 專案目錄結構
 
 ```
@@ -93,10 +103,13 @@ doc_searcher/
 ├── main.py                   # 程式進入點 (支援 GUI 與 CLI 兩種模式)
 ├── install.bat               # Windows 一鍵安裝（Python、VC++ 運行庫、venv、桌面捷徑）
 ├── run_windows.bat           # Windows 啟動器（未安裝時自動呼叫 install.bat）
-├── doc_searcher.spec         # Windows 單一檔案 .exe 的 PyInstaller 設定
-├── doc_searcher_mac.spec     # macOS .app 的 PyInstaller 設定
-├── build_mac.sh              # macOS 建置腳本
-├── build_win.ps1             # Windows PowerShell 建置腳本
+├── packaging/
+│   ├── build_mac.sh          # macOS 建置腳本
+│   ├── build_win.ps1         # Windows PowerShell 建置腳本
+│   ├── doc_searcher_mac.spec # macOS .app 的 PyInstaller 設定
+│   ├── doc_searcher_win.spec # Windows 單一檔案 .exe 的 PyInstaller 設定
+│   └── installer_inno.iss    # Windows 安裝程式 (Inno Setup 6) 腳本
+├── docs/screenshots/         # README 介面截圖
 ├── requirements.txt          # 執行期依賴套件清單
 └── requirements-dev.txt      # 開發與測試用依賴 (pytest)
 ```
@@ -159,10 +172,12 @@ python main.py --dir /path/to/documents --search "專案預算" --type excel
 
 | 平台 | 建置指令 | 輸出 |
 | --- | --- | --- |
-| macOS（依建置機器架構：arm64 / x86_64） | `./build_mac.sh` | `dist/DocSearcher.app`、`dist/DocSearcher-macOS-<arch>.zip` |
-| Windows 10 / 11 | `powershell -ExecutionPolicy Bypass -File .\build_win.ps1` | `dist\DocSearcher.exe`（單一可攜執行檔） |
+| macOS（依建置機器架構：arm64 / x86_64） | `packaging/build_mac.sh` | `dist/DocSearcher.app`、`dist/DocSearcher-macOS-<arch>.zip` |
+| Windows 10 / 11 | `powershell -ExecutionPolicy Bypass -File .\packaging\build_win.ps1` | `dist\DocSearcher.exe`（單一可攜執行檔） |
 
-- macOS 使用 `doc_searcher_mac.spec`（onedir `.app`，PyInstaller 6 已不建議在 `.app` 內使用 onefile）；Windows 使用 `doc_searcher.spec`（onefile、無主控台視窗）。
+- 請在專案根目錄執行建置腳本；輸出位於根目錄的 `dist/`。
+- macOS 使用 `packaging/doc_searcher_mac.spec`（onedir `.app`，PyInstaller 6 已不建議在 `.app` 內使用 onefile）；Windows 使用 `packaging/doc_searcher_win.spec`（onefile、無主控台視窗）。
+- 若需 Windows 安裝程式，先建置 `DocSearcher.exe`，再以 Inno Setup 6 編譯 `packaging/installer_inno.iss`，輸出至 `setup_output/`。
 - GitHub Actions：`build_windows.yml` 與 `build_macos.yml`（Apple Silicon 與 Intel）會自動上傳建置成品。
 - 程式內讀取打包資源請使用 `utils.resource_path.resource_path("assets/...")`，它會在打包後自動改用 `sys._MEIPASS`。
 

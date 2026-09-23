@@ -1,5 +1,6 @@
 ; Inno Setup 6 Script for DocSearcher on Windows 10 and Windows 11
-; Produces: DocSearcher_Setup.exe
+; Produces: setup_output\DocSearcher_Setup_Win10_Win11.exe
+; Lives in packaging/; SourceDir points all relative paths at the project root.
 
 #define MyAppName "DocSearcher"
 #define MyAppVersion "1.1.0"
@@ -7,6 +8,7 @@
 #define MyAppExeName "DocSearcher.exe"
 
 [Setup]
+SourceDir=..
 AppId={{D0C5EA4C-11E2-4C75-9B21-7A3982467C4A}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}

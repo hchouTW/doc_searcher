@@ -5,11 +5,15 @@ import os
 import sys
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
+# SPECPATH is injected by PyInstaller; this spec lives in <root>/packaging.
+ROOT = os.path.dirname(SPECPATH)
+sys.path.insert(0, ROOT)  # so collect_submodules can import the project packages
+
 block_cipher = None
 
 # Collect all jieba dictionaries and assets
 datas = [
-    ('assets', 'assets'),
+    (os.path.join(ROOT, 'assets'), 'assets'),
 ]
 datas += collect_data_files('jieba')
 
@@ -32,8 +36,8 @@ hiddenimports += collect_submodules('ui')
 hiddenimports += collect_submodules('utils')
 
 a = Analysis(
-    ['main.py'],
-    pathex=['.'],
+    [os.path.join(ROOT, 'main.py')],
+    pathex=[ROOT],
     binaries=[],
     datas=datas,
     hiddenimports=hiddenimports,
@@ -69,5 +73,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['assets/app_icon.ico'],
+    icon=[os.path.join(ROOT, 'assets', 'app_icon.ico')],
 )
