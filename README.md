@@ -65,6 +65,7 @@ doc_searcher/
 │   ├── indexer.py            # 文件解析調度、jieba 分詞與批次索引寫入
 │   ├── scanner.py            # 資料夾遞迴掃描、過濾暫存檔 (~$*)、增量比對
 │   ├── searcher.py           # 查詢語法剖析、FTS5 檢索與 Snippet 摘要高亮
+│   ├── search_service.py     # 不依賴介面的搜尋／索引服務（供 MCP 伺服器使用）
 │   └── version.py            # 應用程式版本號與更新紀錄（唯一版本來源）
 ├── parsers/
 │   ├── base.py               # DocumentParser 抽象介面與 PageSegment 資料結構
@@ -96,11 +97,14 @@ doc_searcher/
 │   ├── test_searcher.py      # 查詢語法、格式過濾與高亮測試
 │   ├── test_os_adaptation.py # 作業系統偵測與原生操作適配測試
 │   ├── test_ui_features.py   # 語系、排序與預覽導覽等介面回歸測試
+│   ├── test_search_service.py # 搜尋服務（搜尋、狀態、重新索引、文件文字）測試
+│   ├── test_mcp_server.py    # MCP 協定層與 stdio 往返測試
 │   └── sample_files/         # 各格式測試樣本文件
 ├── scripts/
 │   └── generate_icon.py      # 產生應用程式圖示 (.ico / .png)
 ├── assets/                   # 應用程式圖示
 ├── main.py                   # 程式進入點 (支援 GUI 與 CLI 兩種模式)
+├── mcp_server.py             # MCP 伺服器（stdio），供 Claude Code／Claude Desktop 使用
 ├── install.bat               # Windows 一鍵安裝（Python、VC++ 運行庫、venv、桌面捷徑）
 ├── run_windows.bat           # Windows 啟動器（未安裝時自動呼叫 install.bat）
 ├── packaging/
@@ -111,7 +115,8 @@ doc_searcher/
 │   └── installer_inno.iss    # Windows 安裝程式 (Inno Setup 6) 腳本
 ├── docs/screenshots/         # README 介面截圖
 ├── requirements.txt          # 執行期依賴套件清單
-└── requirements-dev.txt      # 開發與測試用依賴 (pytest)
+├── requirements-dev.txt      # 開發與測試用依賴 (pytest)
+└── requirements-mcp.txt      # MCP 伺服器依賴 (mcp，需 Python 3.10+)
 ```
 
 ---
@@ -194,13 +199,71 @@ Windows 若出現 SmartScreen 提示，請點選「其他資訊」→「仍要�
 
 ---
 
+## 🤖 MCP 伺服器（Claude Code／Claude Desktop 整合）
+
+`mcp_server.py` 以 [Model Context Protocol](https://modelcontextprotocol.io) 將本機索引提供給 AI 用戶端，與桌面程式共用 `~/.doc_searcher` 內的索引與設定（可用 `DOC_SEARCHER_DATA_DIR` 覆寫）。請先在桌面程式加入檢索資料夾並完成索引。
+
+| 類型 | 名稱 | 說明 |
+| --- | --- | --- |
+| 工具 | `search_documents` | `query`（支援 `"片語"`、AND／OR／NOT、`filename:`）、`formats`（`pdf`／`word`／`excel`／`ppt`／`text`）、`limit`（1–100）。回傳路徑、類型、大小、修改時間、命中位置（頁／工作表／投影片／段落）與 **粗體** 標示的摘要 |
+| 工具 | `get_index_status` | 文件數、索引大小、最後更新時間、版本、檢索資料夾與最近一次重新索引狀態 |
+| 工具 | `reindex_directory` | 於背景增量重新索引全部檢索資料夾，或其中某個子資料夾；立即返回，以 `get_index_status` 查詢進度。新資料夾需在桌面程式加入 |
+| 資源 | `docsearcher://document/{path}` | 已索引文件的完整擷取文字（`path` 為百分比編碼的絕對路徑；搜尋結果附有現成的 `resource_uri`）。只提供索引內的文件，不會讀取索引以外的檔案 |
+
+### 1. 安裝（需 Python 3.10+）
+
+```bash
+pip install -r requirements-mcp.txt
+```
+
+### 2. 加入 Claude Code
+
+```bash
+claude mcp add docsearcher -- /絕對路徑/doc_searcher/venv/bin/python /絕對路徑/doc_searcher/mcp_server.py
+```
+
+Windows 請改用 `venv\Scripts\python.exe`。加入後在 Claude Code 輸入 `/mcp` 確認連線狀態。
+
+### 3. 加入 Claude Desktop
+
+編輯 `claude_desktop_config.json`（macOS：`~/Library/Application Support/Claude/`；Windows：`%APPDATA%\Claude\`），重新啟動 Claude Desktop：
+
+```json
+{
+  "mcpServers": {
+    "docsearcher": {
+      "command": "/絕對路徑/doc_searcher/venv/bin/python",
+      "args": ["/絕對路徑/doc_searcher/mcp_server.py"]
+    }
+  }
+}
+```
+
+Windows 範例：`"command": "C:\\path\\to\\doc_searcher\\venv\\Scripts\\python.exe"`、`"args": ["C:\\path\\to\\doc_searcher\\mcp_server.py"]`。
+
+### 4. 以 MCP Inspector 測試
+
+```bash
+# 網頁介面：列出工具、呼叫工具、讀取資源
+npx @modelcontextprotocol/inspector venv/bin/python mcp_server.py
+
+# 命令列：伺服器指令需放在選項之前
+npx @modelcontextprotocol/inspector --cli venv/bin/python mcp_server.py --method tools/list
+npx @modelcontextprotocol/inspector --cli venv/bin/python mcp_server.py \
+  --method tools/call --tool-name search_documents --tool-arg 'query=預算' 'limit=5'
+```
+
+> 每次 `--cli` 呼叫都會啟動新的伺服器程序並隨即結束，因此背景的 `reindex_directory` 會被中斷；請在網頁介面、Claude Code 或 Claude Desktop 中測試重新索引。
+
+---
+
 ## 🧪 執行自動化測試
 
 專案內建完備的單元與整合測試，包含 sample 檔案產生器：
 
 ```bash
-# 0. 安裝測試用依賴
-pip install -r requirements-dev.txt
+# 0. 安裝測試用依賴（加上 requirements-mcp.txt 才會執行 MCP 測試，否則自動略過）
+pip install -r requirements-dev.txt -r requirements-mcp.txt
 
 # 1. 產生測試用多格式文件
 python -m tests.sample_generator
