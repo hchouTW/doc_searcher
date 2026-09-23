@@ -171,6 +171,8 @@ python main.py --dir /path/to/documents --search "專案預算"
 python main.py --dir /path/to/documents --search "專案預算" --type excel
 ```
 
+CLI 只會更新 `--dir` 目錄內的索引，其他目錄的索引不受影響。`--dir` 與 `--search` 必須同時指定。結束代碼：`0` 成功、`1` 目錄無法存取（既有索引保留不變）、`2` 參數錯誤。
+
 ### 4. 打包成免安裝獨立程式
 
 終端使用者不需安裝 Python 或任何套件；只有建置機器需要 Python 3。
