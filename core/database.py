@@ -113,6 +113,15 @@ class Database:
         row = cursor.fetchone()
         return dict(row) if row else None
 
+    def get_document_segments(self, doc_id: int) -> List[Dict[str, Any]]:
+        """Return a document's extracted segments in their original order."""
+        conn = self.get_connection()
+        cursor = conn.execute(
+            "SELECT segment_id, segment_type, content FROM doc_segments WHERE doc_id = ? ORDER BY id",
+            (doc_id,)
+        )
+        return [dict(row) for row in cursor.fetchall()]
+
     def get_all_indexed_paths(self) -> Dict[str, Tuple[float, int]]:
         """Return dict of {path: (mtime, file_size)} for incremental scanning."""
         conn = self.get_connection()

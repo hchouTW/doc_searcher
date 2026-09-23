@@ -1,0 +1,4 @@
+# MCP 伺服器（mcp_server.py）用依賴；需要 Python 3.10+，桌面程式本身不需要
+-r requirements.txt
+
+mcp>=2.2,<3
