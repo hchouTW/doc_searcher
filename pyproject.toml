@@ -1,6 +1,7 @@
 # Project metadata, dependencies, entry points, and pytest settings for DocSearcher.
 # Install: pip install .            (desktop GUI + CLI)
-#          pip install '.[dev,mcp]' (tests + MCP server)
+#          pip install '.[dev,mcp]' (tests + MCP server); '.[package]' adds PyInstaller
+# Pinned CI/release versions: constraints/ci.txt (see constraints/README.md).
 # Python policy: 3.10 (mcp, PyMuPDF, PySide6 minimum) through 3.14 (PySide6 upper bound).
 
 [build-system]
@@ -37,7 +38,8 @@ dependencies = [
 
 [project.optional-dependencies]
 mcp = ["mcp>=2.2,<3"]
-dev = ["pytest>=8.0.0", "build>=1.0"]
+dev = ["pytest>=8.0.0", "build>=1.0", "uv>=0.5"]  # uv regenerates constraints/ci.txt
+package = ["pyinstaller>=6.0", "Pillow>=10.0"]
 
 [project.scripts]
 doc-searcher = "doc_searcher.cli:main"

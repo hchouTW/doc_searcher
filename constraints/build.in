@@ -1,0 +1,3 @@
+# Build-system requirements, locked so CI can install the project with --no-build-isolation.
+setuptools>=69
+wheel

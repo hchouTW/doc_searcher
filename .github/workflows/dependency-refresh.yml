@@ -1,0 +1,98 @@
+# Purpose: Propose dependency upgrades as a reviewed pull request instead of resolving the newest
+#          versions during every build.
+# What the code does: Weekly (or on demand) regenerates constraints/ci.txt with --upgrade, checks wheel
+#                     availability for every CI target, runs the full test matrix against the
+#                     candidate lock, and only then opens/updates a pull request with the diff.
+# Usage notes: PRs created with GITHUB_TOKEN do not trigger other workflows, so validation happens
+#              here before the PR is opened. Nothing is published if the lock is unchanged.
+name: Dependency refresh
+
+on:
+  schedule:
+    - cron: '17 3 * * 1'  # Mondays 03:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.diff.outputs.changed }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.12'
+
+      - name: Install uv from the current lock
+        run: |
+          # The uv entry plus all of its --hash lines (the block ends at the first other line).
+          awk '/^uv==/{keep=1; print; next} keep && /^ +--hash/{print; next} {keep=0}' \
+            constraints/ci.txt > uv-requirement.txt
+          python -m pip install --require-hashes --no-deps -r uv-requirement.txt
+
+      - name: Upgrade and verify the lock
+        run: UV=uv scripts/update_constraints.sh --upgrade
+
+      - name: Detect changes
+        id: diff
+        run: |
+          if git diff --quiet -- constraints/ci.txt; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            git diff --stat -- constraints/ci.txt
+          fi
+
+      - name: Upload candidate lock
+        if: steps.diff.outputs.changed == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: candidate-constraints
+          path: constraints/ci.txt
+          if-no-files-found: error
+
+  test:
+    needs: compile
+    if: needs.compile.outputs.changed == 'true'
+    uses: ./.github/workflows/tests.yml
+    with:
+      constraints-artifact: candidate-constraints
+
+  open-pr:
+    needs: [ compile, test ]
+    if: needs.compile.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Download candidate lock
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: candidate-constraints
+          path: constraints
+
+      - name: Open or update pull request
+        uses: peter-evans/create-pull-request@22a9089034f40e5a961c8808d113e2c98fb63676 # v7.0.11
+        with:
+          branch: deps/weekly-refresh
+          commit-message: Refresh locked dependencies
+          title: Refresh locked dependencies
+          body: |
+            Automated `scripts/update_constraints.sh --upgrade`.
+
+            Before this PR was opened, the candidate lock passed the wheel-availability check for
+            every CI target and the full test matrix (run ${{ github.run_id }}).
+            Review the version changes in `constraints/ci.txt`, then run the native build
+            workflows before merging if PyInstaller, PySide6 or PyMuPDF changed.
+          add-paths: constraints/ci.txt
+          delete-branch: true

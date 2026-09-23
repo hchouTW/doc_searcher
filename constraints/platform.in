@@ -1,0 +1,7 @@
+# Platform workarounds applied when compiling constraints/ci.txt. Remove an entry once upstream
+# ships wheels again (the refresh workflow's wheel check fails if one is missing).
+#
+# cryptography (mcp -> pyjwt[crypto]) >= 49 publishes macOS wheels for arm64 only; 48.x still
+# ships universal2 wheels, which the macOS Intel test/release runner needs. uv keeps one version
+# across platforms when it can, so this currently selects 48.x everywhere.
+cryptography<49 ; sys_platform == 'darwin' and platform_machine == 'x86_64'

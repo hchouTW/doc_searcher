@@ -113,7 +113,8 @@ doc_searcher/
 │   ├── test_mcp_server.py    # MCP 協定層與 stdio 往返測試
 │   └── sample_files/         # 各格式測試樣本文件
 ├── scripts/
-│   └── generate_icon.py      # 產生應用程式圖示 (.ico / .png)
+│   ├── generate_icon.py      # 產生應用程式圖示 (.ico / .png)
+│   └── update_constraints.sh # 重新產生並驗證 constraints/ci.txt
 ├── install.bat               # Windows 一鍵安裝（Python、VC++ 運行庫、venv、桌面捷徑）
 ├── run_windows.bat           # Windows 啟動器（未安裝時自動呼叫 install.bat）
 ├── packaging/
@@ -123,10 +124,8 @@ doc_searcher/
 │   ├── doc_searcher_win.spec # Windows 單一檔案 .exe 的 PyInstaller 設定
 │   └── installer_inno.iss    # Windows 安裝程式 (Inno Setup 6) 腳本
 ├── docs/                     # 基準紀錄 (baseline.md) 與 README 介面截圖
-├── pyproject.toml            # 專案中繼資料、依賴（含 dev／mcp 選項）與指令進入點
-├── requirements.txt          # 相容用：建置腳本仍使用的執行期依賴清單
-├── requirements-dev.txt      # 相容用：開發與測試用依賴 (pytest)
-└── requirements-mcp.txt      # 相容用：MCP 伺服器依賴 (mcp)
+├── constraints/              # CI／發行版建置使用的鎖定依賴（含雜湊），見 constraints/README.md
+└── pyproject.toml            # 專案中繼資料、依賴範圍（dev／mcp／package 選項）與指令進入點
 ```
 
 ---
@@ -155,6 +154,8 @@ pip install -e '.[dev,mcp]'
 ```
 
 > **自 1.2.0 原始碼升級**：程式碼已移至 `src/doc_searcher/`，`main.py` 與 `mcp_server.py` 已移除。請在既有虛擬環境執行一次 `pip install -e .`（Windows 可重新執行 `install.bat`，會一併更新桌面捷徑），並將 MCP 用戶端設定改為 `venv/bin/doc-searcher-mcp`。設定檔與索引位置不變。
+
+> **可重現安裝**：CI 與打包腳本安裝 `constraints/ci.txt` 內固定版本且驗證雜湊的依賴；更新流程見 [constraints/README.md](constraints/README.md)。
 
 > **Python 支援政策**：3.10（mcp、PyMuPDF、PySide6 的最低需求）至 3.14（PySide6 目前上限）。CI 會驗證此範圍。安裝後可使用 `doc-searcher`（GUI／CLI，`--version`、`--help` 不會開啟視窗）與 `doc-searcher-mcp` 指令。
 

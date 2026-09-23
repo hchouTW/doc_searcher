@@ -1,0 +1,12 @@
+# Keeps SHA-pinned GitHub Actions current: Dependabot rewrites the pin and its "# vX.Y.Z" comment
+# in a reviewable pull request. Python packages are refreshed by dependency-refresh.yml instead,
+# because constraints/ci.txt is a universal, hashed uv lock.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      github-actions:
+        patterns: ["*"]
