@@ -72,15 +72,27 @@ def get_service() -> SearchService:
 
 @mcp.tool(annotations=ToolAnnotations(readOnlyHint=True, openWorldHint=False))
 def search_documents(
-    query: Annotated[str, Field(description=(
-        'Keywords (Chinese or English). Supports "exact phrase", AND / OR / NOT, and '
-        "filename:<name> to match file names."
-    ))],
-    formats: Annotated[Optional[list[FormatGroup]], Field(description=(
-        "Only return these format groups: pdf, word (.docx/.doc), excel (.xlsx/.xls), "
-        "ppt (.pptx/.ppt), text (.txt/.md/.csv). Omit to search all."
-    ))] = None,
-    limit: Annotated[int, Field(ge=1, le=MAX_SEARCH_LIMIT, description="Maximum documents to return.")] = 20,
+    query: Annotated[
+        str,
+        Field(
+            description=(
+                'Keywords (Chinese or English). Supports "exact phrase", AND / OR / NOT, and '
+                "filename:<name> to match file names."
+            )
+        ),
+    ],
+    formats: Annotated[
+        Optional[list[FormatGroup]],
+        Field(
+            description=(
+                "Only return these format groups: pdf, word (.docx/.doc), excel (.xlsx/.xls), "
+                "ppt (.pptx/.ppt), text (.txt/.md/.csv). Omit to search all."
+            )
+        ),
+    ] = None,
+    limit: Annotated[
+        int, Field(ge=1, le=MAX_SEARCH_LIMIT, description="Maximum documents to return.")
+    ] = 20,
 ) -> dict[str, Any]:
     """Search indexed local documents and return ranked hits with highlighted snippets.
 
@@ -101,12 +113,19 @@ def get_index_status() -> dict[str, Any]:
     return get_service().index_status()
 
 
-@mcp.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True))
+@mcp.tool(
+    annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True)
+)
 def reindex_directory(
-    directory: Annotated[Optional[str], Field(description=(
-        "A configured search folder, or a subfolder of one, to rescan. Omit to rescan all "
-        "configured folders. New folders must be added in the DocSearcher app."
-    ))] = None,
+    directory: Annotated[
+        Optional[str],
+        Field(
+            description=(
+                "A configured search folder, or a subfolder of one, to rescan. Omit to rescan all "
+                "configured folders. New folders must be added in the DocSearcher app."
+            )
+        ),
+    ] = None,
 ) -> dict[str, Any]:
     """Start an incremental background re-index (new, changed and deleted files) and return
     immediately. Poll get_index_status to see when it finishes and what changed."""

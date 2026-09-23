@@ -18,7 +18,7 @@ class PdfParser(BaseParser):
     def parse(self, file_path: str) -> ExtractedDoc:
         abs_path = os.path.abspath(file_path)
         segments: List[PageSegment] = []
-        
+
         try:
             import pymupdf
         except ImportError:
@@ -49,9 +49,7 @@ class PdfParser(BaseParser):
                     if text:
                         segments.append(
                             PageSegment(
-                                segment_id=str(page_idx + 1),
-                                segment_type="page",
-                                text=text
+                                segment_id=str(page_idx + 1), segment_type="page", text=text
                             )
                         )
                 except Exception:
@@ -59,10 +57,7 @@ class PdfParser(BaseParser):
                     continue
 
             return ExtractedDoc(
-                file_path=abs_path,
-                file_type="pdf",
-                total_segments=total_pages,
-                segments=segments
+                file_path=abs_path, file_type="pdf", total_segments=total_pages, segments=segments
             )
         finally:
             doc.close()

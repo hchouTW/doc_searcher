@@ -13,6 +13,7 @@ from doc_searcher.storage.database import Database
 
 def make_pdf(path, pages, **save_kwargs):
     import pymupdf
+
     doc = pymupdf.open()
     for text in pages:
         doc.new_page().insert_text((72, 72), text)
@@ -30,6 +31,7 @@ def db(tmp_path):
 
 def test_mixed_batch_indexes_good_files_and_records_failures(tmp_path, db, monkeypatch):
     import pymupdf
+
     docs = tmp_path / "docs"
     docs.mkdir()
     good_txt = docs / "good.txt"
@@ -37,8 +39,13 @@ def test_mixed_batch_indexes_good_files_and_records_failures(tmp_path, db, monke
     good_pdf = make_pdf(docs / "good.pdf", ["beta budget"])
     corrupt = docs / "corrupt.docx"
     corrupt.write_bytes(b"not a zip")
-    locked = make_pdf(docs / "locked.pdf", ["secret"], encryption=pymupdf.PDF_ENCRYPT_AES_256,
-                      user_pw="u", owner_pw="o")
+    locked = make_pdf(
+        docs / "locked.pdf",
+        ["secret"],
+        encryption=pymupdf.PDF_ENCRYPT_AES_256,
+        user_pw="u",
+        owner_pw="o",
+    )
     crashing = docs / "crash.xlsx"
     crashing.write_bytes(b"")
     monkeypatch.setattr(get_parser(str(crashing)), "parse", lambda path: 1 / 0)
@@ -57,7 +64,9 @@ def test_mixed_batch_indexes_good_files_and_records_failures(tmp_path, db, monke
     assert db.get_document_by_path(str(vanished)) is None
 
 
-@pytest.mark.skipif(sys.platform == "win32" or os.geteuid() == 0, reason="needs POSIX permissions as non-root")
+@pytest.mark.skipif(
+    sys.platform == "win32" or os.geteuid() == 0, reason="needs POSIX permissions as non-root"
+)
 def test_permission_denied_file_does_not_stop_batch(tmp_path, db):
     readable = tmp_path / "ok.txt"
     readable.write_text("gamma budget", encoding="utf-8")
@@ -74,7 +83,10 @@ def test_permission_denied_file_does_not_stop_batch(tmp_path, db):
 
 def test_one_bad_pdf_page_keeps_the_other_pages(tmp_path, db, monkeypatch):
     import pymupdf
-    path = make_pdf(tmp_path / "pages.pdf", ["first page delta", "second page broken", "third page delta"])
+
+    path = make_pdf(
+        tmp_path / "pages.pdf", ["first page delta", "second page broken", "third page delta"]
+    )
     real_get_text = pymupdf.Page.get_text
 
     def flaky_get_text(page, *args, **kwargs):

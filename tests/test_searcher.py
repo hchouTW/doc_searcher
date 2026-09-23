@@ -95,12 +95,14 @@ def test_search_can_run_while_index_is_being_updated(tmp_path):
             file_type="txt",
             file_size=version,
             mtime=float(version),
-            segments=[{
-                "segment_id": "1",
-                "segment_type": "text",
-                "content": f"budget version {version}",
-                "tokenized_content": f"budget version {version}",
-            }],
+            segments=[
+                {
+                    "segment_id": "1",
+                    "segment_type": "text",
+                    "content": f"budget version {version}",
+                    "tokenized_content": f"budget version {version}",
+                }
+            ],
         )
 
     save_version(0)
@@ -148,12 +150,14 @@ def test_boolean_phrase_and_filename_search_features(tmp_path):
             file_type=file_type,
             file_size=len(content),
             mtime=1.0,
-            segments=[{
-                "segment_id": "1",
-                "segment_type": "text",
-                "content": content,
-                "tokenized_content": tokenized,
-            }],
+            segments=[
+                {
+                    "segment_id": "1",
+                    "segment_type": "text",
+                    "content": content,
+                    "tokenized_content": tokenized,
+                }
+            ],
         )
 
     save("public.txt", "txt", "alpha public", "alpha public")
@@ -183,9 +187,7 @@ def test_boolean_phrase_and_filename_search_features(tmp_path):
     assert {result.filename for result in phrase_results} == {"ordered.txt"}
 
     filename_results = searcher.search("FILENAME:ANNUAL_REPORT", type_filter="pdf")
-    assert [result.filename for result in filename_results] == [
-        "annual_report_2026.pdf"
-    ]
+    assert [result.filename for result in filename_results] == ["annual_report_2026.pdf"]
     assert filename_results[0].segments[0].segment_type == "檔名"
     assert searcher.search("檔名:public")[0].filename == "public.txt"
     db.close()
@@ -221,12 +223,14 @@ def test_search_metadata_filters_apply_to_content_and_filename_queries(tmp_path)
             file_type="txt",
             file_size=size,
             mtime=mtime,
-            segments=[{
-                "segment_id": "1",
-                "segment_type": "text",
-                "content": "shared keyword",
-                "tokenized_content": "shared keyword",
-            }],
+            segments=[
+                {
+                    "segment_id": "1",
+                    "segment_type": "text",
+                    "content": "shared keyword",
+                    "tokenized_content": "shared keyword",
+                }
+            ],
         )
 
     save("old-small.txt", 100, 1000.0)
@@ -236,12 +240,11 @@ def test_search_metadata_filters_apply_to_content_and_filename_queries(tmp_path)
     assert [item.filename for item in searcher.search("shared", modified_after=2000)] == [
         "new-large.txt"
     ]
-    assert [item.filename for item in searcher.search("shared", max_size=1000)] == [
-        "old-small.txt"
-    ]
-    assert [item.filename for item in searcher.search(
-        "filename:new", modified_before=6000, min_size=1000
-    )] == ["new-large.txt"]
+    assert [item.filename for item in searcher.search("shared", max_size=1000)] == ["old-small.txt"]
+    assert [
+        item.filename
+        for item in searcher.search("filename:new", modified_before=6000, min_size=1000)
+    ] == ["new-large.txt"]
     assert searcher.search("shared", modified_before=500, max_size=50) == []
     db.close()
 
@@ -251,12 +254,19 @@ def test_advanced_search_modes_paths_and_creation_time(tmp_path):
 
     def save(relative_path, content, mtime, ctime, size):
         db.save_document_index(
-            file_path=str(tmp_path / relative_path), file_type="txt",
-            file_size=size, mtime=mtime, ctime=ctime,
-            segments=[{
-                "segment_id": "1", "segment_type": "text", "content": content,
-                "tokenized_content": content,
-            }],
+            file_path=str(tmp_path / relative_path),
+            file_type="txt",
+            file_size=size,
+            mtime=mtime,
+            ctime=ctime,
+            segments=[
+                {
+                    "segment_id": "1",
+                    "segment_type": "text",
+                    "content": content,
+                    "tokenized_content": content,
+                }
+            ],
         )
 
     save("team/cat.txt", "Cat and feline", 100, 900, 1024)
@@ -271,56 +281,69 @@ def test_advanced_search_modes_paths_and_creation_time(tmp_path):
     assert {r.path for r in searcher.search("cat", include_paths=[str(tmp_path / "team")])} == {
         str(tmp_path / "team/cat.txt")
     }
-    assert {r.path for r in searcher.search(
-        "cat", exclude_patterns=["temp"], search_roots=[str(tmp_path)]
-    )} == {
-        str(tmp_path / "team/cat.txt")
-    }
+    assert {
+        r.path
+        for r in searcher.search("cat", exclude_patterns=["temp"], search_roots=[str(tmp_path)])
+    } == {str(tmp_path / "team/cat.txt")}
     assert {r.path for r in searcher.search("cat", date_field="ctime", modified_after=500)} == {
-        str(tmp_path / "team/cat.txt"), str(tmp_path / "temp/cat.txt")
+        str(tmp_path / "team/cat.txt"),
+        str(tmp_path / "temp/cat.txt"),
     }
     assert {r.filename for r in searcher.search(r"Cat\s+and", regex=True, match_case=True)} == {
         "cat.txt"
     }
     assert {r.path for r in searcher.search("cat", regex=True, whole_word=True)} == {
-        str(tmp_path / "team/cat.txt"), str(tmp_path / "temp/cat.txt")
+        str(tmp_path / "team/cat.txt"),
+        str(tmp_path / "temp/cat.txt"),
     }
     assert {r.path for r in searcher.search("NOT category", whole_word=True)} == {
-        str(tmp_path / "team/cat.txt"), str(tmp_path / "temp/cat.txt")
+        str(tmp_path / "team/cat.txt"),
+        str(tmp_path / "temp/cat.txt"),
     }
     with pytest.raises(SearchQueryError, match="Regex"):
         searcher.search("[", regex=True)
     db.close()
 
 
-@pytest.mark.parametrize("expression, content", [
-    ("report", "annual report"),
-    ("cat|dog|bird", "a bird appeared"),
-    ("(?i)error", "ERROR found"),
-    (r"\d+", "number 2026"),
-    (r"\d{4}", "year 2026"),
-    (r"\d{4}-\d{2}-\d{2}", "2026-09-23"),
-    (r"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}", "192.168.1.42"),
-    ("^IMPORT", "IMPORT records"),
-    ("END$", "records END"),
-    (r"\btest\b", "a test case"),
-    ("LOG.*ERROR", "LOG: ERROR occurred"),
-    (r"\b\w+\.(pdf|docx|txt)\b", "see report.pdf"),
-])
+@pytest.mark.parametrize(
+    "expression, content",
+    [
+        ("report", "annual report"),
+        ("cat|dog|bird", "a bird appeared"),
+        ("(?i)error", "ERROR found"),
+        (r"\d+", "number 2026"),
+        (r"\d{4}", "year 2026"),
+        (r"\d{4}-\d{2}-\d{2}", "2026-09-23"),
+        (r"\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}", "192.168.1.42"),
+        ("^IMPORT", "IMPORT records"),
+        ("END$", "records END"),
+        (r"\btest\b", "a test case"),
+        ("LOG.*ERROR", "LOG: ERROR occurred"),
+        (r"\b\w+\.(pdf|docx|txt)\b", "see report.pdf"),
+    ],
+)
 def test_help_regex_examples_execute_in_search(expression, content, tmp_path):
     db = Database(str(tmp_path / "regex_examples.db"))
     db.save_document_index(
-        file_path=str(tmp_path / "example.txt"), file_type="txt",
-        file_size=len(content), mtime=100.0, ctime=100.0,
-        segments=[{
-            "segment_id": "1", "segment_type": "text", "content": content,
-            "tokenized_content": content,
-        }],
+        file_path=str(tmp_path / "example.txt"),
+        file_type="txt",
+        file_size=len(content),
+        mtime=100.0,
+        ctime=100.0,
+        segments=[
+            {
+                "segment_id": "1",
+                "segment_type": "text",
+                "content": content,
+                "tokenized_content": content,
+            }
+        ],
     )
     try:
-        assert [result.filename for result in DocumentSearcher(db).search(
-            expression, regex=True, match_case=True
-        )] == ["example.txt"]
+        assert [
+            result.filename
+            for result in DocumentSearcher(db).search(expression, regex=True, match_case=True)
+        ] == ["example.txt"]
     finally:
         db.close()
 
@@ -352,19 +375,36 @@ def test_exclusions_ignore_folders_above_search_roots(tmp_path):
     db = Database(str(tmp_path / "exclusions.db"))
     for relative in ("report.txt", "temp/scratch.txt", "private/secret.txt"):
         db.save_document_index(
-            file_path=str(root / relative), file_type="txt", file_size=10, mtime=1,
-            segments=[{"segment_id": "1", "segment_type": "text",
-                       "content": "budget", "tokenized_content": "budget"}],
+            file_path=str(root / relative),
+            file_type="txt",
+            file_size=10,
+            mtime=1,
+            segments=[
+                {
+                    "segment_id": "1",
+                    "segment_type": "text",
+                    "content": "budget",
+                    "tokenized_content": "budget",
+                }
+            ],
         )
     searcher = DocumentSearcher(db)
 
     def found(**filters):
-        return {Path(r.path).relative_to(root).as_posix() for r in searcher.search("budget", **filters)}
+        return {
+            Path(r.path).relative_to(root).as_posix() for r in searcher.search("budget", **filters)
+        }
 
     roots = [str(root)]
-    assert found(exclude_patterns=["temp"], search_roots=roots) == {"report.txt", "private/secret.txt"}
+    assert found(exclude_patterns=["temp"], search_roots=roots) == {
+        "report.txt",
+        "private/secret.txt",
+    }
     absolute = (root / "private").as_posix() + "/*"
-    assert found(exclude_patterns=[absolute], search_roots=roots) == {"report.txt", "temp/scratch.txt"}
+    assert found(exclude_patterns=[absolute], search_roots=roots) == {
+        "report.txt",
+        "temp/scratch.txt",
+    }
     # Without roots the whole path is matched (legacy callers).
     assert found(exclude_patterns=["temp"]) == set()
     db.close()

@@ -11,8 +11,13 @@ from doc_searcher.search.searcher import DocumentSearcher
 from doc_searcher.storage import migrations
 from doc_searcher.storage.database import Database
 from doc_searcher.storage.errors import (
-    DatabaseCorruptError, DatabaseLockedError, DatabaseReadOnlyError, FTS5UnavailableError,
-    MigrationError, SchemaTooNewError, StorageError,
+    DatabaseCorruptError,
+    DatabaseLockedError,
+    DatabaseReadOnlyError,
+    FTS5UnavailableError,
+    MigrationError,
+    SchemaTooNewError,
+    StorageError,
 )
 from fixtures.legacy_data import LEGACY_DOCUMENTS, write_legacy_db
 
@@ -143,6 +148,7 @@ def _fast_timeout(connect):
     def wrapper(database, timeout=5.0, **kwargs):
         conn = connect(database, timeout=0.1, **kwargs)
         return _NoBusyWait(conn)
+
     return wrapper
 
 
@@ -167,7 +173,9 @@ class _NoBusyWait:
             setattr(self._conn, name, value)
 
 
-@pytest.mark.skipif(sys.platform == "win32" or os.geteuid() == 0, reason="needs POSIX permissions as non-root")
+@pytest.mark.skipif(
+    sys.platform == "win32" or os.geteuid() == 0, reason="needs POSIX permissions as non-root"
+)
 def test_read_only_database_is_reported(tmp_path):
     folder = tmp_path / "ro"
     folder.mkdir()
@@ -208,8 +216,14 @@ def test_missing_fts5_is_reported(tmp_path, monkeypatch):
 
 
 def test_error_categories_are_distinct():
-    kinds = [DatabaseCorruptError, DatabaseLockedError, DatabaseReadOnlyError,
-             FTS5UnavailableError, MigrationError, SchemaTooNewError]
+    kinds = [
+        DatabaseCorruptError,
+        DatabaseLockedError,
+        DatabaseReadOnlyError,
+        FTS5UnavailableError,
+        MigrationError,
+        SchemaTooNewError,
+    ]
     assert all(issubclass(kind, StorageError) for kind in kinds)
     assert len(set(kinds)) == len(kinds)
 

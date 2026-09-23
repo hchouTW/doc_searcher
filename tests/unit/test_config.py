@@ -43,18 +43,21 @@ def test_legacy_config_loads_without_visible_changes(tmp_path):
 
 
 def test_invalid_fields_fall_back_individually(tmp_path, capsys):
-    path = write(tmp_path / "config.json", {
-        "directories": ["/kept", 3, ""],
-        "include_subdirectories": "yes",
-        "language": "fr-FR",
-        "search_debounce_ms": "fast",
-        "theme_mode": "dark",
-        "last_updated_at": "yesterday",
-        "exclude_patterns": "node_modules",
-        "enabled_extensions": [],
-        "max_snippet_chars": True,
-        "search_filters": {"regex": "true", "min_size": 2, "file_type": "pdf", "max_size": -1},
-    })
+    path = write(
+        tmp_path / "config.json",
+        {
+            "directories": ["/kept", 3, ""],
+            "include_subdirectories": "yes",
+            "language": "fr-FR",
+            "search_debounce_ms": "fast",
+            "theme_mode": "dark",
+            "last_updated_at": "yesterday",
+            "exclude_patterns": "node_modules",
+            "enabled_extensions": [],
+            "max_snippet_chars": True,
+            "search_filters": {"regex": "true", "min_size": 2, "file_type": "pdf", "max_size": -1},
+        },
+    )
 
     config = AppConfig(path)
 
@@ -73,12 +76,20 @@ def test_invalid_fields_fall_back_individually(tmp_path, capsys):
     assert filters["file_type"] == "pdf"
     assert filters["max_size"] == 0.0
     reported = capsys.readouterr().out
-    for name in ("include_subdirectories", "language", "search_filters.regex", "search_filters.max_size"):
+    for name in (
+        "include_subdirectories",
+        "language",
+        "search_filters.regex",
+        "search_filters.max_size",
+    ):
         assert name in reported
 
 
 def test_debounce_is_clamped(tmp_path):
-    assert AppConfig(write(tmp_path / "a.json", {"search_debounce_ms": 99999})).search_debounce_ms == 2000
+    assert (
+        AppConfig(write(tmp_path / "a.json", {"search_debounce_ms": 99999})).search_debounce_ms
+        == 2000
+    )
     assert AppConfig(write(tmp_path / "b.json", {"search_debounce_ms": -5})).search_debounce_ms == 0
 
 

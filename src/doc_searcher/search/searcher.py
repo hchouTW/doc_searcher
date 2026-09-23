@@ -20,7 +20,8 @@ import jieba
 from doc_searcher.storage.database import Database
 from doc_searcher.indexing.scanner import is_absolute_pattern
 from doc_searcher.search.text_helper import (
-    extract_keywords_from_query, generate_highlighted_snippets,
+    extract_keywords_from_query,
+    generate_highlighted_snippets,
     generate_regex_highlighted_snippets,
 )
 
@@ -80,8 +81,15 @@ class DocumentSearcher:
 
         filename_query = None if regex else self._extract_filename_query(clean_query)
         filter_clause, filter_params = self._build_filter_clause(
-            type_filter, modified_after, modified_before, min_size, max_size,
-            date_field, include_paths, exclude_patterns, search_roots,
+            type_filter,
+            modified_after,
+            modified_before,
+            min_size,
+            max_size,
+            date_field,
+            include_paths,
+            exclude_patterns,
+            search_roots,
         )
         if regex:
             return self._search_regex(
@@ -91,12 +99,20 @@ class DocumentSearcher:
         if negative_only:
             return self._search_negative_only(
                 negative_only.group(1) or negative_only.group(2),
-                filter_clause, filter_params, limit, match_case, whole_word,
+                filter_clause,
+                filter_params,
+                limit,
+                match_case,
+                whole_word,
             )
         if filename_query is not None:
             return self._search_filenames(
-                filename_query, filter_clause, filter_params, limit,
-                match_case, whole_word,
+                filename_query,
+                filter_clause,
+                filter_params,
+                limit,
+                match_case,
+                whole_word,
             )
 
         keywords = extract_keywords_from_query(clean_query)
@@ -108,7 +124,7 @@ class DocumentSearcher:
             return []
 
         conn = self.db.get_connection()
-        
+
         params: List[Any] = [fts_query]
 
         sql = f"""
@@ -139,13 +155,9 @@ class DocumentSearcher:
             rows = cursor.fetchall()
         except Exception as e:
             print(f"[Searcher] FTS search error: {e}, falling back to LIKE query")
-            rows = self._fallback_like_search(
-                keywords, filter_clause, filter_params, limit
-            )
+            rows = self._fallback_like_search(keywords, filter_clause, filter_params, limit)
 
-        return self._aggregate_rows(
-            rows, keywords, limit, clean_query, match_case, whole_word
-        )
+        return self._aggregate_rows(rows, keywords, limit, clean_query, match_case, whole_word)
 
     def _aggregate_rows(
         self,
@@ -176,8 +188,12 @@ class DocumentSearcher:
                 )
             else:
                 snippets = generate_highlighted_snippets(
-                    content, keywords, max_snippets=3, context_chars=60,
-                    case_sensitive=match_case, whole_word=whole_word,
+                    content,
+                    keywords,
+                    max_snippets=3,
+                    context_chars=60,
+                    case_sensitive=match_case,
+                    whole_word=whole_word,
                 )
             if not snippets:
                 continue
@@ -193,7 +209,9 @@ class DocumentSearcher:
                     ctime=row["ctime"],
                     rank_score=rank,
                     total_matches=len(snippets),
-                    segments=[SegmentMatch(segment_id=seg_id, segment_type=seg_type, snippets=snippets)]
+                    segments=[
+                        SegmentMatch(segment_id=seg_id, segment_type=seg_type, snippets=snippets)
+                    ],
                 )
             else:
                 doc_map[doc_id].total_matches += len(snippets)
@@ -270,7 +288,8 @@ class DocumentSearcher:
         # separator), so folders above a search folder never exclude it. Longest root first.
         roots = sorted(
             {os.path.abspath(root).rstrip("/\\") for root in (search_roots or []) if root},
-            key=len, reverse=True,
+            key=len,
+            reverse=True,
         )
         relative_sql = "d.path"
         relative_params: List[Any] = []
@@ -312,7 +331,7 @@ class DocumentSearcher:
         match = re.match(r"^(?:filename|檔名)\s*:\s*", query, re.IGNORECASE)
         if not match:
             return None
-        filename_query = query[match.end():].strip()
+        filename_query = query[match.end() :].strip()
         if not filename_query:
             raise SearchQueryError("請在 filename: 或 檔名: 後輸入檔名關鍵字。")
         if filename_query.startswith('"') or filename_query.endswith('"'):
@@ -336,11 +355,7 @@ class DocumentSearcher:
     ) -> List[SearchResultItem]:
         """Search document names without requiring a matching content segment."""
         conn = self.db.get_connection()
-        escaped_query = (
-            filename_query.replace("\\", "\\\\")
-            .replace("%", "\\%")
-            .replace("_", "\\_")
-        )
+        escaped_query = filename_query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
         params: List[Any] = [f"%{escaped_query}%", *filter_params, limit]
         rows = conn.execute(
             f"""
@@ -356,30 +371,36 @@ class DocumentSearcher:
 
         results = []
         for row in rows:
-            if not self._literal_matches(
-                row["filename"], filename_query, match_case, whole_word
-            ):
+            if not self._literal_matches(row["filename"], filename_query, match_case, whole_word):
                 continue
             snippets = generate_highlighted_snippets(
-                row["filename"], [filename_query], max_snippets=1, context_chars=80,
-                case_sensitive=match_case, whole_word=whole_word,
+                row["filename"],
+                [filename_query],
+                max_snippets=1,
+                context_chars=80,
+                case_sensitive=match_case,
+                whole_word=whole_word,
             )
-            results.append(SearchResultItem(
-                doc_id=int(row["id"]),
-                path=row["path"],
-                filename=row["filename"],
-                file_type=row["file_type"],
-                file_size=row["file_size"],
-                mtime=row["mtime"],
-                ctime=row["ctime"],
-                rank_score=-1000.0,
-                total_matches=1,
-                segments=[SegmentMatch(
-                    segment_id="",
-                    segment_type="檔名",
-                    snippets=snippets or [row["filename"]],
-                )],
-            ))
+            results.append(
+                SearchResultItem(
+                    doc_id=int(row["id"]),
+                    path=row["path"],
+                    filename=row["filename"],
+                    file_type=row["file_type"],
+                    file_size=row["file_size"],
+                    mtime=row["mtime"],
+                    ctime=row["ctime"],
+                    rank_score=-1000.0,
+                    total_matches=1,
+                    segments=[
+                        SegmentMatch(
+                            segment_id="",
+                            segment_type="檔名",
+                            snippets=snippets or [row["filename"]],
+                        )
+                    ],
+                )
+            )
         return results
 
     def _search_negative_only(
@@ -427,9 +448,14 @@ class DocumentSearcher:
     @staticmethod
     def _negative_result(row: Any) -> SearchResultItem:
         return SearchResultItem(
-            doc_id=row["id"], path=row["path"], filename=row["filename"],
-            file_type=row["file_type"], file_size=row["file_size"],
-            mtime=row["mtime"], ctime=row["ctime"], rank_score=0.0,
+            doc_id=row["id"],
+            path=row["path"],
+            filename=row["filename"],
+            file_type=row["file_type"],
+            file_size=row["file_size"],
+            mtime=row["mtime"],
+            ctime=row["ctime"],
+            rank_score=0.0,
             total_matches=0,
             segments=[SegmentMatch("", "檔名", [html.escape(row["filename"])])],
         )
@@ -463,20 +489,14 @@ class DocumentSearcher:
             """,
             filter_params,
         )
-        return self._aggregate_rows(
-            rows, [], limit, expression, regex_pattern=pattern
-        )
+        return self._aggregate_rows(rows, [], limit, expression, regex_pattern=pattern)
 
     @staticmethod
-    def _literal_matches(
-        content: str, term: str, match_case: bool, whole_word: bool
-    ) -> bool:
+    def _literal_matches(content: str, term: str, match_case: bool, whole_word: bool) -> bool:
         expression = re.escape(term)
         if whole_word:
             expression = rf"(?<!\w){expression}(?!\w)"
-        return re.search(
-            expression, content, 0 if match_case else re.IGNORECASE
-        ) is not None
+        return re.search(expression, content, 0 if match_case else re.IGNORECASE) is not None
 
     @classmethod
     def _matches_query_options(
@@ -512,9 +532,8 @@ class DocumentSearcher:
         """Convert query string into FTS5 expression using tokenized_content column."""
         if query.count('"') % 2:
             raise SearchQueryError("精確片語的雙引號未成對。")
-        if (
-            re.search(r"^(?:AND|OR|NOT)\b", query, re.IGNORECASE)
-            or re.search(r"\b(?:AND|OR|NOT)$", query, re.IGNORECASE)
+        if re.search(r"^(?:AND|OR|NOT)\b", query, re.IGNORECASE) or re.search(
+            r"\b(?:AND|OR|NOT)$", query, re.IGNORECASE
         ):
             raise SearchQueryError("AND、OR、NOT 前後都必須有搜尋詞。")
         if re.search(
@@ -525,7 +544,7 @@ class DocumentSearcher:
             raise SearchQueryError("AND、OR、NOT 不可連續使用。")
 
         parts = re.split(r'(\s+AND\s+|\s+OR\s+|\s+NOT\s+|".*?")', query, flags=re.IGNORECASE)
-        
+
         built_parts = []
         for p in parts:
             p_strip = p.strip()
@@ -538,18 +557,15 @@ class DocumentSearcher:
                 inner = p_strip[1:-1]
                 cut_words = [w.strip() for w in jieba.cut(inner) if w.strip()]
                 if cut_words:
-                    phrase_query = " ".join(
-                        word.replace('"', '""') for word in cut_words
-                    )
+                    phrase_query = " ".join(word.replace('"', '""') for word in cut_words)
                     built_parts.append(f'tokenized_content : "{phrase_query}"')
             else:
                 cut_words = [w.strip() for w in jieba.cut(p_strip) if w.strip()]
                 if cut_words:
                     sub_expr = " AND ".join(
-                        f'"{word.replace(chr(34), chr(34) * 2)}"'
-                        for word in cut_words
+                        f'"{word.replace(chr(34), chr(34) * 2)}"' for word in cut_words
                     )
-                    built_parts.append(f'tokenized_content : ({sub_expr})')
+                    built_parts.append(f"tokenized_content : ({sub_expr})")
 
         if not built_parts:
             return ""
@@ -560,7 +576,7 @@ class DocumentSearcher:
         for previous, current in zip(built_parts, built_parts[1:]):
             if previous.upper() in operators and current.upper() in operators:
                 raise SearchQueryError("AND、OR、NOT 不可連續使用。")
-        
+
         final_tokens = []
         for i, part in enumerate(built_parts):
             if i > 0:
@@ -583,7 +599,7 @@ class DocumentSearcher:
         conn = self.db.get_connection()
         like_clauses = " AND ".join(["s.content LIKE ?"] * len(keywords))
         params: List[Any] = [f"%{k}%" for k in keywords]
-        
+
         sql = f"""
             SELECT 
                 s.doc_id,

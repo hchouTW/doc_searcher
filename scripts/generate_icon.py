@@ -18,14 +18,16 @@ def generate_app_icon(output_dir: str):
 
     # 1. Fluent background rounded tile
     draw.rounded_rectangle([32, 32, 480, 480], radius=110, fill=(37, 99, 235))
-    
+
     # Inner subtle highlight
     draw.rounded_rectangle([44, 44, 468, 468], radius=98, outline=(96, 165, 250, 180), width=6)
 
     # 2. Document sheet representation
     doc_left, doc_top, doc_right, doc_bottom = 120, 110, 360, 410
-    draw.rounded_rectangle([doc_left, doc_top, doc_right, doc_bottom], radius=24, fill=(255, 255, 255))
-    
+    draw.rounded_rectangle(
+        [doc_left, doc_top, doc_right, doc_bottom], radius=24, fill=(255, 255, 255)
+    )
+
     # Document text lines
     line_color = (203, 213, 225)
     draw.rounded_rectangle([160, 180, 320, 196], radius=8, fill=line_color)

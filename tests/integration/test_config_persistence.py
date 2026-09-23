@@ -43,7 +43,9 @@ def test_failed_replace_keeps_previous_file(data_dir, monkeypatch):
     config = AppConfig()
     config.language = "en-US"
     before = config.config_path.read_bytes()
-    monkeypatch.setattr(config_module.os, "replace", lambda *a: (_ for _ in ()).throw(OSError("busy")))
+    monkeypatch.setattr(
+        config_module.os, "replace", lambda *a: (_ for _ in ()).throw(OSError("busy"))
+    )
 
     config.language = "zh-TW"
 
@@ -67,7 +69,11 @@ def test_killed_writer_never_leaves_partial_json(tmp_path):
         "    config.settings.search_debounce_ms = i % 2000\n"
         "    config.save()\n"
     )
-    env = {**os.environ, "PYTHONPATH": str(SRC_DIR), "DOC_SEARCHER_DATA_DIR": str(tmp_path / "data")}
+    env = {
+        **os.environ,
+        "PYTHONPATH": str(SRC_DIR),
+        "DOC_SEARCHER_DATA_DIR": str(tmp_path / "data"),
+    }
     rng = random.Random(1234)
     for _ in range(8):
         proc = subprocess.Popen(
@@ -92,7 +98,8 @@ def test_env_override_that_cannot_be_written_is_an_actionable_error(tmp_path, mo
 def _writable_except(monkeypatch, blocked):
     real = config_module._is_writable_dir
     monkeypatch.setattr(
-        config_module, "_is_writable_dir",
+        config_module,
+        "_is_writable_dir",
         lambda path: Path(path) not in blocked and real(path),
     )
 

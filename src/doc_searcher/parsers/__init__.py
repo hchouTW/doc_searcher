@@ -55,12 +55,16 @@ def parse_file(file_path: str) -> ExtractedDoc:
     ext = os.path.splitext(abs_path)[1].lower().lstrip(".")
     parser = get_parser(abs_path)
     if parser is None:
-        return ExtractedDoc.failed(abs_path, ext, ParseStatus.UNSUPPORTED, f"Unsupported file type: .{ext}")
+        return ExtractedDoc.failed(
+            abs_path, ext, ParseStatus.UNSUPPORTED, f"Unsupported file type: .{ext}"
+        )
     try:
         with open(abs_path, "rb") as handle:
             handle.read(1)
     except OSError as exc:
-        return ExtractedDoc.failed(abs_path, ext, ParseStatus.UNREADABLE, f"Cannot read file: {exc}")
+        return ExtractedDoc.failed(
+            abs_path, ext, ParseStatus.UNREADABLE, f"Cannot read file: {exc}"
+        )
     try:
         return parser.parse(abs_path)
     except Exception as exc:  # A parser bug or library crash must not stop batch indexing.

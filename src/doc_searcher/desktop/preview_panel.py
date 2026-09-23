@@ -8,12 +8,23 @@
 
 import re
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QTextBrowser,
-    QPushButton, QFrame, QApplication
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QTextBrowser,
+    QPushButton,
+    QFrame,
+    QApplication,
 )
 from PySide6.QtCore import QTimer
 from doc_searcher.search.searcher import SearchResultItem
-from doc_searcher.platform.platform_helper import open_file_with_default_app, reveal_in_file_manager, format_file_size, format_timestamp
+from doc_searcher.platform.platform_helper import (
+    open_file_with_default_app,
+    reveal_in_file_manager,
+    format_file_size,
+    format_timestamp,
+)
 from doc_searcher.desktop.theme import ThemeColors, get_active_theme
 from doc_searcher.desktop.i18n import tr
 
@@ -128,7 +139,9 @@ class PreviewPanel(QWidget):
                 border-radius: 8px;
             }}
         """)
-        self.title_label.setStyleSheet(f"font-size: 16px; font-weight: bold; color: {theme.text_primary};")
+        self.title_label.setStyleSheet(
+            f"font-size: 16px; font-weight: bold; color: {theme.text_primary};"
+        )
         self.meta_label.setStyleSheet(f"font-size: 12px; color: {theme.text_muted};")
         self.path_label.setStyleSheet(f"""
             font-size: 11px;
@@ -212,12 +225,12 @@ class PreviewPanel(QWidget):
         self.match_count = 0
         self.current_match = -1
         self._update_match_controls()
-        
+
         c = self.theme
         self.browser.setHtml(f"""
             <div style="text-align: center; margin-top: 60px; color: {c.text_muted};">
-                <p style="font-size: 15px; font-weight: bold;">🔍 {tr(self.language, 'preview_empty_title')}</p>
-                <p style="font-size: 12px;">{tr(self.language, 'preview_empty_body')}</p>
+                <p style="font-size: 15px; font-weight: bold;">🔍 {tr(self.language, "preview_empty_title")}</p>
+                <p style="font-size: 12px;">{tr(self.language, "preview_empty_body")}</p>
             </div>
         """)
 
@@ -231,14 +244,16 @@ class PreviewPanel(QWidget):
         self.title_label.setText(item.filename)
         size_str = format_file_size(item.file_size)
         time_str = format_timestamp(item.mtime)
-        self.meta_label.setText(tr(
-            self.language,
-            "preview_meta",
-            type=item.file_type.upper(),
-            size=size_str,
-            modified=time_str,
-            segments=len(item.segments),
-        ))
+        self.meta_label.setText(
+            tr(
+                self.language,
+                "preview_meta",
+                type=item.file_type.upper(),
+                size=size_str,
+                modified=time_str,
+                segments=len(item.segments),
+            )
+        )
         self.path_label.setText(item.path)
 
         self.btn_open.setEnabled(True)
@@ -280,18 +295,20 @@ class PreviewPanel(QWidget):
 
             localized_snippets = []
             for snip in seg.snippets:
+
                 def add_anchor(match):
                     nonlocal match_index
                     is_active = match_index == self.current_match
                     background = "#f97316" if is_active else c.mark_bg
                     border = (
                         f"2px solid {'#ffffff' if c.is_dark else '#1d4ed8'}"
-                        if is_active else "1px solid transparent"
+                        if is_active
+                        else "1px solid transparent"
                     )
                     anchor = (
                         f'<a name="match-{match_index}"></a>'
                         f'<mark style="background-color: {background}; color: {c.mark_text}; '
-                        f'font-weight: bold; padding: 1px 3px; border: {border}; '
+                        f"font-weight: bold; padding: 1px 3px; border: {border}; "
                         f'border-radius: 3px;">'
                     )
                     match_index += 1
@@ -301,11 +318,14 @@ class PreviewPanel(QWidget):
                     re.sub(r"<mark(?:\s[^>]*)?>", add_anchor, snip, flags=re.IGNORECASE)
                 )
 
-            snippets_html = "".join(f"""
+            snippets_html = "".join(
+                f"""
                 <div style="margin: 6px 0; padding: 8px 12px; background-color: {c.snippet_bg}; border-left: 3px solid {c.snippet_border}; border-radius: 4px; font-size: {font_px}px; line-height: 1.5; color: {c.text_primary};">
                     {snip}
                 </div>
-            """ for snip in localized_snippets)
+            """
+                for snip in localized_snippets
+            )
 
             block = f"""
                 <div style="margin-bottom: 16px;">
@@ -320,7 +340,7 @@ class PreviewPanel(QWidget):
         full_html = f"""
             <html>
             <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: {font_px}px; background-color: {c.bg_card}; color: {c.text_primary};">
-                {''.join(html_blocks)}
+                {"".join(html_blocks)}
             </body>
             </html>
         """
@@ -340,7 +360,12 @@ class PreviewPanel(QWidget):
         self.btn_zoom_in.setEnabled(self.zoom_steps < 6)
         if has_matches:
             self.match_counter_label.setText(
-                tr(self.language, "match_counter", current=self.current_match + 1, total=self.match_count)
+                tr(
+                    self.language,
+                    "match_counter",
+                    current=self.current_match + 1,
+                    total=self.match_count,
+                )
             )
         else:
             self.match_counter_label.setText(tr(self.language, "no_matches"))
@@ -384,4 +409,7 @@ class PreviewPanel(QWidget):
             clipboard.setText(self.current_item.path)
             self.btn_copy_path.setText("✓")
             from PySide6.QtCore import QTimer
-            QTimer.singleShot(1500, lambda: self.btn_copy_path.setText(tr(self.language, "copy_path")))
+
+            QTimer.singleShot(
+                1500, lambda: self.btn_copy_path.setText(tr(self.language, "copy_path"))
+            )

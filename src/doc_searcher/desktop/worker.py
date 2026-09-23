@@ -49,12 +49,14 @@ class IndexWorker(QThread):
             message = str(exc)
             self.state_changed.emit("error")
             self.status_changed.emit(f"索引失敗：{message}")
-            self.indexing_finished.emit({
-                "indexed": 0,
-                "deleted": 0,
-                "failed": 1,
-                "error": message,
-            })
+            self.indexing_finished.emit(
+                {
+                    "indexed": 0,
+                    "deleted": 0,
+                    "failed": 1,
+                    "error": message,
+                }
+            )
         finally:
             self.db.close()
 
@@ -63,8 +65,12 @@ class IndexWorker(QThread):
             self.state_changed.emit("indexing")
             paths = list(self.db.get_all_indexed_paths())
             stats = self.indexer.run_batch_indexing(
-                [], paths, progress_callback=lambda current, total, path:
-                self.progress.emit(current, total, path), reset_cancellation=False,
+                [],
+                paths,
+                progress_callback=lambda current, total, path: self.progress.emit(
+                    current, total, path
+                ),
+                reset_cancellation=False,
             )
             self.state_changed.emit("idle" if stats["cancelled"] else "completed")
             self.indexing_finished.emit(stats)
@@ -74,32 +80,40 @@ class IndexWorker(QThread):
         self.status_changed.emit("正在掃描資料夾檔案...")
         start_time = time.time()
 
-        available_directories, unavailable_directories = (
-            self.scanner.partition_directories(self.directories)
+        available_directories, unavailable_directories = self.scanner.partition_directories(
+            self.directories
         )
         if not available_directories:
             indexed_files = self.db.get_all_indexed_paths()
             _, to_delete = self.scanner.calculate_changes(
-                [], indexed_files, preserved_directories=unavailable_directories,
+                [],
+                indexed_files,
+                preserved_directories=unavailable_directories,
             )
             if to_delete:
                 stats = self.indexer.run_batch_indexing(
-                    [], to_delete, progress_callback=lambda current, total, path:
-                    self.progress.emit(current, total, path), reset_cancellation=False,
+                    [],
+                    to_delete,
+                    progress_callback=lambda current, total, path: self.progress.emit(
+                        current, total, path
+                    ),
+                    reset_cancellation=False,
                 )
                 if stats["cancelled"]:
                     stats["unavailable_directories"] = unavailable_directories
                     self.indexing_finished.emit(stats)
                     return
             self.status_changed.emit("所有檢索目錄目前皆無法存取，已保留既有索引。")
-            self.indexing_finished.emit({
-                "indexed": 0,
-                "deleted": len(to_delete),
-                "failed": 0,
-                "skipped": True,
-                "unavailable_directories": unavailable_directories,
-                "elapsed": time.time() - start_time,
-            })
+            self.indexing_finished.emit(
+                {
+                    "indexed": 0,
+                    "deleted": len(to_delete),
+                    "failed": 0,
+                    "skipped": True,
+                    "unavailable_directories": unavailable_directories,
+                    "elapsed": time.time() - start_time,
+                }
+            )
             return
 
         # 1. Scan filesystem
@@ -114,13 +128,15 @@ class IndexWorker(QThread):
         scan_error_paths = self.scanner.normalize_directories(scan_error_paths)
 
         if self.indexer.is_cancelled:
-            self.indexing_finished.emit({
-                "indexed": 0,
-                "deleted": 0,
-                "failed": 0,
-                "cancelled": True,
-                "elapsed": time.time() - start_time,
-            })
+            self.indexing_finished.emit(
+                {
+                    "indexed": 0,
+                    "deleted": 0,
+                    "failed": 0,
+                    "cancelled": True,
+                    "elapsed": time.time() - start_time,
+                }
+            )
             return
 
         indexed_files = self.db.get_all_indexed_paths()
@@ -136,19 +152,23 @@ class IndexWorker(QThread):
         if total_tasks == 0:
             self.state_changed.emit("completed")
             self.status_changed.emit("所有文件索引皆為最新狀態。")
-            self.indexing_finished.emit({
-                "indexed": 0,
-                "deleted": 0,
-                "failed": 0,
-                "unavailable_directories": unavailable_directories,
-                "scan_error_paths": scan_error_paths,
-                "elapsed": time.time() - start_time,
-            })
+            self.indexing_finished.emit(
+                {
+                    "indexed": 0,
+                    "deleted": 0,
+                    "failed": 0,
+                    "unavailable_directories": unavailable_directories,
+                    "scan_error_paths": scan_error_paths,
+                    "elapsed": time.time() - start_time,
+                }
+            )
             return
 
         self.state_changed.emit("indexing")
         self._active_state = "indexing"
-        self.status_changed.emit(f"準備更新索引 (新增/變更: {len(to_index)} 個，刪除: {len(to_delete)} 個)...")
+        self.status_changed.emit(
+            f"準備更新索引 (新增/變更: {len(to_index)} 個，刪除: {len(to_delete)} 個)..."
+        )
 
         def _on_progress(curr, tot, fname):
             self.progress.emit(curr, tot, fname)

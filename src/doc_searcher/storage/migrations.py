@@ -85,9 +85,12 @@ def backup_path(db_path: str) -> str:
 
 
 def _has_user_tables(conn: sqlite3.Connection) -> bool:
-    return conn.execute(
-        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'documents'"
-    ).fetchone() is not None
+    return (
+        conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'documents'"
+        ).fetchone()
+        is not None
+    )
 
 
 def migrate(conn: sqlite3.Connection, db_path: str) -> List[int]:

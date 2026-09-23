@@ -62,7 +62,7 @@ class DocxParser(BaseParser):
                     PageSegment(
                         segment_id=f"Section {seg_idx} (Paragraphs)",
                         segment_type="section",
-                        text="\n\n".join(para_texts)
+                        text="\n\n".join(para_texts),
                     )
                 )
                 seg_idx += 1
@@ -72,7 +72,7 @@ class DocxParser(BaseParser):
                     PageSegment(
                         segment_id=f"Section {seg_idx} (Tables)",
                         segment_type="section",
-                        text="\n\n".join(table_texts)
+                        text="\n\n".join(table_texts),
                     )
                 )
 
@@ -80,7 +80,7 @@ class DocxParser(BaseParser):
                 file_path=abs_path,
                 file_type="docx",
                 total_segments=len(segments),
-                segments=segments
+                segments=segments,
             )
         except Exception as e:
             return ExtractedDoc.from_exception(abs_path, "docx", "Error reading docx content", e)

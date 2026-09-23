@@ -45,7 +45,9 @@ class PptxParser(BaseParser):
                                 slide_texts.append(t)
                     elif shape.has_table:
                         for row in shape.table.rows:
-                            row_vals = [cell.text.strip() for cell in row.cells if cell.text.strip()]
+                            row_vals = [
+                                cell.text.strip() for cell in row.cells if cell.text.strip()
+                            ]
                             if row_vals:
                                 slide_texts.append(" | ".join(row_vals))
 
@@ -59,17 +61,12 @@ class PptxParser(BaseParser):
                 if combined_slide_text:
                     segments.append(
                         PageSegment(
-                            segment_id=str(idx),
-                            segment_type="slide",
-                            text=combined_slide_text
+                            segment_id=str(idx), segment_type="slide", text=combined_slide_text
                         )
                     )
 
             return ExtractedDoc(
-                file_path=abs_path,
-                file_type="pptx",
-                total_segments=total_slides,
-                segments=segments
+                file_path=abs_path, file_type="pptx", total_segments=total_slides, segments=segments
             )
         except Exception as e:
             return ExtractedDoc.from_exception(abs_path, "pptx", "Error reading pptx content", e)

@@ -37,25 +37,23 @@ class XlsxParser(BaseParser):
 
                 for row in sheet.iter_rows(values_only=True):
                     # Filter non-None cells
-                    row_vals = [str(cell).strip() for cell in row if cell is not None and str(cell).strip()]
+                    row_vals = [
+                        str(cell).strip() for cell in row if cell is not None and str(cell).strip()
+                    ]
                     if row_vals:
                         row_lines.append(" | ".join(row_vals))
 
                 sheet_text = "\n".join(row_lines).strip()
                 if sheet_text:
                     segments.append(
-                        PageSegment(
-                            segment_id=sheet_name,
-                            segment_type="sheet",
-                            text=sheet_text
-                        )
+                        PageSegment(segment_id=sheet_name, segment_type="sheet", text=sheet_text)
                     )
 
             return ExtractedDoc(
                 file_path=abs_path,
                 file_type="xlsx",
                 total_segments=len(sheet_names),
-                segments=segments
+                segments=segments,
             )
         except Exception as e:
             return ExtractedDoc.from_exception(abs_path, "xlsx", "Error reading xlsx file", e)

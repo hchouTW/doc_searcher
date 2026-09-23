@@ -10,14 +10,26 @@ from typing import List, Optional
 import re
 
 from PySide6.QtWidgets import (
-    QTableWidget, QTableWidgetItem, QHeaderView, QAbstractItemView, QMenu,
-    QApplication, QLabel, QWidget, QVBoxLayout
+    QTableWidget,
+    QTableWidgetItem,
+    QHeaderView,
+    QAbstractItemView,
+    QMenu,
+    QApplication,
+    QLabel,
+    QWidget,
+    QVBoxLayout,
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QFont
 
 from doc_searcher.search.searcher import SearchResultItem
-from doc_searcher.platform.platform_helper import open_file_with_default_app, reveal_in_file_manager, format_file_size, format_timestamp
+from doc_searcher.platform.platform_helper import (
+    open_file_with_default_app,
+    reveal_in_file_manager,
+    format_file_size,
+    format_timestamp,
+)
 from doc_searcher.desktop.theme import ThemeColors, get_active_theme
 from doc_searcher.desktop.i18n import tr
 
@@ -42,8 +54,12 @@ class ResultTable(QTableWidget):
     item_selected = Signal(object)  # Emits SearchResultItem or None
 
     HEADER_KEYS = [
-        "table_type", "table_filename", "table_hits", "table_size",
-        "table_modified", "table_path",
+        "table_type",
+        "table_filename",
+        "table_hits",
+        "table_size",
+        "table_modified",
+        "table_path",
     ]
 
     TYPE_ICONS = {
@@ -56,7 +72,7 @@ class ResultTable(QTableWidget):
         "xls": "📗 XLS",
         "txt": "📄 TXT",
         "md": "📄 MD",
-        "csv": "📊 CSV"
+        "csv": "📊 CSV",
     }
 
     def __init__(self, parent=None):
@@ -198,7 +214,9 @@ class ResultTable(QTableWidget):
             self.setItem(row, 4, it_time)
             self.setItem(row, 5, it_path)
 
-            snippet = item.segments[0].snippets[0] if item.segments and item.segments[0].snippets else ""
+            snippet = (
+                item.segments[0].snippets[0] if item.segments and item.segments[0].snippets else ""
+            )
             snippet = re.sub(r"\s+", " ", snippet).strip()
             name_container = QWidget()
             name_container.setAttribute(Qt.WA_TransparentForMouseEvents)
@@ -249,12 +267,18 @@ class ResultTable(QTableWidget):
             it_time = self.item(row, 4)
             it_path = self.item(row, 5)
 
-            if it_type: it_type.setForeground(QColor(c.text_secondary))
-            if it_name: it_name.setForeground(QColor(c.text_primary))
-            if it_matches: it_matches.setForeground(QColor("#60a5fa" if c.is_dark else "#0a58ca"))
-            if it_size: it_size.setForeground(QColor(c.text_muted))
-            if it_time: it_time.setForeground(QColor(c.text_muted))
-            if it_path: it_path.setForeground(QColor(c.text_muted))
+            if it_type:
+                it_type.setForeground(QColor(c.text_secondary))
+            if it_name:
+                it_name.setForeground(QColor(c.text_primary))
+            if it_matches:
+                it_matches.setForeground(QColor("#60a5fa" if c.is_dark else "#0a58ca"))
+            if it_size:
+                it_size.setForeground(QColor(c.text_muted))
+            if it_time:
+                it_time.setForeground(QColor(c.text_muted))
+            if it_path:
+                it_path.setForeground(QColor(c.text_muted))
             name_container = self.cellWidget(row, 1)
             if name_container:
                 name_label = name_container.findChild(QLabel, "resultNameLabel")

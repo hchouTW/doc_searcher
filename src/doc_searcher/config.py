@@ -25,7 +25,18 @@ from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-DEFAULT_EXTENSIONS = [".pdf", ".docx", ".doc", ".pptx", ".ppt", ".xlsx", ".xls", ".txt", ".md", ".csv"]
+DEFAULT_EXTENSIONS = [
+    ".pdf",
+    ".docx",
+    ".doc",
+    ".pptx",
+    ".ppt",
+    ".xlsx",
+    ".xls",
+    ".txt",
+    ".md",
+    ".csv",
+]
 DEFAULT_EXCLUDE_PATTERNS = [".git", "node_modules", "temp", "__pycache__"]
 LANGUAGES = ("zh-TW", "en-US")
 THEMES = ("light", "dark")
@@ -135,7 +146,11 @@ def _validate(raw: Dict[str, Any], default_db_path: str) -> Tuple[Settings, List
         take("enabled_extensions", extensions, extensions is not None)
     if "max_snippet_chars" in raw:
         value = raw["max_snippet_chars"]
-        take("max_snippet_chars", value, isinstance(value, int) and not isinstance(value, bool) and value > 0)
+        take(
+            "max_snippet_chars",
+            value,
+            isinstance(value, int) and not isinstance(value, bool) and value > 0,
+        )
     if "db_path" in raw:
         value = raw["db_path"]
         take("db_path", value, isinstance(value, str) and bool(value.strip()))

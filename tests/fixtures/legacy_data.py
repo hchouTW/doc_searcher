@@ -15,11 +15,23 @@ from typing import List
 
 LEGACY_DOCUMENTS = [
     # (path, file_type, size, mtime, [(segment_id, segment_type, content, tokenized)])
-    ("/legacy/root_a/report.txt", "txt", 120, 1_700_000_000.0,
-     [("1", "page", "legacy alpha report", "legacy alpha report")]),
-    ("/legacy/root_b/notes.md", "md", 80, 1_700_000_100.0,
-     [("1", "page", "legacy beta notes", "legacy beta notes"),
-      ("2", "page", "second segment", "second segment")]),
+    (
+        "/legacy/root_a/report.txt",
+        "txt",
+        120,
+        1_700_000_000.0,
+        [("1", "page", "legacy alpha report", "legacy alpha report")],
+    ),
+    (
+        "/legacy/root_b/notes.md",
+        "md",
+        80,
+        1_700_000_100.0,
+        [
+            ("1", "page", "legacy beta notes", "legacy beta notes"),
+            ("2", "page", "second segment", "second segment"),
+        ],
+    ),
 ]
 
 
@@ -55,7 +67,15 @@ def write_legacy_db(path: Path, with_ctime: bool = True) -> None:
     """)
     for doc_path, file_type, size, mtime, segments in LEGACY_DOCUMENTS:
         columns = "path, filename, file_type, file_size, mtime, indexed_at, total_segments"
-        values = [doc_path, doc_path.rsplit("/", 1)[1], file_type, size, mtime, mtime, len(segments)]
+        values = [
+            doc_path,
+            doc_path.rsplit("/", 1)[1],
+            file_type,
+            size,
+            mtime,
+            mtime,
+            len(segments),
+        ]
         if with_ctime:
             columns += ", ctime"
             values.append(mtime)

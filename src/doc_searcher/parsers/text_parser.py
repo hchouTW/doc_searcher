@@ -41,7 +41,7 @@ def _bomless_utf16(raw: bytes) -> Optional[str]:
 def decode_text(raw: bytes) -> str:
     for bom, encoding in _BOMS:
         if raw.startswith(bom):
-            return raw[len(bom):].decode(encoding, errors="replace")
+            return raw[len(bom) :].decode(encoding, errors="replace")
     utf16 = _bomless_utf16(raw)
     if utf16:
         try:
@@ -74,17 +74,8 @@ class TextParser(BaseParser):
         decoded_text = decode_text(raw_bytes).strip()
         segments = []
         if decoded_text:
-            segments.append(
-                PageSegment(
-                    segment_id="1",
-                    segment_type="section",
-                    text=decoded_text
-                )
-            )
+            segments.append(PageSegment(segment_id="1", segment_type="section", text=decoded_text))
 
         return ExtractedDoc(
-            file_path=abs_path,
-            file_type=ext,
-            total_segments=len(segments),
-            segments=segments
+            file_path=abs_path, file_type=ext, total_segments=len(segments), segments=segments
         )

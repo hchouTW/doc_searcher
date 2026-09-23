@@ -89,7 +89,7 @@ def run_cli_mode(folder: str, query: str, type_filter: str = "all") -> int:
                 print(f"    - [{seg.segment_type} {seg.segment_id}]")
                 for snip in seg.snippets:
                     # Strip HTML tags for clean terminal printing
-                    clean_snip = re.sub(r'<[^>]+>', '', snip)
+                    clean_snip = re.sub(r"<[^>]+>", "", snip)
                     print(f"      {clean_snip}")
         print("\n================================================")
         return EXIT_OK
@@ -105,7 +105,10 @@ def main(argv=None) -> int:
     parser.add_argument("--dir", help="指定要檢索的資料夾目錄路徑 (CLI 模式)")
     parser.add_argument("--search", help="搜尋關鍵字 (CLI 模式)")
     parser.add_argument(
-        "--type", default="all", type=str.lower, choices=TYPE_FILTERS,
+        "--type",
+        default="all",
+        type=str.lower,
+        choices=TYPE_FILTERS,
         help="格式過濾 (all, pdf, word, excel, ppt, text)",
     )
 
@@ -118,6 +121,7 @@ def main(argv=None) -> int:
 
     # Launch PySide6 GUI
     from doc_searcher.desktop.app import run_app
+
     run_app()
     return EXIT_OK
 

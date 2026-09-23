@@ -213,7 +213,8 @@ class SearchService:
         if scope is not None:
             # Only reconcile the requested subtree so other folders keep their entries.
             indexed = {
-                path: value for path, value in indexed.items()
+                path: value
+                for path, value in indexed.items()
                 if self.scanner.is_path_within_directory(path, scope)
             }
         to_index, to_delete = self.scanner.calculate_changes(
@@ -244,5 +245,10 @@ class SearchService:
             f"- Modified: {_iso_time(doc['mtime'])}",
         ]
         for segment in self.db.get_document_segments(doc["id"]):
-            lines += ["", f"## {segment['segment_type']} {segment['segment_id']}", "", segment["content"]]
+            lines += [
+                "",
+                f"## {segment['segment_type']} {segment['segment_id']}",
+                "",
+                segment["content"],
+            ]
         return "\n".join(lines) + "\n"

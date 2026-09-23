@@ -58,3 +58,7 @@ version = { attr = "doc_searcher.version.APP_VERSION" }
 testpaths = ["tests"]
 # Lets a plain checkout run the suite; an installed copy of the package also works.
 pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"

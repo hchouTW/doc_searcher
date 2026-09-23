@@ -22,6 +22,7 @@ def generate_all_samples(target_dir: str):
     # 2. PDF sample (PyMuPDF with china-t font)
     try:
         import pymupdf
+
         pdf_path = out_dir / "sample_report.pdf"
         doc = pymupdf.open()
         page1 = doc.new_page()
@@ -29,14 +30,14 @@ def generate_all_samples(target_dir: str):
             (50, 72),
             "PDF 測試文件 第一頁\n專案預算 審查會議記錄\n重點關注 2026年度 資本支出。",
             fontname="china-t",
-            fontsize=12
+            fontsize=12,
         )
         page2 = doc.new_page()
         page2.insert_text(
             (50, 72),
             "PDF 測試文件 第二頁\n決議事項：核准 研發投資 計畫案。",
             fontname="china-t",
-            fontsize=12
+            fontsize=12,
         )
         doc.save(str(pdf_path))
         doc.close()
@@ -46,12 +47,13 @@ def generate_all_samples(target_dir: str):
     # 3. Word DOCX sample
     try:
         import docx
+
         docx_path = out_dir / "sample_contract.docx"
         doc = docx.Document()
         doc.add_heading("合作意向合約書", 0)
         doc.add_paragraph("本合約由甲方與乙方共同簽署，有效期限至 2026年度 結束。")
         doc.add_paragraph("關鍵字：保密協定條款 與 智財權歸屬。")
-        
+
         table = doc.add_table(rows=2, cols=2)
         table.cell(0, 0).text = "項目"
         table.cell(0, 1).text = "金額"
@@ -64,6 +66,7 @@ def generate_all_samples(target_dir: str):
     # 4. Excel XLSX sample
     try:
         import openpyxl
+
         xlsx_path = out_dir / "sample_financial.xlsx"
         wb = openpyxl.Workbook()
         ws1 = wb.active
@@ -82,6 +85,7 @@ def generate_all_samples(target_dir: str):
     # 5. Legacy Excel XLS sample (xlwt)
     try:
         import xlwt
+
         xls_path = out_dir / "sample_legacy_financial.xls"
         book = xlwt.Workbook(encoding="utf-8")
         sheet1 = book.add_sheet("舊版損益表")
@@ -99,6 +103,7 @@ def generate_all_samples(target_dir: str):
     try:
         import pptx
         from pptx.util import Inches
+
         pptx_path = out_dir / "sample_presentation.pptx"
         prs = pptx.Presentation()
         blank_slide_layout = prs.slide_layouts[6]

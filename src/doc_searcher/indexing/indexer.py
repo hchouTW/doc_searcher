@@ -85,7 +85,7 @@ class DocumentIndexer:
                 mtime=mtime,
                 ctime=ctime,
                 segments=[],
-                error=extracted.error
+                error=extracted.error,
             )
             return False
 
@@ -96,12 +96,14 @@ class DocumentIndexer:
             if not text:
                 continue
             tokenized = tokenize_for_fts(text)
-            prepared_segments.append({
-                "segment_id": seg.segment_id,
-                "segment_type": seg.segment_type,
-                "content": text,
-                "tokenized_content": tokenized
-            })
+            prepared_segments.append(
+                {
+                    "segment_id": seg.segment_id,
+                    "segment_type": seg.segment_type,
+                    "content": text,
+                    "tokenized_content": tokenized,
+                }
+            )
 
         self.db.save_document_index(
             file_path=abs_path,
@@ -110,7 +112,7 @@ class DocumentIndexer:
             mtime=mtime,
             ctime=ctime,
             segments=prepared_segments,
-            error=None
+            error=None,
         )
         return True
 
@@ -122,7 +124,7 @@ class DocumentIndexer:
         reset_cancellation: bool = True,
     ) -> Dict[str, int]:
         """Execute indexing on list of files with progress notifications.
-        
+
         Returns:
             Counts for indexed, deleted, and failed files, plus cancellation state.
         """
@@ -138,9 +140,7 @@ class DocumentIndexer:
                 break
             completed += 1
             if progress_callback:
-                progress_callback(
-                    completed, total, f"移除索引：{os.path.basename(del_path)}"
-                )
+                progress_callback(completed, total, f"移除索引：{os.path.basename(del_path)}")
             self.db.delete_document(del_path)
             stats["deleted"] += 1
 

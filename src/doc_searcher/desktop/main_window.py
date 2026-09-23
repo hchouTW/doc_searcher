@@ -18,11 +18,32 @@ from datetime import datetime
 from typing import Callable, Dict, List, Optional, Tuple, Any
 
 from PySide6.QtWidgets import (
-    QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
-    QPushButton, QSplitter, QFileDialog, QProgressBar, QStatusBar,
-    QButtonGroup, QCheckBox, QFrame, QMessageBox, QApplication, QComboBox,
-    QToolButton, QDateEdit, QDoubleSpinBox, QStyle, QDialog, QScrollArea,
-    QSizePolicy, QTextBrowser, QDialogButtonBox
+    QMainWindow,
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QPushButton,
+    QSplitter,
+    QFileDialog,
+    QProgressBar,
+    QStatusBar,
+    QButtonGroup,
+    QCheckBox,
+    QFrame,
+    QMessageBox,
+    QApplication,
+    QComboBox,
+    QToolButton,
+    QDateEdit,
+    QDoubleSpinBox,
+    QStyle,
+    QDialog,
+    QScrollArea,
+    QSizePolicy,
+    QTextBrowser,
+    QDialogButtonBox,
 )
 from PySide6.QtCore import Qt, QTimer, QDate
 from PySide6.QtGui import QIcon, QKeySequence, QShortcut, QTextDocument
@@ -54,10 +75,16 @@ class ContentWidthComboBox(QComboBox):
     def content_popup_width(self) -> int:
         """Calculate a screen-bounded popup width for all current labels."""
         margins = 44 + self.style().pixelMetric(QStyle.PixelMetric.PM_ScrollBarExtent)
-        content_width = max(
-            (self.fontMetrics().horizontalAdvance(self.itemText(i)) for i in range(self.count())),
-            default=0,
-        ) + margins
+        content_width = (
+            max(
+                (
+                    self.fontMetrics().horizontalAdvance(self.itemText(i))
+                    for i in range(self.count())
+                ),
+                default=0,
+            )
+            + margins
+        )
         screen = self.screen().availableGeometry()
         return min(max(self.width(), content_width), max(180, screen.width() - 32))
 
@@ -84,10 +111,10 @@ class MainWindow(QMainWindow):
         self.config = config
         self.db = Database(self.config.db_path)
         self.language = self.config.language
-        
+
         self.theme_mode = self.config.theme_mode  # 'auto', 'dark', 'light'
         self.theme: ThemeColors = get_active_theme(self.theme_mode)
-        
+
         self.active_type_filter = "all"
         self.index_worker: Optional[IndexWorker] = None
         self.search_worker: Optional[SearchWorker] = None
@@ -140,7 +167,7 @@ class MainWindow(QMainWindow):
         self.central_widget = QWidget()
         self.central_widget.setObjectName("central")
         self.setCentralWidget(self.central_widget)
-        
+
         main_layout = QHBoxLayout(self.central_widget)
         main_layout.setContentsMargins(16, 16, 16, 12)
         main_layout.setSpacing(12)
@@ -238,9 +265,7 @@ class MainWindow(QMainWindow):
         self.chk_include_subdirectories = QCheckBox("包含所有下級資料夾")
         self.chk_include_subdirectories.setChecked(self.config.include_subdirectories)
         self.chk_include_subdirectories.setToolTip("開啟時會檢索所選目錄下的所有層級資料夾")
-        self.chk_include_subdirectories.toggled.connect(
-            self._on_include_subdirectories_toggled
-        )
+        self.chk_include_subdirectories.toggled.connect(self._on_include_subdirectories_toggled)
         dir_layout.addWidget(self.chk_include_subdirectories)
         settings_layout.addWidget(self.dir_frame)
 
@@ -373,7 +398,7 @@ class MainWindow(QMainWindow):
             ("filter_word", "word"),
             ("filter_excel", "excel"),
             ("filter_ppt", "ppt"),
-            ("filter_text", "text")
+            ("filter_text", "text"),
         ]
 
         self.filter_buttons = []
@@ -403,10 +428,14 @@ class MainWindow(QMainWindow):
         date_row.addWidget(self.date_field_combo)
         self.date_filter_combo = ContentWidthComboBox()
         self.date_filter_combo.setMinimumWidth(140)
-        for key, value in (("date_all", "all"), ("date_day", "day"),
-                           ("date_week", "week"), ("date_month", "month"),
-                           ("date_year", "year"),
-                           ("date_custom", "custom")):
+        for key, value in (
+            ("date_all", "all"),
+            ("date_day", "day"),
+            ("date_week", "week"),
+            ("date_month", "month"),
+            ("date_year", "year"),
+            ("date_custom", "custom"),
+        ):
             self.date_filter_combo.addItem(key, value)
         self.date_filter_combo.currentIndexChanged.connect(self._on_metadata_filter_changed)
         date_row.addWidget(self.date_filter_combo)
@@ -433,9 +462,14 @@ class MainWindow(QMainWindow):
         size_row.addWidget(self.size_filter_label)
         self.size_preset_combo = ContentWidthComboBox()
         self.size_preset_combo.setMinimumWidth(180)
-        for key, value in (("size_any", "any"), ("size_small", "small"),
-                           ("size_medium", "medium"), ("size_large", "large"),
-                           ("size_huge", "huge"), ("size_custom", "custom")):
+        for key, value in (
+            ("size_any", "any"),
+            ("size_small", "small"),
+            ("size_medium", "medium"),
+            ("size_large", "large"),
+            ("size_huge", "huge"),
+            ("size_custom", "custom"),
+        ):
             self.size_preset_combo.addItem(key, value)
         self.size_preset_combo.currentIndexChanged.connect(self._on_metadata_filter_changed)
         size_row.addWidget(self.size_preset_combo)
@@ -489,8 +523,7 @@ class MainWindow(QMainWindow):
         self.operator_label = QLabel()
         operator_row.addWidget(self.operator_label)
         self.operator_buttons = []
-        for label, insertion in (("AND", " AND "), ("OR", " OR "),
-                                 ("NOT", " NOT "), ('"…"', '""')):
+        for label, insertion in (("AND", " AND "), ("OR", " OR "), ("NOT", " NOT "), ('"…"', '""')):
             button = QPushButton(label)
             button.clicked.connect(lambda _=False, text=insertion: self._insert_query_syntax(text))
             operator_row.addWidget(button)
@@ -580,9 +613,7 @@ class MainWindow(QMainWindow):
         self.index_frame.setStyleSheet(control_card_style)
         self.top_bar.setStyleSheet(control_card_style)
         self.dir_icon.setStyleSheet(f"font-weight: bold; color: {theme.text_secondary};")
-        self.index_label.setStyleSheet(
-            f"font-weight: bold; color: {theme.text_secondary};"
-        )
+        self.index_label.setStyleSheet(f"font-weight: bold; color: {theme.text_secondary};")
         self._refresh_dir_label()
 
         btn_style = f"""
@@ -599,9 +630,17 @@ class MainWindow(QMainWindow):
             }}
         """
         for button in (
-            self.btn_add_dir, self.btn_reset_dirs, self.btn_clear_dirs, self.btn_reindex,
-            self.btn_pause_index, self.btn_stop_index, self.btn_theme_toggle,
-            self.btn_about, self.btn_search_help, self.btn_choose_scope, *self.operator_buttons,
+            self.btn_add_dir,
+            self.btn_reset_dirs,
+            self.btn_clear_dirs,
+            self.btn_reindex,
+            self.btn_pause_index,
+            self.btn_stop_index,
+            self.btn_theme_toggle,
+            self.btn_about,
+            self.btn_search_help,
+            self.btn_choose_scope,
+            *self.operator_buttons,
         ):
             button.setStyleSheet(btn_style)
         self.btn_settings.setFixedHeight(32)
@@ -640,8 +679,13 @@ class MainWindow(QMainWindow):
                 selection-color: {theme.text_selected}; }}
             QComboBox QAbstractItemView::item {{ min-height: 26px; padding: 4px 10px; }}
         """
-        for combo in (self.date_field_combo, self.date_filter_combo,
-                      self.size_preset_combo, self.min_unit, self.max_unit):
+        for combo in (
+            self.date_field_combo,
+            self.date_filter_combo,
+            self.size_preset_combo,
+            self.min_unit,
+            self.max_unit,
+        ):
             combo.setStyleSheet(combo_style)
         self.chk_include_subdirectories.setStyleSheet(
             f"font-size: 12px; color: {theme.text_secondary};"
@@ -685,7 +729,9 @@ class MainWindow(QMainWindow):
             }}
         """)
 
-        self.filter_label.setStyleSheet(f"font-size: 12px; color: {theme.text_secondary}; font-weight: bold;")
+        self.filter_label.setStyleSheet(
+            f"font-size: 12px; color: {theme.text_secondary}; font-weight: bold;"
+        )
         chip_style = f"""
             QPushButton {{ background: {theme.bg_subtle}; color: {theme.text_secondary};
                 border: 1px solid {theme.border}; border-radius: 12px;
@@ -744,7 +790,8 @@ class MainWindow(QMainWindow):
         """Refresh every persistent visible label after a locale change."""
         self.setWindowTitle(tr(self.language, "app_title"))
         self.btn_settings.setText(
-            tr(self.language, "hide_settings") if self.settings_panel.isVisible()
+            tr(self.language, "hide_settings")
+            if self.settings_panel.isVisible()
             else tr(self.language, "settings")
         )
         self.language_frame.setToolTip(tr(self.language, "language"))
@@ -781,11 +828,19 @@ class MainWindow(QMainWindow):
         self.advanced_dialog.setWindowTitle(tr(self.language, "advanced_filters"))
         self.date_filter_label.setText(tr(self.language, "date_range"))
         for index in range(self.date_field_combo.count()):
-            key = "date_created" if self.date_field_combo.itemData(index) == "ctime" else "date_modified"
+            key = (
+                "date_created"
+                if self.date_field_combo.itemData(index) == "ctime"
+                else "date_modified"
+            )
             self.date_field_combo.setItemText(index, tr(self.language, key))
         date_key_by_value = {
-            "all": "date_all", "day": "date_day", "week": "date_week", "month": "date_month",
-            "year": "date_year", "custom": "date_custom",
+            "all": "date_all",
+            "day": "date_day",
+            "week": "date_week",
+            "month": "date_month",
+            "year": "date_year",
+            "custom": "date_custom",
         }
         for index in range(self.date_filter_combo.count()):
             self.date_filter_combo.setItemText(
@@ -813,9 +868,15 @@ class MainWindow(QMainWindow):
         self.regex_mode.setToolTip(tr(self.language, "regex_tip"))
         self.btn_reset_filters.setText(tr(self.language, "reset_filters"))
         self.operator_label.setText(tr(self.language, "insert_operator"))
-        for button, key in zip(self.operator_buttons, (
-            "operator_and_tip", "operator_or_tip", "operator_not_tip", "operator_exact_tip",
-        )):
+        for button, key in zip(
+            self.operator_buttons,
+            (
+                "operator_and_tip",
+                "operator_or_tip",
+                "operator_not_tip",
+                "operator_exact_tip",
+            ),
+        ):
             button.setToolTip(tr(self.language, key))
         if not self.search_input.text().strip() and not self.search_worker:
             self.results_count_label.setText(tr(self.language, "ready_to_search"))
@@ -935,7 +996,8 @@ class MainWindow(QMainWindow):
                         pass
                 if len(valid) != len(selected):
                     QMessageBox.warning(
-                        self, tr(self.language, "notice"),
+                        self,
+                        tr(self.language, "notice"),
                         tr(self.language, "directory_unavailable"),
                     )
                 if valid:
@@ -954,9 +1016,7 @@ class MainWindow(QMainWindow):
             self.activateWindow()
 
     def _on_choose_directory(self):
-        self._open_folder_dialog(
-            tr(self.language, "choose_folder_title"), self._add_directories
-        )
+        self._open_folder_dialog(tr(self.language, "choose_folder_title"), self._add_directories)
 
     def _add_directories(self, folders: List[str]):
         changed = False
@@ -972,7 +1032,8 @@ class MainWindow(QMainWindow):
         self.table.set_results([])
         self.preview.display_result(None)
         self.results_count_label.setText(
-            tr(self.language, "search_waiting") if self.search_input.text().strip()
+            tr(self.language, "search_waiting")
+            if self.search_input.text().strip()
             else tr(self.language, "ready_to_search")
         )
 
@@ -980,19 +1041,21 @@ class MainWindow(QMainWindow):
         starting_directory = self.config.directories[0] if self.config.directories else ""
         self._open_folder_dialog(
             tr(self.language, "choose_scope"),
-            lambda folders: self._set_scope_folder(folders[0]), starting_directory
+            lambda folders: self._set_scope_folder(folders[0]),
+            starting_directory,
         )
 
     def _set_scope_folder(self, folder: str):
         if not any(
-            FileScanner.is_path_within_directory(folder, root)
-            for root in self.config.directories
+            FileScanner.is_path_within_directory(folder, root) for root in self.config.directories
         ):
             QMessageBox.warning(
                 self, tr(self.language, "notice"), tr(self.language, "scope_outside")
             )
             return
-        existing = [path.strip() for path in self.include_path_input.text().split(";") if path.strip()]
+        existing = [
+            path.strip() for path in self.include_path_input.text().split(";") if path.strip()
+        ]
         if folder not in existing:
             existing.append(folder)
             self.include_path_input.setText("; ".join(existing))
@@ -1000,7 +1063,7 @@ class MainWindow(QMainWindow):
     def _on_reset_directories(self):
         self._open_folder_dialog(
             tr(self.language, "reset_folder_title"),
-            lambda folders: self._reset_directories(folders[0])
+            lambda folders: self._reset_directories(folders[0]),
         )
 
     def _reset_directories(self, folder: str):
@@ -1021,7 +1084,8 @@ class MainWindow(QMainWindow):
         self._invalidate_directory_results()
         if self.search_worker and self.search_worker.isRunning():
             self.pending_search = (
-                self.search_input.text().strip(), self.active_type_filter,
+                self.search_input.text().strip(),
+                self.active_type_filter,
                 self._current_search_filters(),
             )
         self._start_indexing(clear_index=True)
@@ -1135,9 +1199,7 @@ class MainWindow(QMainWindow):
             self.status_label.setText(tr(self.language, "index_stopped", docs=docs))
         elif stats.get("error"):
             self._set_index_state("error")
-            self.status_label.setText(
-                tr(self.language, "index_failed", message=stats["error"])
-            )
+            self.status_label.setText(tr(self.language, "index_failed", message=stats["error"]))
         else:
             if not stats.get("skipped"):
                 self._mark_last_updated()
@@ -1149,16 +1211,27 @@ class MainWindow(QMainWindow):
                 self.status_label.setText(tr(self.language, "index_unavailable", docs=docs))
             elif unavailable_count or scan_error_count:
                 self.status_label.setText(
-                    tr(self.language, "index_partial", indexed=stats.get("indexed", 0),
-                       deleted=stats.get("deleted", 0),
-                       skipped=unavailable_count + scan_error_count, docs=docs)
+                    tr(
+                        self.language,
+                        "index_partial",
+                        indexed=stats.get("indexed", 0),
+                        deleted=stats.get("deleted", 0),
+                        skipped=unavailable_count + scan_error_count,
+                        docs=docs,
+                    )
                 )
             elif not any(stats.get(key, 0) for key in ("indexed", "deleted", "failed")):
                 self.status_label.setText(self._idle_status_text())
             else:
                 self.status_label.setText(
-                    tr(self.language, "index_complete", indexed=stats.get("indexed", 0),
-                       deleted=stats.get("deleted", 0), failed=stats.get("failed", 0), docs=docs)
+                    tr(
+                        self.language,
+                        "index_complete",
+                        indexed=stats.get("indexed", 0),
+                        deleted=stats.get("deleted", 0),
+                        failed=stats.get("failed", 0),
+                        docs=docs,
+                    )
                 )
 
         self._update_db_status(update_main_status=False)
@@ -1185,8 +1258,10 @@ class MainWindow(QMainWindow):
         if not self._last_updated_at(stats):
             return tr(self.language, "status_bar_never", version=APP_VERSION)
         return tr(
-            self.language, "status_bar_format",
-            version=APP_VERSION, docs=docs,
+            self.language,
+            "status_bar_format",
+            version=APP_VERSION,
+            docs=docs,
         )
 
     def _last_updated_at(self, stats: Optional[dict] = None) -> Optional[float]:
@@ -1204,10 +1279,12 @@ class MainWindow(QMainWindow):
         else:
             self.last_updated_label.setText(tr(self.language, "last_updated_never"))
         font = self.last_updated_label.fontMetrics()
-        self.last_updated_label.setMinimumWidth(max(
-            font.horizontalAdvance("最後更新：0000-00-00 00:00"),
-            font.horizontalAdvance("Last Updated: 0000-00-00 00:00"),
-        ))
+        self.last_updated_label.setMinimumWidth(
+            max(
+                font.horizontalAdvance("最後更新：0000-00-00 00:00"),
+                font.horizontalAdvance("Last Updated: 0000-00-00 00:00"),
+            )
+        )
 
     def _mark_last_updated(self):
         self.config.last_updated_at = time.time()
@@ -1314,22 +1391,52 @@ class MainWindow(QMainWindow):
         badges = []
         if self.active_type_filter != "all":
             active_button = next(
-                (button for button in self.filter_buttons
-                 if button.property("filter_tag") == self.active_type_filter), None
+                (
+                    button
+                    for button in self.filter_buttons
+                    if button.property("filter_tag") == self.active_type_filter
+                ),
+                None,
             )
             if active_button:
-                badges.append(("format", tr(self.language, "badge_format", value=active_button.text())))
+                badges.append(
+                    ("format", tr(self.language, "badge_format", value=active_button.text()))
+                )
         date_mode = self.date_filter_combo.currentData()
         if date_mode != "all":
-            badges.append(("date", tr(self.language, "badge_date", value=self.date_filter_combo.currentText())))
+            badges.append(
+                (
+                    "date",
+                    tr(self.language, "badge_date", value=self.date_filter_combo.currentText()),
+                )
+            )
         size_mode = self.size_preset_combo.currentData()
         if size_mode != "any":
-            badges.append(("size", tr(self.language, "badge_size", value=self.size_preset_combo.currentText())))
+            badges.append(
+                (
+                    "size",
+                    tr(self.language, "badge_size", value=self.size_preset_combo.currentText()),
+                )
+            )
         if self.include_path_input.text().strip():
-            badges.append(("path", tr(self.language, "badge_path", value=self.include_path_input.text().strip())))
+            badges.append(
+                (
+                    "path",
+                    tr(self.language, "badge_path", value=self.include_path_input.text().strip()),
+                )
+            )
         if self.exclude_input.text().strip():
-            badges.append(("exclude", tr(self.language, "badge_exclude", value=self.exclude_input.text().strip())))
-        for key, control in (("case", self.match_case), ("word", self.whole_word), ("regex", self.regex_mode)):
+            badges.append(
+                (
+                    "exclude",
+                    tr(self.language, "badge_exclude", value=self.exclude_input.text().strip()),
+                )
+            )
+        for key, control in (
+            ("case", self.match_case),
+            ("word", self.whole_word),
+            ("regex", self.regex_mode),
+        ):
             if control.isChecked():
                 badges.append((key, control.text() + " ✕"))
         for key, label in badges:
@@ -1410,9 +1517,7 @@ class MainWindow(QMainWindow):
             values["modified_after"] = datetime(
                 start.year(), start.month(), start.day()
             ).timestamp()
-            values["modified_before"] = datetime(
-                end.year(), end.month(), end.day()
-            ).timestamp()
+            values["modified_before"] = datetime(end.year(), end.month(), end.day()).timestamp()
 
         mb = 1024 * 1024
         size_mode = self.size_preset_combo.currentData()
@@ -1431,9 +1536,13 @@ class MainWindow(QMainWindow):
         elif size_mode == "custom":
             units = {"KB": 1024, "MB": mb, "GB": mb * 1024}
             if self.min_size.value() > 0:
-                values["min_size"] = round(self.min_size.value() * units[self.min_unit.currentData()])
+                values["min_size"] = round(
+                    self.min_size.value() * units[self.min_unit.currentData()]
+                )
             if self.max_size.value() > 0:
-                values["max_size"] = round(self.max_size.value() * units[self.max_unit.currentData()])
+                values["max_size"] = round(
+                    self.max_size.value() * units[self.max_unit.currentData()]
+                )
         return values
 
     def _current_filter_signature(self) -> Tuple[Any, ...]:
@@ -1579,26 +1688,29 @@ class MainWindow(QMainWindow):
         available = screen.availableGeometry()
         margins = layout.contentsMargins()
         minimum_width = buttons.sizeHint().width() + margins.left() + margins.right()
-        outer_width = min(int(available.width() * 0.9),
-                          max(minimum_width, int(self.width() * 0.9)))
+        outer_width = min(int(available.width() * 0.9), max(minimum_width, int(self.width() * 0.9)))
         measure = QTextDocument()
         measure.setDefaultFont(content.font())
         measure.setHtml(content.toHtml())
         measure.setTextWidth(-1)
         browser_chrome = content.frameWidth() * 2 + measure.documentMargin() * 2
         natural_width = math.ceil(measure.idealWidth() + browser_chrome)
-        dialog_width = min(outer_width, max(minimum_width,
-                                            natural_width + margins.left() + margins.right()))
+        dialog_width = min(
+            outer_width, max(minimum_width, natural_width + margins.left() + margins.right())
+        )
         content_width = dialog_width - margins.left() - margins.right() - content.frameWidth() * 2
         measure.setTextWidth(content_width)
-        controls_height = (margins.top() + margins.bottom() + buttons.sizeHint().height()
-                           + layout.spacing())
+        controls_height = (
+            margins.top() + margins.bottom() + buttons.sizeHint().height() + layout.spacing()
+        )
         minimum_height = controls_height + content.fontMetrics().lineSpacing() * 3
-        outer_height = min(int(available.height() * 0.8),
-                           max(minimum_height, int(self.height() * 0.8)))
-        dialog_height = min(outer_height,
-                            math.ceil(measure.size().height()
-                                      + content.frameWidth() * 2 + controls_height))
+        outer_height = min(
+            int(available.height() * 0.8), max(minimum_height, int(self.height() * 0.8))
+        )
+        dialog_height = min(
+            outer_height,
+            math.ceil(measure.size().height() + content.frameWidth() * 2 + controls_height),
+        )
         help_box.resize(dialog_width, dialog_height)
         help_box.exec()
 
@@ -1610,7 +1722,10 @@ class MainWindow(QMainWindow):
 
     def _trigger_search(self):
         query = self.search_input.text().strip()
-        if self.date_filter_combo.currentData() == "custom" and self.date_from.date() > self.date_to.date():
+        if (
+            self.date_filter_combo.currentData() == "custom"
+            and self.date_from.date() > self.date_to.date()
+        ):
             self.results_count_label.setText(tr(self.language, "invalid_date_range"))
             return
         if self.regex_mode.isChecked() and query:
@@ -1652,17 +1767,14 @@ class MainWindow(QMainWindow):
         worker.filter_signature = self._current_filter_signature()
         self.search_worker = worker
         worker.search_finished.connect(
-            lambda results, completed_query, elapsed_ms, source=worker:
-                self._on_search_finished(
-                    source, results, completed_query, elapsed_ms
-                )
+            lambda results, completed_query, elapsed_ms, source=worker: self._on_search_finished(
+                source, results, completed_query, elapsed_ms
+            )
         )
         worker.search_failed.connect(
             lambda message, source=worker: self._on_search_failed(source, message)
         )
-        worker.finished.connect(
-            lambda source=worker: self._on_search_worker_finished(source)
-        )
+        worker.finished.connect(lambda source=worker: self._on_search_worker_finished(source))
         worker.start()
 
     def _on_search_finished(
@@ -1684,9 +1796,7 @@ class MainWindow(QMainWindow):
         self.table.set_results(results)
         count = len(results)
         if count == 0:
-            self.results_count_label.setText(
-                tr(self.language, "search_none", elapsed=elapsed_ms)
-            )
+            self.results_count_label.setText(tr(self.language, "search_none", elapsed=elapsed_ms))
         else:
             self.results_count_label.setText(
                 tr(self.language, "search_found", count=count, elapsed=elapsed_ms)
@@ -1703,9 +1813,7 @@ class MainWindow(QMainWindow):
             }
             if message in error_keys:
                 message = tr(self.language, error_keys[message])
-            self.results_count_label.setText(
-                tr(self.language, "search_failed", message=message)
-            )
+            self.results_count_label.setText(tr(self.language, "search_failed", message=message))
 
     def _on_search_worker_finished(self, worker: SearchWorker):
         worker.deleteLater()
@@ -1721,10 +1829,7 @@ class MainWindow(QMainWindow):
         self.pending_search = None
         if pending and pending[0]:
             query, type_filter, _search_filters = pending
-            if (
-                query == self.search_input.text().strip()
-                and type_filter == self.active_type_filter
-            ):
+            if query == self.search_input.text().strip() and type_filter == self.active_type_filter:
                 self._start_search(query, type_filter, self._current_search_filters())
 
     def _on_table_item_selected(self, item: Optional[SearchResultItem]):

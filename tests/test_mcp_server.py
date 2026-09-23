@@ -42,6 +42,7 @@ def run_client(scenario):
     async def main():
         async with Client(mcp_server.mcp) as client:
             return await scenario(client)
+
     return anyio.run(main)
 
 
@@ -58,7 +59,9 @@ def test_lists_tools_and_document_template(indexed_service):
     assert schema["required"] == ["query"]
     assert schema["properties"]["limit"]["maximum"] == 100
     assert by_name["search_documents"].annotations.read_only_hint is True
-    assert [t.uri_template for t in templates.resource_templates] == ["docsearcher://document/{path}"]
+    assert [t.uri_template for t in templates.resource_templates] == [
+        "docsearcher://document/{path}"
+    ]
 
 
 def test_search_then_read_hit_as_resource(indexed_service):
@@ -81,7 +84,9 @@ def test_invalid_input_is_reported_as_tool_error(indexed_service):
         return [
             await client.call_tool("search_documents", {"query": "預算", "formats": ["images"]}),
             await client.call_tool("search_documents", {"query": "filename:"}),
-            await client.call_tool("reindex_directory", {"directory": "/definitely/not/configured"}),
+            await client.call_tool(
+                "reindex_directory", {"directory": "/definitely/not/configured"}
+            ),
         ]
 
     bad_format, bad_query, bad_dir = run_client(scenario)
@@ -113,7 +118,9 @@ def test_stdio_server_round_trip_survives_stray_prints(tmp_path):
 
     async def main():
         with open(errlog_path, "w", encoding="utf-8") as errlog:
-            async with Client(stdio_client(params, errlog=errlog), read_timeout_seconds=60) as client:
+            async with Client(
+                stdio_client(params, errlog=errlog), read_timeout_seconds=60
+            ) as client:
                 return await client.call_tool("get_index_status", {})
 
     status = anyio.run(main)

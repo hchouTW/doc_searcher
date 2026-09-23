@@ -16,10 +16,11 @@ from typing import Optional
 @dataclass(frozen=True)
 class OSInfo:
     """Encapsulates detected operating system attributes and visual adaptation parameters."""
-    os_family: str         # 'windows', 'macos', 'linux', or 'other'
-    os_name: str           # 'Windows 11', 'Windows 10', 'macOS 15.4', etc.
-    build_number: int      # e.g. 22631 on Win 11, 19045 on Win 10, 0 on others
-    arch: str              # 'x86_64', 'arm64'
+
+    os_family: str  # 'windows', 'macos', 'linux', or 'other'
+    os_name: str  # 'Windows 11', 'Windows 10', 'macOS 15.4', etc.
+    build_number: int  # e.g. 22631 on Win 11, 19045 on Win 10, 0 on others
+    arch: str  # 'x86_64', 'arm64'
     is_windows: bool
     is_win11: bool
     is_win10: bool
@@ -27,8 +28,8 @@ class OSInfo:
     is_linux: bool
     # Adaptive visual style properties
     font_family: str
-    border_radius: int     # 8px for modern Win11 & macOS, 4px for classic Win10
-    display_badge: str     # Compact badge for status bar display
+    border_radius: int  # 8px for modern Win11 & macOS, 4px for classic Win10
+    display_badge: str  # Compact badge for status bar display
 
 
 def _normalize_arch(machine: str) -> str:
@@ -66,7 +67,7 @@ def detect_os(
     detected_system = (system_name or platform.system()).strip()
     detected_release = release if release is not None else platform.release()
     arch = _normalize_arch(machine if machine is not None else platform.machine())
-    
+
     is_windows = detected_system.casefold() == "windows"
     is_macos = detected_system.casefold() in {"darwin", "macos"}
     is_linux = detected_system.casefold() == "linux"
@@ -79,12 +80,11 @@ def detect_os(
 
     if is_windows:
         os_family = "windows"
-        build_num = windows_build if windows_build is not None else _windows_build(platform.version())
-        is_win11 = build_num >= 22000 or (build_num == 0 and detected_release == "11")
-        is_win10 = (
-            10240 <= build_num < 22000
-            or (build_num == 0 and detected_release == "10")
+        build_num = (
+            windows_build if windows_build is not None else _windows_build(platform.version())
         )
+        is_win11 = build_num >= 22000 or (build_num == 0 and detected_release == "11")
+        is_win10 = 10240 <= build_num < 22000 or (build_num == 0 and detected_release == "10")
         if is_win11:
             version_label = "Windows 11"
         elif is_win10:
@@ -98,7 +98,9 @@ def detect_os(
             font_family = '"Segoe UI Variable Text", "Segoe UI", "Microsoft JhengHei UI", "Microsoft JhengHei", sans-serif'
             border_radius = 8
         else:
-            font_family = '"Segoe UI", "Microsoft JhengHei UI", "Microsoft JhengHei", Arial, sans-serif'
+            font_family = (
+                '"Segoe UI", "Microsoft JhengHei UI", "Microsoft JhengHei", Arial, sans-serif'
+            )
             border_radius = 4
 
         display_badge = "🪟 " + (
@@ -138,7 +140,7 @@ def detect_os(
         is_linux=is_linux,
         font_family=font_family,
         border_radius=border_radius,
-        display_badge=display_badge
+        display_badge=display_badge,
     )
 
 

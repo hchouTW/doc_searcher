@@ -15,7 +15,15 @@ from types import SimpleNamespace
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QApplication, QDialog, QDialogButtonBox, QFileDialog, QMessageBox, QScrollArea, QTextBrowser
+from PySide6.QtWidgets import (
+    QApplication,
+    QDialog,
+    QDialogButtonBox,
+    QFileDialog,
+    QMessageBox,
+    QScrollArea,
+    QTextBrowser,
+)
 
 import pytest
 
@@ -44,14 +52,16 @@ def _result(name: str, matches: int) -> SearchResultItem:
         mtime=float(matches),
         rank_score=float(matches),
         total_matches=matches,
-        segments=[SegmentMatch(
-            segment_id="1",
-            segment_type="text",
-            snippets=[
-                'before <mark style="background-color: #ffeb3b">keyword</mark> after '
-                '<mark style="background-color: #ffeb3b">keyword</mark>'
-            ],
-        )],
+        segments=[
+            SegmentMatch(
+                segment_id="1",
+                segment_type="text",
+                snippets=[
+                    'before <mark style="background-color: #ffeb3b">keyword</mark> after '
+                    '<mark style="background-color: #ffeb3b">keyword</mark>'
+                ],
+            )
+        ],
     )
 
 
@@ -112,12 +122,14 @@ def test_search_help_shows_python_regex_examples(tmp_path, monkeypatch):
     config.db_path = str(tmp_path / "index.db")
     window = MainWindow(config)
     shown = []
+
     def capture_help(dialog):
         browser = dialog.findChild(QTextBrowser)
         shown.append(browser.toPlainText())
         available = dialog.screen().availableGeometry()
-        assert dialog.width() <= min(int(available.width() * 0.9),
-                                     max(320, int(window.width() * 0.9)))
+        assert dialog.width() <= min(
+            int(available.width() * 0.9), max(320, int(window.width() * 0.9))
+        )
         assert dialog.height() <= int(available.height() * 0.8)
         assert browser.verticalScrollBarPolicy() == Qt.ScrollBarAsNeeded
         assert browser.horizontalScrollBarPolicy() == Qt.ScrollBarAlwaysOff
@@ -127,8 +139,7 @@ def test_search_help_shows_python_regex_examples(tmp_path, monkeypatch):
 
     window._show_search_help()
     assert "Python Regex 語法" in shown[-1]
-    for expression in (r"(?i)error", r"\d{4}-\d{2}-\d{2}",
-                       r"\btest\b", r"\b\w+\.(pdf|docx|txt)\b"):
+    for expression in (r"(?i)error", r"\d{4}-\d{2}-\d{2}", r"\btest\b", r"\b\w+\.(pdf|docx|txt)\b"):
         assert expression in shown[-1]
     window.btn_lang_en.click()
     window._show_search_help()
@@ -171,8 +182,11 @@ def test_search_help_sizing_adapts_to_window_and_content(tmp_path, monkeypatch):
     assert narrow[2] > 0
 
     original_set_html = QTextBrowser.setHtml
-    monkeypatch.setattr(QTextBrowser, "setHtml", lambda browser, _html:
-                        original_set_html(browser, "<h3>Help</h3><p>Short text.</p>"))
+    monkeypatch.setattr(
+        QTextBrowser,
+        "setHtml",
+        lambda browser, _html: original_set_html(browser, "<h3>Help</h3><p>Short text.</p>"),
+    )
     monkeypatch.setattr(window, "width", lambda: 1000)
     monkeypatch.setattr(window, "height", lambda: 700)
     window.resize(1000, 700)
@@ -226,8 +240,7 @@ def test_folder_picker_selection_and_cancel(tmp_path, monkeypatch, action):
     dialog.done(QDialog.Accepted)
     app.processEvents()
     assert window._folder_dialog is None
-    expected = ([str(old_folder), str(folder)] if action == "_on_choose_directory"
-                else [str(folder)])
+    expected = [str(old_folder), str(folder)] if action == "_on_choose_directory" else [str(folder)]
     assert config.directories == expected
     assert folder.name in window.dir_label.text()
     assert started == [True]
@@ -255,7 +268,9 @@ def test_folder_picker_batches_multiple_paths_and_skips_unavailable(tmp_path, mo
 
     window._on_choose_directory()
     dialog = opened[-1]
-    monkeypatch.setattr(dialog, "selectedFiles", lambda: [str(first), str(second), str(tmp_path / "gone")])
+    monkeypatch.setattr(
+        dialog, "selectedFiles", lambda: [str(first), str(second), str(tmp_path / "gone")]
+    )
     dialog.done(QDialog.Accepted)
     app.processEvents()
 
@@ -315,7 +330,9 @@ def test_clear_directories_updates_count_and_requests_index_clear(tmp_path, monk
     config.directories = [str(folder)]
     window = MainWindow(config)
     requested = []
-    monkeypatch.setattr(window, "_start_indexing", lambda clear_index=False: requested.append(clear_index))
+    monkeypatch.setattr(
+        window, "_start_indexing", lambda clear_index=False: requested.append(clear_index)
+    )
 
     window._clear_directories()
     assert config.directories == []
@@ -394,8 +411,7 @@ def test_directory_change_clears_results_and_rejects_superseded_search(tmp_path,
     window.search_timer.stop()
     window.table.set_results([_result("stale.txt", 1)])
     old_signature = window._current_filter_signature()
-    worker = SimpleNamespace(type_filter=window.active_type_filter,
-                             filter_signature=old_signature)
+    worker = SimpleNamespace(type_filter=window.active_type_filter, filter_signature=old_signature)
     window.search_worker = worker
     monkeypatch.setattr(window, "_start_indexing", lambda *args, **kwargs: None)
 
@@ -507,8 +523,7 @@ def test_search_syntax_colors_operators_and_exact_phrases():
 
     formats = editor.document().firstBlock().layout().formats()
     colored = {
-        (item.start, item.length): item.format.foreground().color().name()
-        for item in formats
+        (item.start, item.length): item.format.foreground().color().name() for item in formats
     }
     assert colored[(7, 3)] == "#fb923c"
     assert colored[(11, 15)] == "#86efac"
@@ -540,7 +555,7 @@ def test_custom_size_units_and_reset_filters(tmp_path):
 
 def _relative_luminance(hex_color: str) -> float:
     hex_color = hex_color.lstrip("#")
-    r, g, b = (int(hex_color[i:i + 2], 16) / 255 for i in (0, 2, 4))
+    r, g, b = (int(hex_color[i : i + 2], 16) / 255 for i in (0, 2, 4))
 
     def adjust(channel: float) -> float:
         return channel / 12.92 if channel <= 0.03928 else ((channel + 0.055) / 1.055) ** 2.4
@@ -562,7 +577,9 @@ def test_status_bar_shows_version_and_no_longer_duplicates_top_bar(tmp_path):
     window = MainWindow(config)
 
     # No documents indexed yet: version shown, no duplicate document count.
-    assert window.status_label.text() == tr(window.language, "status_bar_never", version=APP_VERSION)
+    assert window.status_label.text() == tr(
+        window.language, "status_bar_never", version=APP_VERSION
+    )
     assert window.last_updated_label.text() == tr(window.language, "last_updated_never")
 
     stats = {"total_docs": 6429, "last_indexed_at": 1758585600.0}
@@ -571,6 +588,7 @@ def test_status_bar_shows_version_and_no_longer_duplicates_top_bar(tmp_path):
     assert "6,429" in idle_text
     # The old duplicate "index up to date | N documents" keys must be retired.
     from doc_searcher.desktop import i18n
+
     assert "index_current" not in i18n.TRANSLATIONS["zh-TW"]
     assert "status_ready" not in i18n.TRANSLATIONS["zh-TW"]
     window.close()
@@ -592,7 +610,9 @@ def test_status_bar_timestamp_tracks_directory_changes_refresh_and_scan(tmp_path
     first = config.last_updated_at
     assert first > 0
     assert AppConfig(config_path).last_updated_at == first
-    assert datetime.fromtimestamp(first).strftime("%Y-%m-%d %H:%M") in window.last_updated_label.text()
+    assert (
+        datetime.fromtimestamp(first).strftime("%Y-%m-%d %H:%M") in window.last_updated_label.text()
+    )
 
     config.last_updated_at = 1.0
     window._reset_directories(str(replacement))
@@ -609,13 +629,21 @@ def test_status_bar_timestamp_tracks_directory_changes_refresh_and_scan(tmp_path
     assert "最後更新：" in window.last_updated_label.text()
     window.btn_lang_en.click()
     assert "Last Updated:" in window.last_updated_label.text()
-    assert window.last_updated_label.minimumWidth() >= window.last_updated_label.fontMetrics().horizontalAdvance(window.last_updated_label.text())
+    assert (
+        window.last_updated_label.minimumWidth()
+        >= window.last_updated_label.fontMetrics().horizontalAdvance(
+            window.last_updated_label.text()
+        )
+    )
     window.close()
 
     reloaded = AppConfig(config_path)
     reloaded.settings.directories = []
     reopened = MainWindow(reloaded)
-    assert datetime.fromtimestamp(reloaded.last_updated_at).strftime("%Y-%m-%d %H:%M") in reopened.last_updated_label.text()
+    assert (
+        datetime.fromtimestamp(reloaded.last_updated_at).strftime("%Y-%m-%d %H:%M")
+        in reopened.last_updated_label.text()
+    )
     reopened.close()
 
 
@@ -653,8 +681,7 @@ def test_search_field_restrictor_is_highlighted_distinctly():
 
     formats = editor.document().firstBlock().layout().formats()
     colored = {
-        (item.start, item.length): item.format.foreground().color().name()
-        for item in formats
+        (item.start, item.length): item.format.foreground().color().name() for item in formats
     }
     assert colored[(0, len("filename:"))] == "#38bdf8"
 

@@ -27,14 +27,14 @@ def tokenize_for_fts(text: str) -> str:
 def extract_keywords_from_query(query: str) -> List[str]:
     """Parse user query string into individual match keywords."""
     # Remove operators like AND, OR, NOT
-    cleaned = re.sub(r'\b(AND|OR|NOT)\b', ' ', query, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\b(AND|OR|NOT)\b", " ", query, flags=re.IGNORECASE)
     # Extract words and quoted phrases
     phrases = re.findall(r'"([^"]+)"', cleaned)
-    remainder = re.sub(r'"[^"]+"', ' ', cleaned)
-    
+    remainder = re.sub(r'"[^"]+"', " ", cleaned)
+
     words = remainder.split()
     all_terms = phrases + words
-    
+
     # Also tokenize Chinese terms so each component word can be highlighted
     highlight_terms = set()
     for term in all_terms:
@@ -67,9 +67,9 @@ def generate_highlighted_snippets(
     if not escaped_kws:
         return []
 
-    expression = r'(' + '|'.join(escaped_kws) + r')'
+    expression = r"(" + "|".join(escaped_kws) + r")"
     if whole_word:
-        expression = rf'(?<!\w){expression}(?!\w)'
+        expression = rf"(?<!\w){expression}(?!\w)"
     pattern = re.compile(expression, 0 if case_sensitive else re.IGNORECASE)
     return generate_regex_highlighted_snippets(
         content, pattern, max_snippets=max_snippets, context_chars=context_chars
@@ -111,16 +111,16 @@ def generate_regex_highlighted_snippets(
         pieces = []
         cursor = 0
         for local_match in pattern.finditer(chunk):
-            pieces.append(html.escape(chunk[cursor:local_match.start()]))
+            pieces.append(html.escape(chunk[cursor : local_match.start()]))
             pieces.append(
                 '<mark style="background-color: #ffeb3b; color: #000; '
                 'font-weight: bold; padding: 1px 3px; border-radius: 2px;">'
-                f'{html.escape(local_match.group(0))}</mark>'
+                f"{html.escape(local_match.group(0))}</mark>"
             )
             cursor = local_match.end()
         pieces.append(html.escape(chunk[cursor:]))
         highlighted_chunk = "".join(pieces)
-        
+
         prefix = "..." if start_idx > 0 else ""
         suffix = "..." if end_idx < len(content) else ""
         snippets.append(f"{prefix}{highlighted_chunk}{suffix}")

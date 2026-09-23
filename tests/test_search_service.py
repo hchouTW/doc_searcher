@@ -76,13 +76,16 @@ def test_search_format_groups_filter_and_merge(make_service, docs):
     assert len(service.search("預算", formats=["pdf", "excel"], limit=1)["results"]) == 1
 
 
-@pytest.mark.parametrize("kwargs", [
-    {"query": "   "},
-    {"query": "預算", "formats": ["images"]},
-    {"query": "預算", "limit": 0},
-    {"query": "預算", "limit": 101},
-    {"query": "filename:"},
-])
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"query": "   "},
+        {"query": "預算", "formats": ["images"]},
+        {"query": "預算", "limit": 0},
+        {"query": "預算", "limit": 101},
+        {"query": "filename:"},
+    ],
+)
 def test_search_rejects_invalid_input(make_service, docs, kwargs):
     service = make_service([docs])
     with pytest.raises(ValueError):

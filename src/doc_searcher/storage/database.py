@@ -70,7 +70,7 @@ class Database:
         conn = self.get_connection()
         cursor = conn.execute(
             "SELECT id, path, filename, file_type, file_size, mtime, ctime, total_segments, error FROM documents WHERE path = ?",
-            (os.path.abspath(file_path),)
+            (os.path.abspath(file_path),),
         )
         row = cursor.fetchone()
         return dict(row) if row else None
@@ -80,7 +80,7 @@ class Database:
         conn = self.get_connection()
         cursor = conn.execute(
             "SELECT segment_id, segment_type, content FROM doc_segments WHERE doc_id = ? ORDER BY id",
-            (doc_id,)
+            (doc_id,),
         )
         return [dict(row) for row in cursor.fetchall()]
 
@@ -146,16 +146,42 @@ class Database:
                 # Clean up previous segments and FTS entries
                 conn.execute("DELETE FROM doc_fts WHERE doc_id = ?", (str(doc_id),))
                 conn.execute("DELETE FROM doc_segments WHERE doc_id = ?", (doc_id,))
-                conn.execute("""
+                conn.execute(
+                    """
                     UPDATE documents
                     SET filename = ?, file_type = ?, file_size = ?, mtime = ?, ctime = ?, indexed_at = ?, total_segments = ?, error = ?
                     WHERE id = ?
-                """, (filename, file_type, file_size, mtime, creation_time, now, len(segments), error, doc_id))
+                """,
+                    (
+                        filename,
+                        file_type,
+                        file_size,
+                        mtime,
+                        creation_time,
+                        now,
+                        len(segments),
+                        error,
+                        doc_id,
+                    ),
+                )
             else:
-                cursor = conn.execute("""
+                cursor = conn.execute(
+                    """
                     INSERT INTO documents (path, filename, file_type, file_size, mtime, ctime, indexed_at, total_segments, error)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (abs_path, filename, file_type, file_size, mtime, creation_time, now, len(segments), error))
+                """,
+                    (
+                        abs_path,
+                        filename,
+                        file_type,
+                        file_size,
+                        mtime,
+                        creation_time,
+                        now,
+                        len(segments),
+                        error,
+                    ),
+                )
                 doc_id = cursor.lastrowid
 
             # Insert segments and FTS entries
@@ -167,18 +193,24 @@ class Database:
                     seg_type = str(seg["segment_type"])
                     content = seg["content"]
                     tokenized = seg.get("tokenized_content", "")
-                    
+
                     seg_rows.append((doc_id, seg_id, seg_type, content))
                     fts_rows.append((str(doc_id), seg_id, seg_type, content, tokenized))
 
-                conn.executemany("""
+                conn.executemany(
+                    """
                     INSERT INTO doc_segments (doc_id, segment_id, segment_type, content)
                     VALUES (?, ?, ?, ?)
-                """, seg_rows)
+                """,
+                    seg_rows,
+                )
 
-                conn.executemany("""
+                conn.executemany(
+                    """
                     INSERT INTO doc_fts (doc_id, segment_id, segment_type, content, tokenized_content)
                     VALUES (?, ?, ?, ?, ?)
-                """, fts_rows)
+                """,
+                    fts_rows,
+                )
 
         return doc_id

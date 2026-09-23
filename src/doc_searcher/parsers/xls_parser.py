@@ -47,22 +47,20 @@ class XlsParser(BaseParser):
                 sheet_text = "\n".join(row_lines).strip()
                 if sheet_text:
                     segments.append(
-                        PageSegment(
-                            segment_id=sheet_name,
-                            segment_type="sheet",
-                            text=sheet_text
-                        )
+                        PageSegment(segment_id=sheet_name, segment_type="sheet", text=sheet_text)
                     )
 
             return ExtractedDoc(
                 file_path=abs_path,
                 file_type="xls",
                 total_segments=len(sheet_names),
-                segments=segments
+                segments=segments,
             )
         except Exception as e:
             if "encrypted" in str(e).lower():
-                return ExtractedDoc.failed(abs_path, "xls", ParseStatus.ENCRYPTED, f"Workbook is encrypted: {e}")
+                return ExtractedDoc.failed(
+                    abs_path, "xls", ParseStatus.ENCRYPTED, f"Workbook is encrypted: {e}"
+                )
             return ExtractedDoc.from_exception(abs_path, "xls", "Error reading xls file", e)
         finally:
             if book is not None:

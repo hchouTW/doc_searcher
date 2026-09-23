@@ -19,24 +19,25 @@ from abc import ABC, abstractmethod
 class ParseStatus(str, Enum):
     """Stable parse outcomes; values are safe to persist or show in diagnostics."""
 
-    SUCCESS = "success"                        # text extracted
-    EMPTY = "empty"                            # valid document without extractable text
-    UNSUPPORTED = "unsupported"                # no parser for this extension
-    UNREADABLE = "unreadable"                  # missing file or OS/permission error
-    ENCRYPTED = "encrypted"                    # password required to read content
-    CORRUPT = "corrupt"                        # file is readable but not a valid document
+    SUCCESS = "success"  # text extracted
+    EMPTY = "empty"  # valid document without extractable text
+    UNSUPPORTED = "unsupported"  # no parser for this extension
+    UNREADABLE = "unreadable"  # missing file or OS/permission error
+    ENCRYPTED = "encrypted"  # password required to read content
+    CORRUPT = "corrupt"  # file is readable but not a valid document
     DEPENDENCY_MISSING = "dependency_missing"  # parser library is not installed
 
 
 @dataclass
 class PageSegment:
     """Represents text extracted from a specific section of a document.
-    
+
     Attributes:
         segment_id: Page number (1-based), Slide number, or Sheet name.
         segment_type: 'page', 'slide', 'sheet', or 'section'.
         text: Extracted plain text content.
     """
+
     segment_id: str
     segment_type: str
     text: str
@@ -45,7 +46,7 @@ class PageSegment:
 @dataclass
 class ExtractedDoc:
     """Represents the complete parsed document.
-    
+
     Attributes:
         file_path: Absolute path to the source document.
         file_type: Extension or type tag (e.g. 'pdf', 'docx', 'xlsx').
@@ -55,6 +56,7 @@ class ExtractedDoc:
         status: Stable outcome category; SUCCESS/EMPTY are derived from segments when a
             parser does not report a failure.
     """
+
     file_path: str
     file_type: str
     total_segments: int = 0
@@ -71,11 +73,15 @@ class ExtractedDoc:
                 self.status = ParseStatus.SUCCESS if has_text else ParseStatus.EMPTY
 
     @classmethod
-    def failed(cls, file_path: str, file_type: str, status: ParseStatus, error: str) -> "ExtractedDoc":
+    def failed(
+        cls, file_path: str, file_type: str, status: ParseStatus, error: str
+    ) -> "ExtractedDoc":
         return cls(file_path=file_path, file_type=file_type, error=error, status=status)
 
     @classmethod
-    def from_exception(cls, file_path: str, file_type: str, action: str, exc: BaseException) -> "ExtractedDoc":
+    def from_exception(
+        cls, file_path: str, file_type: str, action: str, exc: BaseException
+    ) -> "ExtractedDoc":
         """Real OS errors (with an errno: missing file, permissions, I/O) are UNREADABLE.
 
         Libraries also raise errno-less OSError for bad content (olefile, zipfile), and
@@ -97,10 +103,10 @@ class BaseParser(ABC):
     @abstractmethod
     def parse(self, file_path: str) -> ExtractedDoc:
         """Parse document and extract text by segments.
-        
+
         Args:
             file_path: Absolute path to the file.
-            
+
         Returns:
             ExtractedDoc containing segments and metadata.
         """

@@ -24,7 +24,7 @@ SAMPLE_DIR = Path(__file__).parent / "sample_files"
 
 def test_file_scanner():
     scanner = FileScanner()
-    
+
     # Test exclusions
     assert scanner.is_valid_document_file("~$contract.docx") is False
     assert scanner.is_valid_document_file(".DS_Store") is False
@@ -49,14 +49,10 @@ def test_file_scanner_can_exclude_subdirectories(tmp_path):
     nested_file.write_text("nested", encoding="utf-8")
 
     scanner = FileScanner()
-    recursive_paths = {
-        path for path, _, _ in scanner.scan_directories([str(tmp_path)])
-    }
+    recursive_paths = {path for path, _, _ in scanner.scan_directories([str(tmp_path)])}
     top_level_paths = {
         path
-        for path, _, _ in scanner.scan_directories(
-            [str(tmp_path)], include_subdirectories=False
-        )
+        for path, _, _ in scanner.scan_directories([str(tmp_path)], include_subdirectories=False)
     }
 
     assert recursive_paths == {str(root_file), str(nested_file)}
@@ -122,11 +118,13 @@ def test_file_scanner_deduplicates_overlapping_roots(tmp_path):
     nested.mkdir()
 
     scanner = FileScanner()
-    normalized = scanner.normalize_directories([
-        str(nested),
-        str(tmp_path),
-        str(nested),
-    ])
+    normalized = scanner.normalize_directories(
+        [
+            str(nested),
+            str(tmp_path),
+            str(nested),
+        ]
+    )
 
     assert normalized == [str(tmp_path)]
 
@@ -186,6 +184,7 @@ def test_recursive_scan_avoids_symbolic_link_cycles(tmp_path):
         (nested / "back-to-root").symlink_to(tmp_path, target_is_directory=True)
     except OSError:
         import pytest
+
         pytest.skip("Symbolic links are not available on this platform")
 
     files = FileScanner().scan_directories([str(tmp_path)])
@@ -202,9 +201,7 @@ def test_batch_progress_includes_deletions_and_additions(tmp_path):
     stats = indexer.run_batch_indexing(
         ["new.txt"],
         ["old.txt"],
-        progress_callback=lambda current, total, name: progress.append(
-            (current, total, name)
-        ),
+        progress_callback=lambda current, total, name: progress.append((current, total, name)),
     )
 
     assert progress == [
@@ -278,9 +275,7 @@ def test_index_worker_keeps_missing_root_but_prunes_removed_selected_root(tmp_pa
     retained = str(missing / "retained.txt")
     removed = str(tmp_path / "unselected" / "removed.txt")
     for path in (retained, removed):
-        db.save_document_index(
-            file_path=path, file_type="txt", file_size=1, mtime=1.0, segments=[]
-        )
+        db.save_document_index(file_path=path, file_type="txt", file_size=1, mtime=1.0, segments=[])
 
     IndexWorker(db, [str(available), str(missing)])._run_indexing()
     assert set(db.get_all_indexed_paths()) == {retained}
@@ -294,9 +289,7 @@ def test_index_worker_prunes_unselected_roots_when_every_selected_root_is_missin
     selected = str(tmp_path / "unmounted" / "keep.txt")
     unselected = str(tmp_path / "old" / "remove.txt")
     for path in (selected, unselected):
-        db.save_document_index(
-            file_path=path, file_type="txt", file_size=1, mtime=1.0, segments=[]
-        )
+        db.save_document_index(file_path=path, file_type="txt", file_size=1, mtime=1.0, segments=[])
 
     finished = []
     worker = IndexWorker(db, [str(tmp_path / "unmounted")])
@@ -322,9 +315,7 @@ def test_partition_directories_reports_permission_denied(tmp_path, monkeypatch):
         return real_scandir(path)
 
     monkeypatch.setattr(os, "scandir", scandir)
-    available, unavailable = FileScanner().partition_directories(
-        [str(allowed), str(restricted)]
-    )
+    available, unavailable = FileScanner().partition_directories([str(allowed), str(restricted)])
     assert available == [str(allowed)]
     assert unavailable == [str(restricted)]
 
@@ -361,9 +352,7 @@ def test_cancelling_indexer_releases_paused_checkpoint(tmp_path):
     checkpoint_result = []
 
     indexer.pause()
-    waiter = threading.Thread(
-        target=lambda: checkpoint_result.append(indexer.wait_until_ready())
-    )
+    waiter = threading.Thread(target=lambda: checkpoint_result.append(indexer.wait_until_ready()))
     waiter.start()
     indexer.cancel()
     waiter.join(timeout=1)

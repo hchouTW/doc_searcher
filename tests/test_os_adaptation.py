@@ -68,7 +68,9 @@ def test_native_reveal_command_adapts_to_linux(tmp_path: Path):
     with patch("doc_searcher.platform.platform_helper.subprocess.run") as run:
         assert reveal_in_file_manager(str(document), linux)
 
-    run.assert_called_once_with(["xdg-open", os.path.dirname(os.path.abspath(document))], check=True)
+    run.assert_called_once_with(
+        ["xdg-open", os.path.dirname(os.path.abspath(document))], check=True
+    )
 
 
 def test_unknown_system_fails_safely_without_launching(tmp_path: Path):

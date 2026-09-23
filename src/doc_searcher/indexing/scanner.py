@@ -41,7 +41,7 @@ class FileScanner:
             return False
         if file_name.lower() in {"thumbs.db", "desktop.ini"}:
             return False
-        
+
         ext = os.path.splitext(file_name)[1].lower()
         return ext in self.supported_extensions
 
@@ -65,7 +65,11 @@ class FileScanner:
             if is_absolute_pattern(pattern):
                 if fnmatch.fnmatch(normalized, pattern):
                     return True
-            elif pattern in parts or fnmatch.fnmatch(name, pattern) or fnmatch.fnmatch(relative, pattern):
+            elif (
+                pattern in parts
+                or fnmatch.fnmatch(name, pattern)
+                or fnmatch.fnmatch(relative, pattern)
+            ):
                 return True
         return False
 
@@ -84,10 +88,7 @@ class FileScanner:
         normalized: List[str] = []
         for directory in directories:
             candidate = os.path.abspath(directory)
-            if any(
-                self.is_path_within_directory(candidate, existing)
-                for existing in normalized
-            ):
+            if any(self.is_path_within_directory(candidate, existing) for existing in normalized):
                 continue
 
             normalized = [
@@ -98,9 +99,7 @@ class FileScanner:
             normalized.append(candidate)
         return normalized
 
-    def partition_directories(
-        self, directories: List[str]
-    ) -> Tuple[List[str], List[str]]:
+    def partition_directories(self, directories: List[str]) -> Tuple[List[str], List[str]]:
         """Split configured roots into accessible and temporarily unavailable lists."""
         available = []
         unavailable = []
@@ -125,7 +124,7 @@ class FileScanner:
 
         Subdirectories are included by default. Set include_subdirectories to
         False to scan only files directly inside each selected directory.
-        
+
         Returns:
             List of (abs_path, mtime, file_size) tuples.
         """
@@ -169,7 +168,8 @@ class FileScanner:
                 visited_directories.add(directory_id)
 
                 child_directories[:] = [
-                    name for name in child_directories
+                    name
+                    for name in child_directories
                     if not name.startswith(".")
                     and not self.matches_exclusion(
                         os.path.join(root, name), exclude_patterns, abs_dir
@@ -209,7 +209,7 @@ class FileScanner:
         preserved_directories: Optional[List[str]] = None,
     ) -> Tuple[List[str], List[str]]:
         """Compare current scanned files against indexed files.
-        
+
         Returns:
             (to_index_paths, to_delete_paths)
         """

@@ -40,7 +40,7 @@ class DocParser(BaseParser):
                         file_path=abs_path,
                         file_type="doc",
                         total_segments=1,
-                        segments=[PageSegment(segment_id="1", segment_type="section", text=text)]
+                        segments=[PageSegment(segment_id="1", segment_type="section", text=text)],
                     )
             except Exception as ex:
                 return ExtractedDoc.from_exception(
@@ -53,7 +53,7 @@ class DocParser(BaseParser):
                 if ole.exists("WordDocument"):
                     with ole.openstream("WordDocument") as stream:
                         raw_bytes += stream.read()
-                
+
                 # Check for 1Table or 0Table if present
                 if ole.exists("1Table"):
                     with ole.openstream("1Table") as stream:
@@ -73,18 +73,11 @@ class DocParser(BaseParser):
                 extracted_text = extracted_text.strip()
                 if extracted_text:
                     segments.append(
-                        PageSegment(
-                            segment_id="1",
-                            segment_type="section",
-                            text=extracted_text
-                        )
+                        PageSegment(segment_id="1", segment_type="section", text=extracted_text)
                     )
 
             return ExtractedDoc(
-                file_path=abs_path,
-                file_type="doc",
-                total_segments=len(segments),
-                segments=segments
+                file_path=abs_path, file_type="doc", total_segments=len(segments), segments=segments
             )
         except Exception as e:
             return ExtractedDoc.from_exception(abs_path, "doc", "Error parsing .doc file", e)
@@ -97,7 +90,9 @@ class DocParser(BaseParser):
         try:
             # Word uses UTF-16LE for Unicode text
             # Find runs of 2-byte characters where the high byte is often null (ASCII range) or valid CJK
-            utf16_pattern = re.compile(rb'(?:[\x20-\x7e\x09\x0a\x0d]\x00|[\x00-\xff][\x4e-\x9f]){%d,}' % min_len)
+            utf16_pattern = re.compile(
+                rb"(?:[\x20-\x7e\x09\x0a\x0d]\x00|[\x00-\xff][\x4e-\x9f]){%d,}" % min_len
+            )
             for match in utf16_pattern.finditer(data):
                 try:
                     s = match.group().decode("utf-16le", errors="ignore").strip()
@@ -109,7 +104,7 @@ class DocParser(BaseParser):
             pass
 
         # 2. Look for ASCII/UTF-8 strings
-        ascii_pattern = re.compile(rb'[\x20-\x7e\x09\x0a\x0d]{%d,}' % min_len)
+        ascii_pattern = re.compile(rb"[\x20-\x7e\x09\x0a\x0d]{%d,}" % min_len)
         for match in ascii_pattern.finditer(data):
             try:
                 s = match.group().decode("utf-8", errors="ignore").strip()
@@ -123,7 +118,7 @@ class DocParser(BaseParser):
         cleaned = []
         for line in results:
             # Filter out obvious binary noise
-            cleaned_line = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', '', line).strip()
+            cleaned_line = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", "", line).strip()
             if len(cleaned_line) >= min_len and cleaned_line not in seen:
                 seen.add(cleaned_line)
                 cleaned.append(cleaned_line)

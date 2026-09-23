@@ -51,18 +51,11 @@ class PptParser(BaseParser):
                 if extracted_text:
                     # Group text by potential slide boundaries or as single segment
                     segments.append(
-                        PageSegment(
-                            segment_id="1",
-                            segment_type="slide",
-                            text=extracted_text
-                        )
+                        PageSegment(segment_id="1", segment_type="slide", text=extracted_text)
                     )
 
             return ExtractedDoc(
-                file_path=abs_path,
-                file_type="ppt",
-                total_segments=len(segments),
-                segments=segments
+                file_path=abs_path, file_type="ppt", total_segments=len(segments), segments=segments
             )
         except Exception as e:
             return ExtractedDoc.from_exception(abs_path, "ppt", "Error parsing .ppt file", e)
@@ -73,7 +66,9 @@ class PptParser(BaseParser):
 
         # UTF-16LE patterns common in PPT 97-2003
         try:
-            utf16_pattern = re.compile(rb'(?:[\x20-\x7e\x09\x0a\x0d]\x00|[\x00-\xff][\x4e-\x9f]){%d,}' % min_len)
+            utf16_pattern = re.compile(
+                rb"(?:[\x20-\x7e\x09\x0a\x0d]\x00|[\x00-\xff][\x4e-\x9f]){%d,}" % min_len
+            )
             for match in utf16_pattern.finditer(data):
                 try:
                     s = match.group().decode("utf-16le", errors="ignore").strip()
@@ -85,7 +80,7 @@ class PptParser(BaseParser):
             pass
 
         # ASCII patterns
-        ascii_pattern = re.compile(rb'[\x20-\x7e\x09\x0a\x0d]{%d,}' % min_len)
+        ascii_pattern = re.compile(rb"[\x20-\x7e\x09\x0a\x0d]{%d,}" % min_len)
         for match in ascii_pattern.finditer(data):
             try:
                 s = match.group().decode("utf-8", errors="ignore").strip()
@@ -97,7 +92,7 @@ class PptParser(BaseParser):
         seen = set()
         cleaned = []
         for line in results:
-            cleaned_line = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', '', line).strip()
+            cleaned_line = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", "", line).strip()
             # Ignore standard PPT headers or font names that appear repeatedly
             if cleaned_line in {"Times New Roman", "Arial", "Calibri", "Wingdings", "MS Gothic"}:
                 continue
