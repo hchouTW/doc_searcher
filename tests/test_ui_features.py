@@ -8,7 +8,6 @@
 #   - Uses Qt's offscreen platform so no desktop session is required.
 
 import os
-from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 

@@ -12,7 +12,7 @@ from PySide6.QtCore import QThread, Signal
 from core.database import Database
 from core.scanner import FileScanner
 from core.indexer import DocumentIndexer
-from core.searcher import DocumentSearcher, SearchResultItem
+from core.searcher import DocumentSearcher
 
 
 class IndexWorker(QThread):

@@ -4,14 +4,15 @@
 #   - Creates/reuses ./venv, installs requirements + PyInstaller + Pillow, generates the icon if
 #     missing, runs doc_searcher_mac.spec, and zips the bundle with ditto for distribution.
 # Usage notes, dependencies, or assumptions:
-#   - ./build_mac.sh   (needs python3 on the build machine only)
+#   - packaging/build_mac.sh   (needs python3 on the build machine only)
 #   - Output: dist/DocSearcher.app and dist/DocSearcher-macOS-<arch>.zip
 #   - The build is ad-hoc signed, not notarized; recipients must clear the quarantine flag
 #     (see README "macOS Gatekeeper").
 
 set -euo pipefail
 
-cd "$(dirname "$0")"
+# Run from the project root so venv/, dist/ and build/ live there.
+cd "$(dirname "$0")/.."
 
 if [[ ! -x venv/bin/python ]]; then
     echo "[*] Creating virtual environment..."
@@ -28,7 +29,7 @@ if [[ ! -f assets/app_icon.png ]]; then
 fi
 
 echo "[*] Building DocSearcher.app..."
-venv/bin/pyinstaller doc_searcher_mac.spec --clean -y
+venv/bin/python -m PyInstaller packaging/doc_searcher_mac.spec --clean -y
 
 arch="$(uname -m)"
 zip_path="dist/DocSearcher-macOS-${arch}.zip"

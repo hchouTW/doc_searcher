@@ -6,7 +6,6 @@
 #   - Standard library and fallback encodings.
 
 import os
-from typing import List
 from .base import BaseParser, ExtractedDoc, PageSegment
 
 

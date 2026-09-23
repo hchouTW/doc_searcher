@@ -4,5 +4,5 @@ if exist "venv\Scripts\pythonw.exe" (
     start "" "venv\Scripts\pythonw.exe" "main.py"
 ) else (
     echo [!] 尚未完成安裝，正在啟動安裝程序...
-    call install_windows.bat
+    call install.bat
 )

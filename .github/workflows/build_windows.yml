@@ -20,19 +20,9 @@ jobs:
       with:
         python-version: '3.12'
 
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-        pip install pyinstaller Pillow
-
-    - name: Generate Windows 11 App Icons
-      run: |
-        python scripts/generate_icon.py
-
-    - name: Build Windows Executable with PyInstaller
-      run: |
-        pyinstaller doc_searcher.spec --clean -y
+    - name: Build DocSearcher.exe
+      shell: pwsh
+      run: ./packaging/build_win.ps1
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v4

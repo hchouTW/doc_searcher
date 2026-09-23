@@ -29,8 +29,8 @@ jobs:
 
     - name: Build DocSearcher.app
       run: |
-        chmod +x build_mac.sh
-        ./build_mac.sh
+        chmod +x packaging/build_mac.sh
+        packaging/build_mac.sh
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v4

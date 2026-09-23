@@ -3,19 +3,29 @@
 #   - Traverses target folders, optionally including all subdirectories, to discover documents.
 #   - Supports cooperative checkpoints so background scans can pause or cancel safely.
 #   - Deduplicates overlapping roots and preserves indexes for temporarily unavailable roots.
-#   - Prunes hidden/system folders and user-configurable glob/name exclusions.
+#   - Prunes hidden/system folders and user-configurable glob/name exclusions. Relative patterns
+#     only apply below each scanned root; absolute patterns (/... or C:/...) match the full path.
 #   - Compares with indexed metadata to identify new, modified, and deleted files.
 # Usage notes, dependencies, or assumptions:
 #   - Uses standard library os and pathlib.
 
 import os
 import fnmatch
+import re
 from typing import Callable, List, Dict, Optional, Set, Tuple
 
 try:
-    from parsers import is_supported, SUPPORTED_EXTENSIONS
+    from parsers import SUPPORTED_EXTENSIONS
 except (ImportError, ValueError):
-    from ..parsers import is_supported, SUPPORTED_EXTENSIONS
+    from ..parsers import SUPPORTED_EXTENSIONS
+
+
+_ABSOLUTE_PATTERN_RE = re.compile(r"^(/|[A-Za-z]:/)")
+
+
+def is_absolute_pattern(pattern: str) -> bool:
+    """Return whether a normalized ("/"-separated) exclusion pattern is an absolute path."""
+    return bool(_ABSOLUTE_PATTERN_RE.match(pattern))
 
 
 class FileScanner:
@@ -38,17 +48,27 @@ class FileScanner:
         ext = os.path.splitext(file_name)[1].lower()
         return ext in self.supported_extensions
 
-    @staticmethod
-    def matches_exclusion(path: str, patterns: List[str]) -> bool:
-        """Match a path against folder names, file names, or glob patterns."""
+    @classmethod
+    def matches_exclusion(cls, path: str, patterns: List[str], root: Optional[str] = None) -> bool:
+        """Match a path against folder names, file names, or glob patterns.
+
+        With root, relative patterns only see the part of path below root, so a folder above
+        the search folder (e.g. pattern "temp" and root ~/temp/docs) never excludes it.
+        """
         normalized = path.replace("\\", "/")
+        relative = normalized
+        if root is not None and cls.is_path_within_directory(path, root):
+            relative = "/" + os.path.relpath(path, root).replace("\\", "/")
         name = os.path.basename(normalized)
-        parts = normalized.split("/")
+        parts = relative.split("/")
         for raw_pattern in patterns:
             pattern = raw_pattern.strip().replace("\\", "/")
             if not pattern:
                 continue
-            if pattern in parts or fnmatch.fnmatch(name, pattern) or fnmatch.fnmatch(normalized, pattern):
+            if is_absolute_pattern(pattern):
+                if fnmatch.fnmatch(normalized, pattern):
+                    return True
+            elif pattern in parts or fnmatch.fnmatch(name, pattern) or fnmatch.fnmatch(relative, pattern):
                 return True
         return False
 
@@ -154,7 +174,9 @@ class FileScanner:
                 child_directories[:] = [
                     name for name in child_directories
                     if not name.startswith(".")
-                    and not self.matches_exclusion(os.path.join(root, name), exclude_patterns)
+                    and not self.matches_exclusion(
+                        os.path.join(root, name), exclude_patterns, abs_dir
+                    )
                 ]
 
                 for f in files:
@@ -163,7 +185,7 @@ class FileScanner:
 
                     if self.is_valid_document_file(f):
                         full_path = os.path.abspath(os.path.join(root, f))
-                        if self.matches_exclusion(full_path, exclude_patterns):
+                        if self.matches_exclusion(full_path, exclude_patterns, abs_dir):
                             continue
                         if full_path in seen_paths:
                             continue

@@ -44,6 +44,16 @@
 
 ---
 
+## 🖼️ 介面截圖
+
+| 淺色模式 | 深色模式 |
+| --- | --- |
+| ![淺色模式](docs/screenshots/doc_searcher_light.png) | ![深色模式](docs/screenshots/doc_searcher_dark.png) |
+
+![進階篩選面板](docs/screenshots/doc_searcher_advanced.png)
+
+---
+
 ## 📂 專案目錄結構
 
 ```
@@ -54,7 +64,8 @@ doc_searcher/
 │   ├── database.py           # SQLite3 連線與 FTS5 虛擬全文資料表
 │   ├── indexer.py            # 文件解析調度、jieba 分詞與批次索引寫入
 │   ├── scanner.py            # 資料夾遞迴掃描、過濾暫存檔 (~$*)、增量比對
-│   └── searcher.py           # 查詢語法剖析、FTS5 檢索與 Snippet 摘要高亮
+│   ├── searcher.py           # 查詢語法剖析、FTS5 檢索與 Snippet 摘要高亮
+│   └── version.py            # 應用程式版本號與更新紀錄（唯一版本來源）
 ├── parsers/
 │   ├── base.py               # DocumentParser 抽象介面與 PageSegment 資料結構
 │   ├── pdf_parser.py         # PyMuPDF PDF 提取器
@@ -71,8 +82,10 @@ doc_searcher/
 │   ├── search_input.py       # 即時搜尋語法著色輸入框
 │   ├── result_table.py       # 搜尋結果表格（自定義格式圖示、快捷鍵操作）
 │   ├── preview_panel.py      # 右側內文摘要預覽面板 (HTML 標記高亮)
+│   ├── theme.py              # 深淺色主題與依作業系統調整字型、圓角
 │   └── worker.py             # QThread 非同步背景任務 (索引與搜尋不凍結視窗)
 ├── utils/
+│   ├── os_detector.py        # 作業系統版本與硬體架構偵測
 │   ├── platform_helper.py    # 跨平台開檔與 Finder/檔案總管呼叫
 │   ├── resource_path.py      # 打包後 (sys._MEIPASS) 與原始碼執行皆可用的資源路徑解析
 │   └── text_helper.py        # jieba 分詞預處理、HTML 標籤過濾與 Snippet 生成
@@ -80,13 +93,25 @@ doc_searcher/
 │   ├── sample_generator.py   # 自動產生各格式測試檔案之腳本
 │   ├── test_parsers.py       # 各格式解析器單元測試
 │   ├── test_indexer.py       # 增量索引與 SQLite FTS5 測試
-│   └── test_searcher.py      # 查詢語法、格式過濾與高亮測試
+│   ├── test_searcher.py      # 查詢語法、格式過濾與高亮測試
+│   ├── test_os_adaptation.py # 作業系統偵測與原生操作適配測試
+│   ├── test_ui_features.py   # 語系、排序與預覽導覽等介面回歸測試
+│   └── sample_files/         # 各格式測試樣本文件
+├── scripts/
+│   └── generate_icon.py      # 產生應用程式圖示 (.ico / .png)
+├── assets/                   # 應用程式圖示
 ├── main.py                   # 程式進入點 (支援 GUI 與 CLI 兩種模式)
-├── doc_searcher.spec         # Windows 單一檔案 .exe 的 PyInstaller 設定
-├── doc_searcher_mac.spec     # macOS .app 的 PyInstaller 設定
-├── build_mac.sh              # macOS 建置腳本
-├── build_win.ps1             # Windows PowerShell 建置腳本
-└── requirements.txt          # 依賴套件清單
+├── install.bat               # Windows 一鍵安裝（Python、VC++ 運行庫、venv、桌面捷徑）
+├── run_windows.bat           # Windows 啟動器（未安裝時自動呼叫 install.bat）
+├── packaging/
+│   ├── build_mac.sh          # macOS 建置腳本
+│   ├── build_win.ps1         # Windows PowerShell 建置腳本
+│   ├── doc_searcher_mac.spec # macOS .app 的 PyInstaller 設定
+│   ├── doc_searcher_win.spec # Windows 單一檔案 .exe 的 PyInstaller 設定
+│   └── installer_inno.iss    # Windows 安裝程式 (Inno Setup 6) 腳本
+├── docs/screenshots/         # README 介面截圖
+├── requirements.txt          # 執行期依賴套件清單
+└── requirements-dev.txt      # 開發與測試用依賴 (pytest)
 ```
 
 ---
@@ -111,6 +136,8 @@ source venv/bin/activate
 # 安裝所需套件
 pip install -r requirements.txt
 ```
+
+> Windows 也可直接雙擊 `install.bat`：自動安裝 Python（若尚未安裝）、Visual C++ 運行庫、虛擬環境與套件，並建立桌面捷徑；之後以 `run_windows.bat` 啟動。
 
 ### 2. 啟動桌面圖形介面 (GUI)
 
@@ -145,11 +172,14 @@ python main.py --dir /path/to/documents --search "專案預算" --type excel
 
 | 平台 | 建置指令 | 輸出 |
 | --- | --- | --- |
-| macOS（依建置機器架構：arm64 / x86_64） | `./build_mac.sh` | `dist/DocSearcher.app`、`dist/DocSearcher-macOS-<arch>.zip` |
-| Windows 10 / 11 | `powershell -ExecutionPolicy Bypass -File .\build_win.ps1`（或 `build_exe.bat`） | `dist\DocSearcher.exe`（單一可攜執行檔） |
+| macOS（依建置機器架構：arm64 / x86_64） | `packaging/build_mac.sh` | `dist/DocSearcher.app`、`dist/DocSearcher-macOS-<arch>.zip` |
+| Windows 10 / 11 | `powershell -ExecutionPolicy Bypass -File .\packaging\build_win.ps1` | `dist\DocSearcher.exe`（單一可攜執行檔） |
 
-- macOS 使用 `doc_searcher_mac.spec`（onedir `.app`，PyInstaller 6 已不建議在 `.app` 內使用 onefile）；Windows 使用 `doc_searcher.spec`（onefile、無主控台視窗）。
-- GitHub Actions：`build_windows.yml` 與 `build_macos.yml`（Apple Silicon 與 Intel）會自動上傳建置成品。
+- 請在專案根目錄執行建置腳本；輸出位於根目錄的 `dist/`。
+- macOS 使用 `packaging/doc_searcher_mac.spec`（onedir `.app`，PyInstaller 6 已不建議在 `.app` 內使用 onefile）；Windows 使用 `packaging/doc_searcher_win.spec`（onefile、無主控台視窗）。
+- 若需 Windows 安裝程式，先建置 `DocSearcher.exe`，再以 Inno Setup 6 編譯 `packaging/installer_inno.iss`，輸出至 `setup_output/`。
+- GitHub Actions：`tests.yml` 於 Linux／Windows／macOS 執行 pytest；`build_windows.yml` 與 `build_macos.yml`（Apple Silicon 與 Intel）會自動上傳建置成品。
+- 版本號只需修改 `core/version.py` 的 `APP_VERSION`：macOS `.app`、Windows `.exe` 檔案資訊與 Inno Setup 安裝程式皆自動沿用。
 - 程式內讀取打包資源請使用 `utils.resource_path.resource_path("assets/...")`，它會在打包後自動改用 `sys._MEIPASS`。
 
 #### macOS Gatekeeper（未簽署版本）
@@ -169,6 +199,9 @@ Windows 若出現 SmartScreen 提示，請點選「其他資訊」→「仍要�
 專案內建完備的單元與整合測試，包含 sample 檔案產生器：
 
 ```bash
+# 0. 安裝測試用依賴
+pip install -r requirements-dev.txt
+
 # 1. 產生測試用多格式文件
 python -m tests.sample_generator
 

@@ -3,6 +3,7 @@
 #   - Translates natural queries, boolean expressions, and quoted phrases into FTS5 match syntax.
 #   - Supports explicit filename searches and user-facing query validation.
 #   - Applies file type, mtime/ctime, size, include-path, and exclusion filters safely.
+#     With search_roots, relative exclusion patterns only apply below the search folders.
 #   - Supports case-sensitive, whole-word, and validated regular-expression modes.
 #   - Executes FTS queries against tokenized and raw content with BM25 ranking.
 #   - Generates snippet contexts with highlighted HTML <mark> tags and location indicators.
@@ -18,12 +19,14 @@ import jieba
 
 try:
     from core.database import Database
+    from core.scanner import is_absolute_pattern
     from utils.text_helper import (
         extract_keywords_from_query, generate_highlighted_snippets,
         generate_regex_highlighted_snippets,
     )
 except (ImportError, ValueError):
     from .database import Database
+    from .scanner import is_absolute_pattern
     from ..utils.text_helper import (
         extract_keywords_from_query, generate_highlighted_snippets,
         generate_regex_highlighted_snippets,
@@ -76,6 +79,7 @@ class DocumentSearcher:
         match_case: bool = False,
         whole_word: bool = False,
         regex: bool = False,
+        search_roots: Optional[List[str]] = None,
     ) -> List[SearchResultItem]:
         """Search documents matching query string and optional metadata filters."""
         clean_query = query_str.strip()
@@ -85,7 +89,7 @@ class DocumentSearcher:
         filename_query = None if regex else self._extract_filename_query(clean_query)
         filter_clause, filter_params = self._build_filter_clause(
             type_filter, modified_after, modified_before, min_size, max_size,
-            date_field, include_paths, exclude_patterns,
+            date_field, include_paths, exclude_patterns, search_roots,
         )
         if regex:
             return self._search_regex(
@@ -240,6 +244,7 @@ class DocumentSearcher:
         date_field: str = "mtime",
         include_paths: Optional[List[str]] = None,
         exclude_patterns: Optional[List[str]] = None,
+        search_roots: Optional[List[str]] = None,
     ) -> tuple[str, List[Any]]:
         """Build a safe SQL metadata filter clause and its bound parameters."""
         clauses = []
@@ -265,19 +270,41 @@ class DocumentSearcher:
             for path in normalized_paths:
                 escaped = cls._escape_like(path.rstrip("/\\"))
                 path_clauses.append("(d.path = ? OR d.path LIKE ? ESCAPE '\\')")
-                params.extend([path.rstrip("/\\"), f"{escaped}{os.sep}%"])
+                # Escape the separator too: on Windows it is "\\", the LIKE escape character.
+                params.extend([path.rstrip("/\\"), f"{escaped}{cls._escape_like(os.sep)}%"])
             clauses.append("(" + " OR ".join(path_clauses) + ")")
+
+        # Relative patterns see only the part below the containing search root (starting with a
+        # separator), so folders above a search folder never exclude it. Longest root first.
+        roots = sorted(
+            {os.path.abspath(root).rstrip("/\\") for root in (search_roots or []) if root},
+            key=len, reverse=True,
+        )
+        relative_sql = "d.path"
+        relative_params: List[Any] = []
+        if roots:
+            cases = []
+            for root in roots:
+                cases.append("WHEN d.path LIKE ? ESCAPE '\\' THEN SUBSTR(d.path, ?)")
+                relative_params.extend(
+                    [f"{cls._escape_like(root)}{cls._escape_like(os.sep)}%", len(root) + 1]
+                )
+            relative_sql = "CASE " + " ".join(cases) + " ELSE d.path END"
 
         for raw_pattern in exclude_patterns or []:
             pattern = raw_pattern.strip().replace("\\", "/")
             if not pattern:
                 continue
             escaped = cls._escape_like(pattern).replace("*", "%").replace("?", "_")
-            if "/" not in pattern and not any(char in pattern for char in "*?"):
+            if is_absolute_pattern(pattern):
                 clauses.append("REPLACE(d.path, '\\', '/') NOT LIKE ? ESCAPE '\\'")
+                params.append(f"{escaped}%")
+                continue
+            clauses.append(f"REPLACE({relative_sql}, '\\', '/') NOT LIKE ? ESCAPE '\\'")
+            params.extend(relative_params)
+            if "/" not in pattern and not any(char in pattern for char in "*?"):
                 params.append(f"%/{escaped}/%")
             else:
-                clauses.append("REPLACE(d.path, '\\', '/') NOT LIKE ? ESCAPE '\\'")
                 params.append(f"%{escaped}%")
 
         clause = "" if not clauses else "AND " + " AND ".join(clauses)

@@ -8,15 +8,14 @@
 
 import os
 import threading
-import time
 from typing import Callable, Optional, List, Dict
 
 try:
-    from parsers import get_parser, is_supported
+    from parsers import get_parser
     from utils.text_helper import tokenize_for_fts
     from core.database import Database
 except (ImportError, ValueError):
-    from ..parsers import get_parser, is_supported
+    from ..parsers import get_parser
     from ..utils.text_helper import tokenize_for_fts
     from .database import Database
 

@@ -1,12 +1,20 @@
 ; Inno Setup 6 Script for DocSearcher on Windows 10 and Windows 11
-; Produces: DocSearcher_Setup.exe
+; Produces: setup_output\DocSearcher_Setup_Win10_Win11.exe
+; Lives in packaging/; SourceDir points all relative paths at the project root.
 
 #define MyAppName "DocSearcher"
-#define MyAppVersion "1.1.0"
 #define MyAppPublisher "Antigravity"
 #define MyAppExeName "DocSearcher.exe"
+; Version comes from the built exe's version resource (set from core/version.py by
+; packaging/doc_searcher_win.spec), so build DocSearcher.exe before compiling this script.
+#define MyAppExePath AddBackslash(SourcePath) + "..\dist\" + MyAppExeName
+#if !FileExists(MyAppExePath)
+  #error dist\DocSearcher.exe not found - run packaging\build_win.ps1 first
+#endif
+#define MyAppVersion GetVersionNumbersString(MyAppExePath)
 
 [Setup]
+SourceDir=..
 AppId={{D0C5EA4C-11E2-4C75-9B21-7A3982467C4A}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}

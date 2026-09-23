@@ -81,6 +81,18 @@ def test_scanner_exclusion_patterns_prune_folders_and_files(tmp_path):
     assert {path for path, _, _ in found} == {str(kept)}
 
 
+def test_scanner_exclusions_only_apply_below_scanned_root(tmp_path):
+    root = tmp_path / "temp" / "docs"
+    files = [root / "keep.txt", root / "temp" / "skip.txt", root / "private" / "skip.txt"]
+    for path in files:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("sample", encoding="utf-8")
+
+    absolute = (root / "private").as_posix() + "/*"
+    found = FileScanner().scan_directories([str(root)], exclude_patterns=["temp", absolute])
+    assert {path for path, _, _ in found} == {str(root / "keep.txt")}
+
+
 def test_legacy_database_migration_populates_creation_time(tmp_path):
     document = tmp_path / "existing.txt"
     document.write_text("existing", encoding="utf-8")
