@@ -8,7 +8,7 @@
 
 from typing import List, Tuple
 
-APP_VERSION = "1.2.0"
+APP_VERSION = "1.3.0"
 
 # Newest first: (version, release_date, [highlight, ...])
 CHANGELOG: List[Tuple[str, str, List[str]]] = [
