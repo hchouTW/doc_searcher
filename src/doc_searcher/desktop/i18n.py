@@ -167,6 +167,7 @@ TRANSLATIONS = {
         "error_repeated_operator": "AND、OR、NOT 不可連續使用。",
         "error_filename_empty": "請在 filename: 或 檔名: 後輸入檔名關鍵字。",
         "error_filename_quotes": "檔名搜尋的雙引號未成對。",
+        "error_regex_timeout": "正規表示式執行過久已停止；請簡化運算式（避免巢狀重複，如 (a+)+）或縮小搜尋範圍。",
     },
     "en-US": {
         "app_title": "Document Content Search",
@@ -324,6 +325,7 @@ TRANSLATIONS = {
         "error_repeated_operator": "AND, OR, and NOT cannot be used consecutively.",
         "error_filename_empty": "Enter a file-name keyword after filename: or 檔名:.",
         "error_filename_quotes": "The file-name query has an unmatched quotation mark.",
+        "error_regex_timeout": "The regular expression ran too long and was stopped; simplify it (avoid nested repeats such as (a+)+) or narrow the search.",
     },
 }
 

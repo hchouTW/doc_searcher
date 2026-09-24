@@ -7,6 +7,7 @@
 #   - Requires PySide6.QtCore (QThread, Signal).
 
 import logging
+import threading
 import time
 from typing import Any, Dict, List, Optional, Tuple
 from PySide6.QtCore import QThread, Signal
@@ -133,8 +134,13 @@ class SearchWorker(QThread):
         self.type_filter = type_filter
         self.search_filters = search_filters or {}
         self.searcher = DocumentSearcher(db)
+        self._cancelled = threading.Event()
         # Set by MainWindow to detect results made stale by a filter change.
         self.filter_signature: Tuple[Any, ...] = ()
+
+    def cancel(self):
+        """Stop a long regex search at the next segment; its results are discarded anyway."""
+        self._cancelled.set()
 
     def run(self):
         try:
@@ -142,6 +148,7 @@ class SearchWorker(QThread):
             results = self.searcher.search(
                 self.query,
                 type_filter=self.type_filter,
+                cancel_check=self._cancelled.is_set,
                 **self.search_filters,
             )
             elapsed_ms = (time.perf_counter() - start) * 1000.0

@@ -24,3 +24,7 @@ setup_output/
 .coverage.*
 coverage.xml
 htmlcov/
+
+# Benchmark output
+.benchmarks/
+/bench*.json

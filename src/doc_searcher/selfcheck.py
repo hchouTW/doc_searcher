@@ -22,7 +22,7 @@ from doc_searcher.platform.os_detector import detect_os
 from doc_searcher.platform.resource_path import resource_path
 from doc_searcher.version import APP_VERSION
 
-PARSER_BACKENDS = ("pymupdf", "docx", "pptx", "openpyxl", "xlrd", "olefile")
+PARSER_BACKENDS = ("pymupdf", "docx", "pptx", "openpyxl", "xlrd", "olefile", "regex")
 ASSETS = ("assets/app_icon.png", "assets/app_icon.ico")
 
 CheckResult = Tuple[str, bool, str]

@@ -4,7 +4,8 @@
 #   - Supports explicit filename searches and user-facing query validation.
 #   - Applies file type, mtime/ctime, size, include-path, and exclusion filters safely.
 #     With search_roots, relative exclusion patterns only apply below the search folders.
-#   - Supports case-sensitive, whole-word, and validated regular-expression modes.
+#   - Supports case-sensitive, whole-word, and validated regular-expression modes; regex
+#     searches run under a time budget and can be cancelled (search.regex_engine).
 #   - Executes FTS queries against tokenized and raw content with BM25 ranking.
 #   - Generates snippet contexts with highlighted HTML <mark> tags and location indicators.
 # Usage notes, dependencies, or assumptions:
@@ -16,11 +17,16 @@ import os
 import re
 import sqlite3
 from dataclasses import dataclass, field
-from typing import List, Dict, Any, Iterable, Optional
+from typing import Any, Callable, Dict, Iterable, List, Optional
 import jieba
 
 from doc_searcher.storage.database import Database
 from doc_searcher.storage.errors import classify
+from doc_searcher.search.regex_engine import (
+    Deadline,
+    RegexError,
+    compile_user_regex,
+)
 from doc_searcher.indexing.scanner import is_absolute_pattern
 from doc_searcher.search.text_helper import (
     extract_keywords_from_query,
@@ -57,7 +63,7 @@ class SearchQueryError(ValueError):
     """Raised when a user query has invalid boolean, quote, or regex syntax.
 
     code is stable for callers (UI translation, tests): unpaired_phrase, operator_position,
-    repeated_operator, filename_empty, filename_quotes, regex_syntax. The message is the
+    repeated_operator, filename_empty, filename_quotes, regex_syntax, regex_timeout, cancelled. The message is the
     Traditional Chinese text shown when no translation is available.
     """
 
@@ -102,8 +108,13 @@ class DocumentSearcher:
         whole_word: bool = False,
         regex: bool = False,
         search_roots: Optional[List[str]] = None,
+        cancel_check: Optional[Callable[[], bool]] = None,
     ) -> List[SearchResultItem]:
-        """Search documents matching query string and optional metadata filters."""
+        """Search documents matching query string and optional metadata filters.
+
+        Regex searches stop with SearchQueryError code "regex_timeout" after
+        REGEX_TIME_BUDGET_SECONDS, and with code "cancelled" once cancel_check() returns True.
+        """
         clean_query = query_str.strip()
         if not clean_query:
             return []
@@ -122,7 +133,13 @@ class DocumentSearcher:
         )
         if regex:
             return self._search_regex(
-                clean_query, filter_clause, filter_params, limit, match_case, whole_word
+                clean_query,
+                filter_clause,
+                filter_params,
+                limit,
+                match_case,
+                whole_word,
+                cancel_check,
             )
         negative_only = re.fullmatch(r'NOT\s+(?:"([^"]+)"|(\S+))', clean_query, re.IGNORECASE)
         if negative_only:
@@ -203,7 +220,8 @@ class DocumentSearcher:
         query: str,
         match_case: bool = False,
         whole_word: bool = False,
-        regex_pattern: Optional[re.Pattern] = None,
+        regex_pattern: Optional[Any] = None,
+        deadline: Optional[Deadline] = None,
     ) -> List[SearchResultItem]:
         """Aggregate matching segment rows into ranked document results."""
         doc_map: Dict[int, SearchResultItem] = {}
@@ -220,7 +238,7 @@ class DocumentSearcher:
 
             if regex_pattern is not None:
                 snippets = generate_regex_highlighted_snippets(
-                    content, regex_pattern, max_snippets=3, context_chars=60
+                    content, regex_pattern, max_snippets=3, context_chars=60, deadline=deadline
                 )
             else:
                 snippets = generate_highlighted_snippets(
@@ -504,13 +522,12 @@ class DocumentSearcher:
         limit: int,
         match_case: bool,
         whole_word: bool,
+        cancel_check: Optional[Callable[[], bool]] = None,
     ) -> List[SearchResultItem]:
-        """Run a validated Python regular expression against indexed segments."""
+        """Run a validated user regular expression against indexed segments, within a budget."""
         try:
-            if whole_word:
-                expression = rf"(?<!\w)(?:{expression})(?!\w)"
-            pattern = re.compile(expression, 0 if match_case else re.IGNORECASE)
-        except re.error as exc:
+            pattern = compile_user_regex(expression, match_case, whole_word)
+        except RegexError as exc:
             raise SearchQueryError(f"Regex 語法錯誤：{exc}", "regex_syntax") from exc
 
         rows = self.db.get_connection().execute(
@@ -525,7 +542,24 @@ class DocumentSearcher:
             """,
             filter_params,
         )
-        return self._aggregate_rows(rows, [], limit, expression, regex_pattern=pattern)
+        deadline = Deadline()
+
+        def checked_rows():
+            for row in rows:
+                if cancel_check is not None and cancel_check():
+                    raise SearchQueryError("搜尋已取消。", "cancelled")
+                yield row
+
+        try:
+            return self._aggregate_rows(
+                checked_rows(), [], limit, expression, regex_pattern=pattern, deadline=deadline
+            )
+        except TimeoutError as exc:
+            raise SearchQueryError(
+                f"正規表示式執行超過 {deadline.seconds:g} 秒，已停止；"
+                "請簡化運算式（避免巢狀重複，如 (a+)+）或縮小搜尋範圍。",
+                "regex_timeout",
+            ) from exc
 
     @staticmethod
     def _literal_matches(content: str, term: str, match_case: bool, whole_word: bool) -> bool:

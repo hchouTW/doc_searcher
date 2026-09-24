@@ -67,3 +67,22 @@ the stated margin above baseline.
 | No-change rescan / single-file update | ≤ 1.25× baseline |
 | Cancellation latency | ≤ 250 ms from `cancel()` to return |
 | Cold indexing | no regression > 1.25×; a parallel-parsing change (Task 5.3) must show ≥ 1.5× improvement on the 10k corpus to be worth its complexity |
+
+## Task 5.2 results (bounded regex and snippets)
+
+Same machine, medians vs the baseline above:
+
+| Benchmark | Baseline | After 5.2 | Change |
+| --- | ---: | ---: | --- |
+| FTS `預算` | 15.4 ms | 13.8 ms | faster |
+| FTS `budget` | 19.6 ms | 16.4 ms | faster |
+| FTS `quarterly AND 風險` | 28.4 ms | 18.3 ms | faster |
+| FTS `"revenue forecast"` | 6.1 ms | 3.4 ms | faster |
+| Regex `20(19\|2[0-6])-0[1-6]-\d{2}` | 12.0 ms | 17.1 ms | **1.42× (+5 ms)** |
+
+Snippets are now generated lazily (memory no longer grows with the number of matches), which
+speeds up every search. The regex slowdown is the cost of running user patterns on the `regex`
+engine with a timeout: stdlib `re` cannot be interrupted, and a pattern such as `(x+x+)+y` pinned
+the search thread indefinitely (> 10 s on 28 characters), blocking all later searches until the
+app restarted. **Decision needed:** this exceeds the proposed 1.25× regex budget; accepting it
+means the regex budget becomes ≤ 1.5× baseline.

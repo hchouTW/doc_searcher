@@ -7,12 +7,13 @@
 #   - signature() gives a comparable value for discarding results of superseded searches.
 #   - query_error_key() maps SearchQueryError.code values to i18n keys.
 # Usage notes, dependencies, or assumptions:
-#   - Standard library only, so every rule is unit-testable without a QApplication.
+#   - No Qt, so every rule is unit-testable without a QApplication.
 
-import re
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from typing import Any, Dict, List, Optional, Tuple
+
+from doc_searcher.search.regex_engine import RegexError, compile_user_regex
 
 DAYS_BY_DATE_MODE = {"day": 1, "week": 7, "month": 30, "year": 365}
 MB = 1024 * 1024
@@ -31,6 +32,7 @@ QUERY_ERROR_KEYS = {
     "repeated_operator": "error_repeated_operator",
     "filename_empty": "error_filename_empty",
     "filename_quotes": "error_filename_quotes",
+    "regex_timeout": "error_regex_timeout",
 }
 
 
@@ -100,8 +102,8 @@ def validate(
         return "invalid_date_range", ""
     if state.regex and query:
         try:
-            re.compile(query)
-        except re.error as exc:
+            compile_user_regex(query)  # the same engine the search uses
+        except RegexError as exc:
             return "regex", str(exc)
     if search_kwargs.get("min_size", 0) > search_kwargs.get("max_size", float("inf")):
         return "invalid_size_range", ""

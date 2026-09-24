@@ -1,16 +1,24 @@
 # Purpose: Text processing, jieba Chinese tokenization, and HTML snippet highlighting helper.
 # What the code does:
 #   - Tokenizes Chinese and English text using jieba.cut_for_search for FTS5 index.
-#   - Extracts safe literal or regex snippet contexts with HTML <mark> tags.
+#   - Extracts safe literal or regex snippet contexts with HTML <mark> tags, pulling only the
+#     first few matches lazily.
 #   - Sanitizes and escapes HTML characters safely.
 # Usage notes, dependencies, or assumptions:
 #   - Requires jieba.
 #   - Used by indexer, searcher, and UI preview panel.
 
 import html
+import itertools
 import re
-from typing import List, Tuple
+from typing import Any, List, Optional, Tuple
+
 import jieba
+
+from doc_searcher.search.regex_engine import Deadline
+
+# Longest part of a single match shown in a snippet (e.g. ".*" over a whole 5 MB segment).
+MAX_MATCH_CHARS = 300
 
 
 def tokenize_for_fts(text: str) -> str:
@@ -78,31 +86,30 @@ def generate_highlighted_snippets(
 
 def generate_regex_highlighted_snippets(
     content: str,
-    pattern: re.Pattern,
+    pattern: Any,
     max_snippets: int = 3,
     context_chars: int = 50,
+    deadline: Optional[Deadline] = None,
 ) -> List[str]:
-    """Generate escaped snippets from an already validated regular expression."""
+    """Generate escaped snippets from an already validated regular expression.
+
+    Only the first max_snippets matches are examined, consumed lazily, so memory does not grow
+    with the number of matches. A match longer than MAX_MATCH_CHARS is shown truncated. With a
+    deadline, pattern must come from regex_engine (it accepts timeout=).
+    """
     if not content:
         return []
-    matches = list(pattern.finditer(content))
-    if not matches:
-        return []
 
-    snippets = []
+    snippets: List[str] = []
     used_ranges: List[Tuple[int, int]] = []
-
-    for match in matches[:max_snippets]:
+    matches = pattern.finditer(content, **Deadline.timeout_kwargs(deadline))
+    # Like the original eager version, only the first max_snippets matches are considered
+    # (overlapping ones are skipped), but they are pulled lazily: memory stays constant.
+    for match in itertools.islice(matches, max_snippets):
+        shown_end = min(match.end(), match.start() + MAX_MATCH_CHARS)
         start_idx = max(0, match.start() - context_chars)
-        end_idx = min(len(content), match.end() + context_chars)
-
-        # Check overlap with previous snippets
-        overlaps = False
-        for u_start, u_end in used_ranges:
-            if not (end_idx < u_start or start_idx > u_end):
-                overlaps = True
-                break
-        if overlaps:
+        end_idx = min(len(content), shown_end + context_chars)
+        if any(not (end_idx < u_start or start_idx > u_end) for u_start, u_end in used_ranges):
             continue
 
         used_ranges.append((start_idx, end_idx))
@@ -110,7 +117,9 @@ def generate_regex_highlighted_snippets(
 
         pieces = []
         cursor = 0
-        for local_match in pattern.finditer(chunk):
+        for local_match in pattern.finditer(chunk, **Deadline.timeout_kwargs(deadline)):
+            if not local_match.group(0):
+                continue  # zero-width matches (e.g. lookarounds) have nothing to highlight
             pieces.append(html.escape(chunk[cursor : local_match.start()]))
             pieces.append(
                 '<mark style="background-color: #ffeb3b; color: #000; '

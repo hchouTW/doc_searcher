@@ -1687,6 +1687,8 @@ class MainWindow(QMainWindow):
             self.preview.display_result(None)
             self.results_count_label.setText(tr(self.language, "ready_to_search"))
         elif decision == "queued":
+            if self.search_worker and self.search_worker.isRunning():
+                self.search_worker.cancel()  # superseded: do not make the new search wait
             self.results_count_label.setText(tr(self.language, "search_waiting"))
         else:
             self._start_search(query, self.active_type_filter, filters)
