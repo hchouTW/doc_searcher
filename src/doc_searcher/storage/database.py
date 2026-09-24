@@ -16,6 +16,26 @@ from doc_searcher.storage.errors import classify
 from doc_searcher.storage.migrations import migrate
 
 
+def _enable_wal(conn: sqlite3.Connection, timeout: float = 5.0) -> None:
+    """Switch to WAL (persistent in the file) unless it is already on.
+
+    The switch needs an exclusive lock and SQLite reports "database is locked" at once instead
+    of honouring busy_timeout, so two processes opening a new index together would fail; retry
+    for up to the busy timeout. Files already in WAL mode skip the switch entirely.
+    """
+    if conn.execute("PRAGMA journal_mode").fetchone()[0].lower() == "wal":
+        return
+    deadline = time.monotonic() + timeout
+    while True:
+        try:
+            conn.execute("PRAGMA journal_mode=WAL;")
+            return
+        except sqlite3.OperationalError as exc:
+            if "locked" not in str(exc).lower() or time.monotonic() >= deadline:
+                raise
+            time.sleep(0.05)
+
+
 class Database:
     """SQLite3 database manager with FTS5 full-text indexing."""
 
@@ -34,8 +54,7 @@ class Database:
             try:
                 conn.row_factory = sqlite3.Row
                 conn.execute("PRAGMA busy_timeout=5000;")
-                # Enable WAL mode for smooth concurrent reads and writes
-                conn.execute("PRAGMA journal_mode=WAL;")
+                _enable_wal(conn)
                 conn.execute("PRAGMA foreign_keys=ON;")
                 conn.execute("PRAGMA synchronous=NORMAL;")
             except BaseException:

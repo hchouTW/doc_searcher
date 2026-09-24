@@ -1,8 +1,8 @@
 # Purpose: Main GUI/CLI entry point for Document Searcher (console script `doc-searcher`).
 # What the code does:
 #   - Supports both GUI mode (default) and CLI mode for automation/testing.
-#   - In CLI mode: scans one directory, reconciles only that directory's index entries (other
-#     roots are never touched), runs a search, and prints results.
+#   - In CLI mode: indexes one directory through indexing.service.IndexingService, scoped so only
+#     that directory's entries are reconciled (other roots are never touched), then searches.
 #   - In GUI mode: launches PySide6 desktop interface.
 # Usage notes, dependencies, or assumptions:
 #   - GUI: doc-searcher   (or python -m doc_searcher)
@@ -29,7 +29,7 @@ def run_cli_mode(folder: str, query: str, type_filter: str = "all") -> int:
     from doc_searcher.storage.database import Database
     from doc_searcher.storage.errors import StorageError
     from doc_searcher.indexing.scanner import FileScanner
-    from doc_searcher.indexing.indexer import DocumentIndexer
+    from doc_searcher.indexing.service import IndexingService, IndexRequest
     from doc_searcher.search.searcher import DocumentSearcher
 
     abs_dir = os.path.abspath(folder)
@@ -53,27 +53,17 @@ def run_cli_mode(folder: str, query: str, type_filter: str = "all") -> int:
         print(f"[!] {exc}", file=sys.stderr)
         return EXIT_DATA
     try:
-        indexer = DocumentIndexer(db)
-        scan_errors: list[str] = []
-        files = scanner.scan_directories(available_directories, error_callback=scan_errors.append)
-        print(f"[*] 找到 {len(files)} 個支援的文件檔案，開始建立/更新索引...")
-
-        # Only reconcile entries under the requested root so other roots keep their records.
-        current_indexed = {
-            path: value
-            for path, value in db.get_all_indexed_paths().items()
-            if scanner.is_path_within_directory(path, abs_dir)
-        }
-        to_index, to_delete = scanner.calculate_changes(
-            files,
-            current_indexed,
-            preserved_directories=scanner.normalize_directories(scan_errors),
-        )
-
-        if to_index or to_delete:
-            print(f"[*] 增量更新中 (新增/變更: {len(to_index)} 個，刪除: {len(to_delete)} 個)...")
-            stats = indexer.run_batch_indexing(to_index, to_delete)
-            print(f"[✓] 索引更新完成：{stats}")
+        # Scope = the requested root: entries owned by other roots are never reconciled.
+        request = IndexRequest(roots=[abs_dir], scope=[abs_dir])
+        try:
+            stats = IndexingService(db, scanner).run(request)
+        except StorageError as exc:
+            print(f"[!] {exc}", file=sys.stderr)
+            return EXIT_DATA
+        print(f"[*] 找到 {stats['scanned']} 個支援的文件檔案。")
+        if stats["indexed"] or stats["deleted"] or stats["failed"]:
+            summary = {key: stats[key] for key in ("indexed", "deleted", "failed", "cancelled")}
+            print(f"[✓] 索引更新完成：{summary}")
         else:
             print("[✓] 索引已是最新狀態。")
 

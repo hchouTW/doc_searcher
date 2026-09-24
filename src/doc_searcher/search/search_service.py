@@ -23,7 +23,7 @@ from urllib.parse import quote
 
 from doc_searcher.config import AppConfig
 from doc_searcher.storage.database import Database
-from doc_searcher.indexing.indexer import DocumentIndexer
+from doc_searcher.indexing.service import IndexingService, IndexRequest
 from doc_searcher.indexing.scanner import FileScanner
 from doc_searcher.search.searcher import DocumentSearcher, SearchQueryError, SearchResultItem
 from doc_searcher.version import APP_VERSION
@@ -198,34 +198,19 @@ class SearchService:
         }
 
     def _reindex(self, targets: List[str], scope: Optional[str]) -> Dict[str, Any]:
-        available, unavailable = self.scanner.partition_directories(targets)
-        if not available:
-            return {"skipped": True, "unavailable_directories": unavailable}
-
-        scan_errors: List[str] = []
-        current_files = self.scanner.scan_directories(
-            available,
-            self.config.include_subdirectories,
-            error_callback=scan_errors.append,
+        request = IndexRequest(
+            roots=targets,
+            include_subdirectories=self.config.include_subdirectories,
             exclude_patterns=self.config.exclude_patterns,
+            # A subfolder request reconciles only that subtree; other folders keep their entries.
+            scope=[scope] if scope is not None else None,
         )
-        indexed = self.db.get_all_indexed_paths()
-        if scope is not None:
-            # Only reconcile the requested subtree so other folders keep their entries.
-            indexed = {
-                path: value
-                for path, value in indexed.items()
-                if self.scanner.is_path_within_directory(path, scope)
-            }
-        to_index, to_delete = self.scanner.calculate_changes(
-            current_files,
-            indexed,
-            preserved_directories=[*unavailable, *self.scanner.normalize_directories(scan_errors)],
-        )
-        stats: Dict[str, Any] = DocumentIndexer(self.db).run_batch_indexing(to_index, to_delete)
-        stats["scanned"] = len(current_files)
-        if unavailable:
-            stats["unavailable_directories"] = unavailable
+        stats = IndexingService(self.db, self.scanner).run(request)
+        # Keep the MCP payload compact: only mention problems that occurred.
+        for key in ("unavailable_directories", "scan_error_paths"):
+            if not stats.get(key):
+                stats.pop(key, None)
+        stats.pop("elapsed", None)
         return stats
 
     # --------------------------------------------------------------- document
