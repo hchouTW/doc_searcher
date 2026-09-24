@@ -7,11 +7,13 @@
 #   - Listens to macOS/Windows system colorScheme changes and updates theme dynamically.
 #   - Provides a manual theme toggle button (Auto / Dark / Light).
 #   - Ensures high-contrast readability with no system-color mismatches.
+#   - Owns widgets and workers only: filter translation/validation lives in search_filters,
+#     index/search scheduling and indexing status decisions in coordination, and indexing
+#     itself in indexing.service (via IndexWorker).
 # Usage notes, dependencies, or assumptions:
 #   - PySide6.QtWidgets, doc_searcher.desktop.theme.
 
 import os
-import re
 import time
 import math
 from datetime import datetime
@@ -59,6 +61,9 @@ from doc_searcher.platform.resource_path import resource_path
 from .result_table import ResultTable
 from .preview_panel import PreviewPanel
 from .worker import IndexWorker, SearchWorker
+from . import search_filters
+from .coordination import WorkScheduler, summarize_indexing
+from .search_filters import FilterState
 from .search_input import SyntaxSearchInput
 
 
@@ -118,8 +123,7 @@ class MainWindow(QMainWindow):
         self.active_type_filter = "all"
         self.index_worker: Optional[IndexWorker] = None
         self.search_worker: Optional[SearchWorker] = None
-        self.pending_search: Optional[Tuple[str, str, Dict[str, Any]]] = None
-        self.pending_index_start = False
+        self.scheduler = WorkScheduler()
         self._folder_dialog: Optional[QFileDialog] = None
         self.index_state = "idle"
         self.last_index_progress: Tuple[int, int, str] = (0, 0, "")
@@ -1088,7 +1092,8 @@ class MainWindow(QMainWindow):
         self._mark_last_updated()
         self._invalidate_directory_results()
         if self.search_worker and self.search_worker.isRunning():
-            self.pending_search = (
+            # Results of the running search belong to the old folders; drop them.
+            self.scheduler.pending_search = (
                 self.search_input.text().strip(),
                 self.active_type_filter,
                 self._current_search_filters(),
@@ -1113,12 +1118,13 @@ class MainWindow(QMainWindow):
             )
             return
 
-        if self.index_worker and self.index_worker.isRunning():
-            self.pending_index_start = True
-            return
-        if self.search_worker and self.search_worker.isRunning():
-            self.pending_index_start = True
+        decision = self.scheduler.request_index(
+            index_running=bool(self.index_worker and self.index_worker.isRunning()),
+            search_running=bool(self.search_worker and self.search_worker.isRunning()),
+        )
+        if decision == "queued_behind_search":
             self.status_label.setText(tr(self.language, "search_waiting"))
+        if decision != "start":
             return
 
         self.btn_reindex.setEnabled(False)
@@ -1198,46 +1204,14 @@ class MainWindow(QMainWindow):
         self.btn_pause_index.setText(tr(self.language, "pause_index"))
         self.btn_stop_index.setEnabled(False)
         self.btn_stop_index.setText(tr(self.language, "stop_index"))
-        if stats.get("cancelled"):
-            self._set_index_state("idle")
-            docs = self.db.get_stats().get("total_docs", 0)
-            self.status_label.setText(tr(self.language, "index_stopped", docs=docs))
-        elif stats.get("error"):
-            self._set_index_state("error")
-            self.status_label.setText(tr(self.language, "index_failed", message=stats["error"]))
+        outcome = summarize_indexing(stats, lambda: self.db.get_stats().get("total_docs", 0))
+        if outcome.mark_updated:
+            self._mark_last_updated()
+        self._set_index_state(outcome.state)
+        if outcome.message_key is None:
+            self.status_label.setText(self._idle_status_text())
         else:
-            if not stats.get("skipped"):
-                self._mark_last_updated()
-            self._set_index_state("completed")
-            docs = self.db.get_stats().get("total_docs", 0)
-            unavailable_count = len(stats.get("unavailable_directories", []))
-            scan_error_count = len(stats.get("scan_error_paths", []))
-            if stats.get("skipped"):
-                self.status_label.setText(tr(self.language, "index_unavailable", docs=docs))
-            elif unavailable_count or scan_error_count:
-                self.status_label.setText(
-                    tr(
-                        self.language,
-                        "index_partial",
-                        indexed=stats.get("indexed", 0),
-                        deleted=stats.get("deleted", 0),
-                        skipped=unavailable_count + scan_error_count,
-                        docs=docs,
-                    )
-                )
-            elif not any(stats.get(key, 0) for key in ("indexed", "deleted", "failed")):
-                self.status_label.setText(self._idle_status_text())
-            else:
-                self.status_label.setText(
-                    tr(
-                        self.language,
-                        "index_complete",
-                        indexed=stats.get("indexed", 0),
-                        deleted=stats.get("deleted", 0),
-                        failed=stats.get("failed", 0),
-                        docs=docs,
-                    )
-                )
+            self.status_label.setText(tr(self.language, outcome.message_key, **outcome.params))
 
         self._update_db_status(update_main_status=False)
         if self.search_input.text().strip():
@@ -1245,11 +1219,10 @@ class MainWindow(QMainWindow):
 
     def _after_index_worker_finished(self):
         """Resume queued index/search work after the index thread actually exits."""
-        if self.pending_index_start:
-            self.pending_index_start = False
+        next_step = self.scheduler.after_index()
+        if next_step == "index":
             self._start_indexing(clear_index=not self.config.directories)
-            return
-        if self.pending_search and self.pending_search[0]:
+        elif next_step == "search":
             self._trigger_search()
 
     def _idle_status_text(self, stats: Optional[dict] = None) -> str:
@@ -1498,77 +1471,40 @@ class MainWindow(QMainWindow):
         if had_exclusions and self.config.directories:
             self.exclude_reindex_timer.start()
 
+    def _filter_state(self) -> FilterState:
+        """Snapshot the advanced-filter widgets for the Qt-free search_filters rules."""
+        return FilterState(
+            date_mode=self.date_filter_combo.currentData(),
+            date_field=self.date_field_combo.currentData(),
+            date_from=self.date_from.date().toPython(),
+            date_to=self.date_to.date().toPython(),
+            size_mode=self.size_preset_combo.currentData(),
+            min_size=self.min_size.value(),
+            min_unit=self.min_unit.currentData(),
+            max_size=self.max_size.value(),
+            max_unit=self.max_unit.currentData(),
+            include_paths=self.include_path_input.text(),
+            match_case=self.match_case.isChecked(),
+            whole_word=self.whole_word.isChecked(),
+            regex=self.regex_mode.isChecked(),
+        )
+
     def _current_search_filters(self) -> Dict[str, Any]:
         """Convert UI metadata choices into worker-safe numeric boundaries."""
-        values: Dict[str, Any] = {
-            "date_field": self.date_field_combo.currentData(),
-            "include_paths": [
-                path.strip() for path in self.include_path_input.text().split(";") if path.strip()
-            ],
-            "exclude_patterns": self.config.exclude_patterns,
-            "search_roots": self.config.directories,
-            "match_case": self.match_case.isChecked(),
-            "whole_word": self.whole_word.isChecked(),
-            "regex": self.regex_mode.isChecked(),
-        }
-        now = time.time()
-        date_mode = self.date_filter_combo.currentData()
-        days_by_mode = {"day": 1, "week": 7, "month": 30, "year": 365}
-        if date_mode in days_by_mode:
-            values["modified_after"] = now - days_by_mode[date_mode] * 86400
-        elif date_mode == "custom":
-            start = self.date_from.date()
-            end = self.date_to.date().addDays(1)
-            values["modified_after"] = datetime(
-                start.year(), start.month(), start.day()
-            ).timestamp()
-            values["modified_before"] = datetime(end.year(), end.month(), end.day()).timestamp()
-
-        mb = 1024 * 1024
-        size_mode = self.size_preset_combo.currentData()
-        size_bounds = {
-            "small": (None, mb - 1),
-            "medium": (mb, 10 * mb - 1),
-            "large": (10 * mb, 100 * mb),
-            "huge": (100 * mb + 1, None),
-        }
-        if size_mode in size_bounds:
-            minimum, maximum = size_bounds[size_mode]
-            if minimum is not None:
-                values["min_size"] = minimum
-            if maximum is not None:
-                values["max_size"] = maximum
-        elif size_mode == "custom":
-            units = {"KB": 1024, "MB": mb, "GB": mb * 1024}
-            if self.min_size.value() > 0:
-                values["min_size"] = round(
-                    self.min_size.value() * units[self.min_unit.currentData()]
-                )
-            if self.max_size.value() > 0:
-                values["max_size"] = round(
-                    self.max_size.value() * units[self.max_unit.currentData()]
-                )
-        return values
+        return search_filters.to_search_kwargs(
+            self._filter_state(),
+            exclude_patterns=self.config.exclude_patterns,
+            search_roots=self.config.directories,
+            now=time.time(),
+        )
 
     def _current_filter_signature(self) -> Tuple[Any, ...]:
         """Return stable UI values for rejecting results from superseded searches."""
-        return (
-            self.date_filter_combo.currentData(),
-            self.date_field_combo.currentData(),
-            self.date_from.date().toJulianDay(),
-            self.date_to.date().toJulianDay(),
-            self.size_preset_combo.currentData(),
-            self.min_size.value(),
-            self.max_size.value(),
-            self.min_unit.currentData(),
-            self.max_unit.currentData(),
-            self.include_path_input.text(),
-            self.exclude_input.text(),
-            self.match_case.isChecked(),
-            self.whole_word.isChecked(),
-            self.regex_mode.isChecked(),
-            tuple(self.config.directories),
-            self.config.include_subdirectories,
+        return search_filters.signature(
+            self._filter_state(),
+            exclude_text=self.exclude_input.text(),
+            directories=self.config.directories,
+            include_subdirectories=self.config.include_subdirectories,
         )
 
     def _insert_query_syntax(self, insertion: str):
@@ -1727,46 +1663,36 @@ class MainWindow(QMainWindow):
 
     def _trigger_search(self):
         query = self.search_input.text().strip()
-        if (
-            self.date_filter_combo.currentData() == "custom"
-            and self.date_from.date() > self.date_to.date()
-        ):
+        filters = self._current_search_filters()
+        problem = search_filters.validate(self._filter_state(), query, filters)
+        if problem and problem[0] == "regex":
+            self.search_input.setToolTip(f"Regex: {problem[1]}")
+            self.results_count_label.setText(f"Regex: {problem[1]}")
+            return
+        if problem and problem[0] == "invalid_date_range":
             self.results_count_label.setText(tr(self.language, "invalid_date_range"))
             return
-        if self.regex_mode.isChecked() and query:
-            try:
-                re.compile(query)
-            except re.error as exc:
-                self.search_input.setToolTip(f"Regex: {exc}")
-                self.results_count_label.setText(f"Regex: {exc}")
-                return
         self.search_input.setToolTip("")
-        search_filters = self._current_search_filters()
-        if search_filters.get("min_size", 0) > search_filters.get("max_size", float("inf")):
-            self.results_count_label.setText(tr(self.language, "invalid_size_range"))
+        if problem:
+            self.results_count_label.setText(tr(self.language, problem[0]))
             return
-        if not query:
+
+        decision = self.scheduler.request_search(
+            (query, self.active_type_filter, filters),
+            index_running=bool(self.index_worker and self.index_worker.isRunning()),
+            search_running=bool(self.search_worker and self.search_worker.isRunning()),
+        )
+        if decision == "clear":
             self.table.set_results([])
             self.preview.display_result(None)
             self.results_count_label.setText(tr(self.language, "ready_to_search"))
-            if self.search_worker and self.search_worker.isRunning():
-                self.pending_search = ("", self.active_type_filter, search_filters)
-            return
-
-        if self.index_worker and self.index_worker.isRunning():
-            self.pending_search = (query, self.active_type_filter, search_filters)
+        elif decision == "queued":
             self.results_count_label.setText(tr(self.language, "search_waiting"))
-            return
-
-        if self.search_worker and self.search_worker.isRunning():
-            self.pending_search = (query, self.active_type_filter, search_filters)
-            self.results_count_label.setText(tr(self.language, "search_waiting"))
-            return
-
-        self._start_search(query, self.active_type_filter, search_filters)
+        else:
+            self._start_search(query, self.active_type_filter, filters)
 
     def _start_search(self, query: str, type_filter: str, search_filters: Dict[str, Any]):
-        self.pending_search = None
+        self.scheduler.search_started()
         self.results_count_label.setText(tr(self.language, "searching"))
         worker = SearchWorker(self.db, query, type_filter, search_filters)
         worker.filter_signature = self._current_filter_signature()
@@ -1789,13 +1715,13 @@ class MainWindow(QMainWindow):
         query: str,
         elapsed_ms: float,
     ):
-        if (
-            worker is not self.search_worker
-            or self.pending_search is not None
-            or query != self.search_input.text().strip()
-            or worker.type_filter != self.active_type_filter
-            or worker.filter_signature != self._current_filter_signature()
-        ):
+        finished = (query, worker.type_filter, worker.filter_signature)
+        current = (
+            self.search_input.text().strip(),
+            self.active_type_filter,
+            self._current_filter_signature(),
+        )
+        if not self.scheduler.accepts_results(worker is self.search_worker, finished, current):
             return
 
         self.table.set_results(results)
@@ -1808,16 +1734,10 @@ class MainWindow(QMainWindow):
             )
 
     def _on_search_failed(self, worker: SearchWorker, message: str):
-        if worker is self.search_worker and self.pending_search is None:
-            error_keys = {
-                "精確片語的雙引號未成對。": "error_unpaired_phrase",
-                "AND、OR、NOT 前後都必須有搜尋詞。": "error_operator_position",
-                "AND、OR、NOT 不可連續使用。": "error_repeated_operator",
-                "請在 filename: 或 檔名: 後輸入檔名關鍵字。": "error_filename_empty",
-                "檔名搜尋的雙引號未成對。": "error_filename_quotes",
-            }
-            if message in error_keys:
-                message = tr(self.language, error_keys[message])
+        if worker is self.search_worker and self.scheduler.pending_search is None:
+            key = search_filters.query_error_key(message)
+            if key:
+                message = tr(self.language, key)
             self.results_count_label.setText(tr(self.language, "search_failed", message=message))
 
     def _on_search_worker_finished(self, worker: SearchWorker):
@@ -1826,13 +1746,10 @@ class MainWindow(QMainWindow):
             return
 
         self.search_worker = None
-        if self.pending_index_start:
-            self.pending_index_start = False
+        next_step, pending = self.scheduler.after_search()
+        if next_step == "index":
             self._start_indexing(clear_index=not self.config.directories)
-            return
-        pending = self.pending_search
-        self.pending_search = None
-        if pending and pending[0]:
+        elif next_step == "search" and pending is not None:
             query, type_filter, _search_filters = pending
             if query == self.search_input.text().strip() and type_filter == self.active_type_filter:
                 self._start_search(query, type_filter, self._current_search_filters())
@@ -1842,7 +1759,7 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         self.advanced_dialog.close()
-        self.pending_search = None
+        self.scheduler.pending_search = None
         if self.index_worker and self.index_worker.isRunning():
             self.index_worker.cancel()
             self.index_worker.wait(1000)
