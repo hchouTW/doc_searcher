@@ -191,6 +191,20 @@ jobs:
           path: release-assets/
           if-no-files-found: error
 
+      # action-gh-release appends freshly generated notes to an existing release body, so a rebuild
+      # of a published tag would duplicate them; generate notes only when creating the release.
+      - name: Check for an existing release
+        id: existing
+        if: env.PUBLISH == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Publish GitHub Release
         if: env.PUBLISH == 'true'
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
@@ -198,4 +212,4 @@ jobs:
           tag_name: ${{ env.RELEASE_TAG }}
           files: release-assets/*
           fail_on_unmatched_files: true
-          generate_release_notes: true
+          generate_release_notes: ${{ steps.existing.outputs.exists != 'true' }}
