@@ -41,6 +41,7 @@ mcp = ["mcp>=2.2,<3"]
 dev = [
     "pytest>=8.0.0",
     "pytest-cov>=5.0",
+    "pytest-benchmark>=4.0",
     "build>=1.0",
     "ruff>=0.16",
     "mypy>=1.10",
@@ -64,6 +65,8 @@ version = { attr = "doc_searcher.version.APP_VERSION" }
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = ["--strict-markers"]
+# Benchmarks are slow; run them explicitly: pytest tests/benchmarks --benchmark-only
+norecursedirs = ["benchmarks"]
 markers = [
     "posix: needs POSIX semantics (permissions, symlinks); skipped on Windows",
     "windows: needs native Windows semantics; skipped elsewhere",
