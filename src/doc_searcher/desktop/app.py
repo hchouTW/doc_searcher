@@ -14,7 +14,7 @@ from PySide6.QtCore import Qt
 from doc_searcher.config import AppConfig, ConfigError
 from doc_searcher.diagnostics import configure_logging
 from doc_searcher.storage.errors import StorageError
-from doc_searcher.desktop.theme import get_active_theme, generate_qss
+from doc_searcher.desktop.theme import get_active_theme, apply_application_theme
 from .main_window import MainWindow
 
 
@@ -43,7 +43,7 @@ def run_app():
         sys.exit(3)
     theme_mode = config.theme_mode
     theme = get_active_theme(theme_mode)
-    app.setStyleSheet(generate_qss(theme))
+    apply_application_theme(theme)
 
     try:
         window = MainWindow(config)

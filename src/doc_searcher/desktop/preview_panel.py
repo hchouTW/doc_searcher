@@ -131,9 +131,10 @@ class PreviewPanel(QWidget):
         """Update styling to match theme colors."""
         self.theme = theme
 
+        self.header_card.setObjectName("previewHeader")
         # Header card style
         self.header_card.setStyleSheet(f"""
-            QFrame {{
+            QFrame#previewHeader {{
                 background-color: {theme.bg_card};
                 border: 1px solid {theme.border};
                 border-radius: 8px;

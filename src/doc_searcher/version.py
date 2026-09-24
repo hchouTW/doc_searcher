@@ -13,6 +13,15 @@ APP_VERSION = "1.3.0"
 # Newest first: (version, release_date, [highlight, ...])
 CHANGELOG: List[Tuple[str, str, List[str]]] = [
     (
+        "1.3.0",
+        "2026-09-24",
+        [
+            "reliable_indexing_storage",
+            "bounded_search",
+            "verified_native_releases",
+        ],
+    ),
+    (
         "1.2.0",
         "2026-09-24",
         [

@@ -133,7 +133,7 @@ class ResultTable(QTableWidget):
             }}
             QTableWidget::item {{
                 padding: 7px 10px;
-                border-bottom: 1px solid {theme.border if theme.is_dark else "transparent"};
+                border-bottom: 1px solid {theme.border};
             }}
             QTableWidget::item:selected {{
                 background-color: {theme.bg_selected};
@@ -239,6 +239,7 @@ class ResultTable(QTableWidget):
             snippet_label.setObjectName("resultSnippetLabel")
             snippet_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
             snippet_label.setWordWrap(True)
+            snippet_label.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
             snippet_label.setFixedHeight(38)
             snippet_label.setTextFormat(Qt.TextFormat.RichText)
             snippet_label.setToolTip(re.sub(r"<[^>]+>", "", snippet))
@@ -281,17 +282,27 @@ class ResultTable(QTableWidget):
                 it_time.setForeground(QColor(c.text_muted))
             if it_path:
                 it_path.setForeground(QColor(c.text_muted))
+            selected = bool(it_name and it_name.isSelected())
             name_container = self.cellWidget(row, 1)
             if name_container:
                 name_label = name_container.findChild(QLabel, "resultNameLabel")
                 snippet_label = name_container.findChild(QLabel, "resultSnippetLabel")
                 if name_label:
                     name_label.setStyleSheet(
-                        f"color: {c.text_primary}; font-weight: bold; background: transparent;"
+                        f"color: {c.text_selected if selected else c.text_primary}; "
+                        "font-weight: bold; background: transparent;"
                     )
                 if snippet_label:
+                    snippet = name_container.property("snippet_html") or ""
+                    snippet = re.sub(
+                        r"<mark\b[^>]*>",
+                        f'<span style="background-color: {c.mark_bg}; color: {c.mark_text}; font-weight: bold;">',
+                        snippet,
+                    ).replace("</mark>", "</span>")
+                    snippet_label.setText(snippet)
                     snippet_label.setStyleSheet(
-                        f"color: {c.text_secondary}; font-size: 11px; background: transparent;"
+                        f"color: {c.text_selected if selected else c.text_secondary}; "
+                        "font-size: 11px; background: transparent;"
                     )
 
     def get_selected_item(self) -> Optional[SearchResultItem]:
@@ -303,6 +314,7 @@ class ResultTable(QTableWidget):
         return first_item.data(Qt.ItemDataRole.UserRole) if first_item else None
 
     def _on_selection_changed(self):
+        self._refresh_row_colors()
         item = self.get_selected_item()
         self.item_selected.emit(item)
 

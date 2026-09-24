@@ -3,11 +3,13 @@
 #   - Detects system dark mode via Qt styleHints.
 #   - Adapts typography and corner radius automatically to Windows 11, Windows 10, or macOS.
 #   - Defines complete, high-contrast color palettes for both Dark and Light modes.
+#   - Synchronizes the application palette and global styles on every theme change.
 # Usage notes, dependencies, or assumptions:
 #   - PySide6.QtGui (QGuiApplication, QColor, QPalette), PySide6.QtCore (Qt).
 
 from dataclasses import dataclass
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor, QPalette
 from PySide6.QtWidgets import QApplication
 from doc_searcher.platform.os_detector import CURRENT_OS
 
@@ -131,6 +133,44 @@ def get_active_theme(force_mode: str = "auto") -> ThemeColors:
     return palette
 
 
+def apply_application_theme(theme: ThemeColors) -> None:
+    """Keep native controls, dialogs, and global QSS in sync with manual mode."""
+    app = QApplication.instance()
+    if not isinstance(app, QApplication):
+        return
+    palette = QPalette()
+    roles = {
+        QPalette.ColorRole.Window: theme.bg_window,
+        QPalette.ColorRole.WindowText: theme.text_primary,
+        QPalette.ColorRole.Base: theme.bg_input,
+        QPalette.ColorRole.AlternateBase: theme.bg_table_alt,
+        QPalette.ColorRole.Text: theme.text_primary,
+        QPalette.ColorRole.Button: theme.btn_bg,
+        QPalette.ColorRole.ButtonText: theme.btn_text,
+        QPalette.ColorRole.Light: theme.btn_hover,
+        QPalette.ColorRole.Midlight: theme.btn_bg,
+        QPalette.ColorRole.Mid: theme.border,
+        QPalette.ColorRole.Dark: theme.btn_border,
+        QPalette.ColorRole.Shadow: theme.border,
+        QPalette.ColorRole.Highlight: theme.bg_selected,
+        QPalette.ColorRole.HighlightedText: theme.text_selected,
+        QPalette.ColorRole.ToolTipBase: theme.bg_card,
+        QPalette.ColorRole.ToolTipText: theme.text_primary,
+        QPalette.ColorRole.PlaceholderText: theme.text_muted,
+        QPalette.ColorRole.Link: theme.border_focus,
+    }
+    for role, color in roles.items():
+        palette.setColor(role, QColor(color))
+    for role in (
+        QPalette.ColorRole.WindowText,
+        QPalette.ColorRole.Text,
+        QPalette.ColorRole.ButtonText,
+    ):
+        palette.setColor(QPalette.ColorGroup.Disabled, role, QColor(theme.text_muted))
+    app.setPalette(palette)
+    app.setStyleSheet(generate_qss(theme))
+
+
 def generate_qss(c: ThemeColors) -> str:
     """Generate global application QSS stylesheet ensuring zero color conflicts with OS adaptation."""
     r = c.border_radius
@@ -171,6 +211,26 @@ def generate_qss(c: ThemeColors) -> str:
         QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
             height: 0px;
         }}
+
+        QScrollBar:horizontal {{
+            border: none;
+            background: {c.bg_window};
+            height: 8px;
+            margin: 0px;
+        }}
+        QScrollBar::handle:horizontal {{
+            background: {c.border};
+            min-width: 20px;
+            border-radius: 4px;
+        }}
+        QScrollBar::handle:horizontal:hover {{ background: {c.text_muted}; }}
+        QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{ width: 0px; }}
+        QScrollBar::add-page, QScrollBar::sub-page {{ background: transparent; }}
+        QDialog {{ background: {c.bg_window}; color: {c.text_primary}; }}
+        QProgressBar {{
+            background: {c.bg_subtle}; border: 1px solid {c.border}; border-radius: 4px;
+        }}
+        QProgressBar::chunk {{ background: {c.accent}; border-radius: 3px; }}
 
         /* Status Bar */
         QStatusBar {{

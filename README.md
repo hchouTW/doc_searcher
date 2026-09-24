@@ -40,6 +40,7 @@
    - 自動合併重複／上下層檢索目錄並防止符號連結循環，降低重複掃描與停擺風險。
 7. **緊湊、雙語且狀態清楚的操作介面**：
    - 完整支援繁體中文與英文即時切換，並保存語言偏好。
+   - 外觀支援自動跟隨系統、深色與淺色；切換時同步更新側欄、結果選取、預覽、進階篩選、提示與捲軸，並保留目前結果與預覽位置。
    - 目錄與外觀設定收進可折疊設定區；掃描、暫停、繼續、停止仍可快速操作。
    - 索引狀態清楚顯示閒置、掃描中、建立索引中、已暫停與完成，以及檔案計數與百分比。
    - 搜尋與索引採序列化協調，避免同時大量讀寫造成停擺；等候中的搜尋會自動接續執行。
@@ -52,7 +53,15 @@
 | --- | --- |
 | ![淺色模式](docs/screenshots/doc_searcher_light.png) | ![深色模式](docs/screenshots/doc_searcher_dark.png) |
 
-![進階篩選面板](docs/screenshots/doc_searcher_advanced.png)
+兩種外觀使用相同的示範資料與選取結果，方便比較文字、選取色與關鍵字高亮；圖片中的文件與路徑皆為合成範例。
+
+| 進階篩選（淺色） | 進階篩選（深色） |
+| --- | --- |
+| ![淺色進階篩選面板](docs/screenshots/doc_searcher_advanced_light.png) | ![深色進階篩選面板](docs/screenshots/doc_searcher_advanced_dark.png) |
+
+展開「設定」後，點選外觀按鈕即可依序切換「自動 → 深色 → 淺色」。自動模式會跟隨系統外觀變更，手動模式則維持所選外觀。
+
+開發者可在安裝專案後執行 `python scripts/capture_screenshots.py` 重建截圖。腳本使用 Qt offscreen 與暫存設定／資料庫，不會讀寫個人索引；字型與控制項細節可能隨平台而異。
 
 ---
 
@@ -114,6 +123,7 @@ doc_searcher/
 │   ├── test_mcp_server.py    # MCP 協定層與 stdio 往返測試
 │   └── sample_files/         # 各格式測試樣本文件
 ├── scripts/
+│   ├── capture_screenshots.py # 以合成資料重建深淺色 README 截圖
 │   ├── generate_icon.py      # 產生應用程式圖示 (.ico / .png)
 │   └── update_constraints.sh # 重新產生並驗證 constraints/ci.txt
 ├── install.bat               # Windows 一鍵安裝（Python、VC++ 運行庫、venv、桌面捷徑）

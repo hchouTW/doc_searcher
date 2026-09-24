@@ -1,3 +1,4 @@
 # Build-system requirements, locked so CI can install the project with --no-build-isolation.
-setuptools>=69
+# jieba 0.42.1 still loads dictionaries through pkg_resources, removed by setuptools 81+.
+setuptools>=69,<81
 wheel

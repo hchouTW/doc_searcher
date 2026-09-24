@@ -56,7 +56,7 @@ from doc_searcher.search.searcher import SearchResultItem
 from doc_searcher.indexing.scanner import FileScanner
 from doc_searcher.desktop.i18n import tr
 from doc_searcher.version import APP_VERSION, CHANGELOG
-from doc_searcher.desktop.theme import ThemeColors, get_active_theme
+from doc_searcher.desktop.theme import ThemeColors, get_active_theme, apply_application_theme
 from doc_searcher.platform.resource_path import resource_path
 from .result_table import ResultTable
 from .preview_panel import PreviewPanel
@@ -590,6 +590,7 @@ class MainWindow(QMainWindow):
     def apply_theme(self, theme: ThemeColors):
         """Apply colors across the entire window and child widgets."""
         self.theme = theme
+        apply_application_theme(theme)
         radius = theme.border_radius
         control_radius = max(4, radius - 2)
 
@@ -606,9 +607,26 @@ class MainWindow(QMainWindow):
             }}
         """)
 
+        self.sidebar.setObjectName("sidebar")
+        self.sidebar.setStyleSheet(f"QWidget#sidebar {{ background: {theme.bg_window}; }}")
+        scroll_style = f"QScrollArea {{ background: {theme.bg_window}; border: none; }}"
+        self.sidebar_scroll.setStyleSheet(scroll_style)
+        self.advanced_scroll.setStyleSheet(scroll_style)
+
+        # Scope card borders to the frames; QLabel also inherits QFrame.
+        for card in (
+            self.dir_frame,
+            self.appearance_frame,
+            self.index_frame,
+            self.top_bar,
+            self.search_card,
+            self.advanced_filter_frame,
+        ):
+            card.setProperty("themeCard", True)
+
         # Navigation, settings, and index blocks
         control_card_style = f"""
-            QFrame {{
+            QFrame[themeCard="true"] {{
                 background-color: {theme.bg_card};
                 border: 1px solid {theme.border};
                 border-radius: {radius}px;
@@ -631,8 +649,10 @@ class MainWindow(QMainWindow):
                 padding: 5px 12px;
                 font-size: 12px;
             }}
-            QPushButton:hover {{
-                background-color: {theme.btn_hover};
+            QPushButton:hover {{ background-color: {theme.btn_hover}; }}
+            QPushButton:disabled {{
+                color: {theme.text_muted}; background: {theme.bg_subtle};
+                border-color: {theme.border};
             }}
         """
         for button in (
@@ -700,7 +720,7 @@ class MainWindow(QMainWindow):
 
         # Search card
         self.search_card.setStyleSheet(f"""
-            QFrame {{
+            QFrame[themeCard="true"] {{
                 background-color: {theme.bg_card};
                 border: 1px solid {theme.border};
                 border-radius: {radius}px;
@@ -749,7 +769,7 @@ class MainWindow(QMainWindow):
         for button in self.filter_buttons:
             button.setStyleSheet(chip_style)
         self.advanced_filter_frame.setStyleSheet(f"""
-            QFrame {{ background: {theme.bg_subtle}; border: 1px solid {theme.border};
+            QFrame[themeCard="true"] {{ background: {theme.bg_subtle}; border: 1px solid {theme.border};
                 border-radius: {control_radius}px; }}
             QLabel {{ border: none; color: {theme.text_secondary}; }}
             QComboBox, QDateEdit, QDoubleSpinBox, QLineEdit {{ background: {theme.bg_input};

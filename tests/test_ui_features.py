@@ -691,3 +691,55 @@ def test_theme_colors_meet_wcag_aa_for_muted_text_and_errors():
     assert _contrast_ratio(LIGHT_PALETTE.text_muted, LIGHT_PALETTE.bg_window) >= 4.5
     assert _contrast_ratio(LIGHT_PALETTE.error, LIGHT_PALETTE.bg_window) >= 4.5
     assert _contrast_ratio(DARK_PALETTE.error, DARK_PALETTE.bg_window) >= 4.5
+
+
+def test_theme_switch_updates_palette_sidebar_and_preserves_results(tmp_path):
+    from PySide6.QtGui import QColor, QPalette
+
+    app = _app()
+    config = AppConfig(tmp_path / "config.json")
+    config.db_path = str(tmp_path / "index.db")
+    window = MainWindow(config)
+    window.show()
+    window.table.set_results([_result("first.txt", 2), _result("second.txt", 3)])
+    window.table.selectRow(1)
+    selected = window.table.get_selected_item()
+    window.preview._next_match()
+    active_match = window.preview.current_match
+    for theme in (DARK_PALETTE, LIGHT_PALETTE, DARK_PALETTE):
+        window.apply_theme(theme)
+        app.processEvents()
+        assert app.palette().color(QPalette.Window) == QColor(theme.bg_window)
+        assert app.palette().color(QPalette.PlaceholderText) == QColor(theme.text_muted)
+        assert window.advanced_dialog.palette().color(QPalette.Window) == QColor(theme.bg_window)
+        # The empty sidebar area must not fall back to the OS's light background.
+        sidebar_image = window.sidebar.grab().toImage()
+        assert sidebar_image.pixelColor(5, sidebar_image.height() - 5) == QColor(theme.bg_window)
+        assert window.table.get_selected_item() is selected
+        assert window.preview.current_match == active_match
+        assert theme.bg_card in app.styleSheet()  # Tooltips change with the window.
+    window.close()
+
+
+@pytest.mark.parametrize("theme", [LIGHT_PALETTE, DARK_PALETTE])
+def test_selected_result_labels_and_highlights_follow_theme(theme):
+    from PySide6.QtWidgets import QLabel
+
+    app = _app()
+    table = ResultTable()
+    table.apply_theme(theme)
+    table.set_results([_result("first.txt", 2), _result("second.txt", 3)])
+    table.selectRow(1)
+    app.processEvents()
+    for row in range(2):
+        container = table.cellWidget(row, 1)
+        label = container.findChild(QLabel, "resultNameLabel")
+        snippet = container.findChild(QLabel, "resultSnippetLabel")
+        expected = theme.text_selected if row == 1 else theme.text_primary
+        assert expected in label.styleSheet()
+        assert theme.mark_text in snippet.text()
+        assert theme.mark_bg in snippet.text()
+        assert "<mark" not in snippet.text()
+    assert _contrast_ratio(theme.text_selected, theme.bg_selected) >= 4.5
+    assert _contrast_ratio(theme.mark_text, theme.mark_bg) >= 4.5
+    table.close()
