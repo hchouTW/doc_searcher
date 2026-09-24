@@ -1,10 +1,10 @@
 # Purpose: Build and verify the native DocSearcher apps; the same job serves branch builds and releases.
-# What the code does: On macOS arm64, macOS x86_64, and Windows x64 runners, checks the runner
+# What the code does: On macOS arm64 and Windows x64 runners, checks the runner
 #                     architecture, runs packaging/build_mac.sh or build_win.ps1 (hashed lock install,
 #                     PyInstaller, scripts/verify_build.py self-check), and uploads one artifact per
 #                     platform under its release file name.
 # Usage notes: release.yml calls this with `ref` set to the release tag. Artifact names match the
-#              release asset names: DocSearcher-macOS-arm64.zip, DocSearcher-macOS-x86_64.zip,
+#              release asset names: DocSearcher-macOS-arm64.zip and
 #              DocSearcher-Windows-x64.exe.
 name: Build native apps
 
@@ -35,10 +35,6 @@ jobs:
             arch: arm64
             asset: DocSearcher-macOS-arm64
             file: DocSearcher-macOS-arm64.zip
-          - runner: macos-15-intel # Intel
-            arch: x86_64
-            asset: DocSearcher-macOS-x86_64
-            file: DocSearcher-macOS-x86_64.zip
           - runner: windows-latest
             arch: x86_64
             asset: DocSearcher-Windows-x64

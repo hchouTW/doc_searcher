@@ -4,7 +4,7 @@
 #   - Compiles pyproject.toml (extras dev, mcp, package) + constraints/build.in +
 #     constraints/platform.in with `uv pip compile --universal --generate-hashes`.
 #   - Checks that every pinned package has a wheel for each CI target (Linux x86_64,
-#     Windows x64, macOS arm64/x86_64 on Python 3.10, 3.12, 3.14); jieba is sdist-only.
+#     Windows x64, macOS arm64 on Python 3.10, 3.12, 3.14); jieba is sdist-only.
 # Usage notes, dependencies, or assumptions:
 #   - scripts/update_constraints.sh            keep existing pins where still valid
 #   - scripts/update_constraints.sh --upgrade  move every pin to the newest allowed version
@@ -33,7 +33,7 @@ scratch="$(mktemp -d)"
 trap 'rm -rf "$scratch"' EXIT
 status=0
 # macOS 13 is the oldest macOS on GitHub-hosted runners; ubuntu-latest has glibc 2.39.
-for target in x86_64-manylinux_2_39 x86_64-pc-windows-msvc aarch64-apple-darwin x86_64-apple-darwin; do
+for target in x86_64-manylinux_2_39 x86_64-pc-windows-msvc aarch64-apple-darwin; do
     for python in 3.10 3.12 3.14; do
         if MACOSX_DEPLOYMENT_TARGET=13.0 "$UV" pip compile "$lock" --python-platform "$target" \
             --python-version "$python" --only-binary :all: --no-binary jieba --quiet \

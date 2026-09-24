@@ -85,10 +85,6 @@ jobs:
             arch: arm64
             asset: DocSearcher-macOS-arm64
             file: DocSearcher-macOS-arm64.zip
-          - runner: macos-15-intel
-            arch: x86_64
-            asset: DocSearcher-macOS-x86_64
-            file: DocSearcher-macOS-x86_64.zip
           - runner: windows-latest
             arch: x86_64
             asset: DocSearcher-Windows-x64
@@ -178,8 +174,7 @@ jobs:
         working-directory: release-assets
         run: |
           expected="DocSearcher-Windows-x64.exe
-          DocSearcher-macOS-arm64.zip
-          DocSearcher-macOS-x86_64.zip"
+          DocSearcher-macOS-arm64.zip"
           actual="$(ls -1 | sort)"
           if [ "$actual" != "$(printf '%s\n' "$expected" | sed 's/^ *//' | sort)" ]; then
             printf 'Unexpected release assets:\n%s\n' "$actual"

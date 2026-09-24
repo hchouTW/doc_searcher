@@ -10,7 +10,7 @@ artifact is signed, notarized (macOS), and passes its packaged self-check again 
 
 | Platform | Script | Checks that must pass |
 | --- | --- | --- |
-| macOS arm64 / x86_64 | `packaging/sign_mac.sh` | `codesign --verify --deep --strict`, notarization status `Accepted`, `stapler validate`, `spctl --assess`, `scripts/verify_build.py` |
+| macOS arm64 | `packaging/sign_mac.sh` | `codesign --verify --deep --strict`, notarization status `Accepted`, `stapler validate`, `spctl --assess`, `scripts/verify_build.py` |
 | Windows x64 | `packaging/sign_win.ps1` | `Get-AuthenticodeSignature` = `Valid`, `scripts/verify_build.py` |
 
 macOS uses the hardened runtime with `packaging/entitlements.plist`

@@ -37,7 +37,7 @@ so an upstream fix (or a new warning) is noticed.
 | Runner | Artifact |
 | --- | --- |
 | `macos-latest` (arm64) | `DocSearcher-macOS-arm64.zip` (zipped `DocSearcher.app`) |
-| `macos-15-intel` | `DocSearcher-macOS-x86_64.zip` |
+| `macos-15-intel` | `DocSearcher-macOS-x86_64.zip` (historical v1.2.0 artifact; no longer produced from v1.3.0) |
 | `windows-latest` | `DocSearcher-Windows-x64.exe` |
 
 Branch builds upload `DocSearcher-macOS-<arch>` and `DocSearcher-Win11-x64` workflow artifacts.
