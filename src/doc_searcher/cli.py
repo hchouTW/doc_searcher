@@ -7,6 +7,7 @@
 # Usage notes, dependencies, or assumptions:
 #   - GUI: doc-searcher   (or python -m doc_searcher)
 #   - CLI: doc-searcher --dir /path/to/folder --search "關鍵字"
+#   - CLI stdout carries only search results; progress and diagnostics go to stderr.
 #   - Also: doc-searcher --help | --version | --self-check [--report FILE] (none starts the GUI;
 #     see doc_searcher.selfcheck).
 #   - CLI exit codes: 0 success, 1 directory unavailable (index left unchanged), 2 usage error,
@@ -16,6 +17,8 @@ import sys
 import os
 import argparse
 import re
+
+from doc_searcher.diagnostics import configure_logging
 
 EXIT_OK = 0
 EXIT_UNAVAILABLE = 1
@@ -33,7 +36,7 @@ def run_cli_mode(folder: str, query: str, type_filter: str = "all") -> int:
     from doc_searcher.search.searcher import DocumentSearcher
 
     abs_dir = os.path.abspath(folder)
-    print(f"[*] 掃描目錄：{abs_dir}")
+    print(f"[*] 掃描目錄：{abs_dir}", file=sys.stderr)
 
     try:
         config = AppConfig()
@@ -60,14 +63,14 @@ def run_cli_mode(folder: str, query: str, type_filter: str = "all") -> int:
         except StorageError as exc:
             print(f"[!] {exc}", file=sys.stderr)
             return EXIT_DATA
-        print(f"[*] 找到 {stats['scanned']} 個支援的文件檔案。")
+        print(f"[*] 找到 {stats['scanned']} 個支援的文件檔案。", file=sys.stderr)
         if stats["indexed"] or stats["deleted"] or stats["failed"]:
             summary = {key: stats[key] for key in ("indexed", "deleted", "failed", "cancelled")}
-            print(f"[✓] 索引更新完成：{summary}")
+            print(f"[✓] 索引更新完成：{summary}", file=sys.stderr)
         else:
-            print("[✓] 索引已是最新狀態。")
+            print("[✓] 索引已是最新狀態。", file=sys.stderr)
 
-        print(f"[*] 執行檢索關鍵字：'{query}' (篩選: {type_filter})")
+        print(f"[*] 執行檢索關鍵字：'{query}' (篩選: {type_filter})", file=sys.stderr)
         searcher = DocumentSearcher(db)
         results = searcher.search(query, type_filter=type_filter)
 
@@ -110,6 +113,7 @@ def main(argv=None) -> int:
     )
 
     args = parser.parse_args(argv)
+    configure_logging()
 
     if args.self_check:
         from doc_searcher.selfcheck import run_self_check

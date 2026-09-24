@@ -6,13 +6,16 @@
 # Usage notes, dependencies, or assumptions:
 #   - Requires PySide6.QtCore (QThread, Signal).
 
+import logging
 import time
 from typing import Any, Dict, List, Optional, Tuple
 from PySide6.QtCore import QThread, Signal
 
 from doc_searcher.storage.database import Database
 from doc_searcher.indexing.service import IndexingService, IndexRequest
-from doc_searcher.search.searcher import DocumentSearcher
+from doc_searcher.search.searcher import DocumentSearcher, SearchQueryError
+
+logger = logging.getLogger(__name__)
 
 
 class IndexWorker(QThread):
@@ -115,7 +118,7 @@ class SearchWorker(QThread):
     """Background worker for asynchronous full-text search."""
 
     search_finished = Signal(list, str, float)  # results, query, elapsed_ms
-    search_failed = Signal(str)
+    search_failed = Signal(str, str)  # message, SearchQueryError.code ('' if not a query error)
 
     def __init__(
         self,
@@ -143,7 +146,10 @@ class SearchWorker(QThread):
             )
             elapsed_ms = (time.perf_counter() - start) * 1000.0
             self.search_finished.emit(results, self.query, elapsed_ms)
-        except Exception as exc:
-            self.search_failed.emit(str(exc))
+        except SearchQueryError as exc:
+            self.search_failed.emit(str(exc), exc.code)
+        except Exception as exc:  # Reported in the UI; the worker thread must not die silently.
+            logger.exception("Search failed")
+            self.search_failed.emit(str(exc), "")
         finally:
             self.db.close()

@@ -106,7 +106,7 @@ def test_signature_changes_with_every_result_affecting_input():
 
 
 def test_query_error_keys():
-    assert sf.query_error_key("AND、OR、NOT 不可連續使用。") == "error_repeated_operator"
+    assert sf.query_error_key("repeated_operator") == "error_repeated_operator"
     assert sf.query_error_key("something else") is None
 
 

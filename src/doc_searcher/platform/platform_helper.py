@@ -5,13 +5,20 @@
 #   - Formats file sizes and timestamps into human-readable strings.
 # Usage notes, dependencies, or assumptions:
 #   - Uses the central OS detector so UI styling and native actions agree.
+#   - Launch failures (LAUNCH_ERRORS) are logged and return False; other errors propagate.
 
+import logging
 import os
 import subprocess
 from datetime import datetime
 from typing import Optional
 
 from .os_detector import CURRENT_OS, OSInfo
+
+logger = logging.getLogger(__name__)
+
+# Launch failures: the program is missing/not permitted (OSError) or exits non-zero.
+LAUNCH_ERRORS = (OSError, subprocess.CalledProcessError)
 
 
 def open_file_with_default_app(file_path: str, os_info: Optional[OSInfo] = None) -> bool:
@@ -31,8 +38,8 @@ def open_file_with_default_app(file_path: str, os_info: Optional[OSInfo] = None)
         else:
             return False
         return True
-    except Exception as e:
-        print(f"[Platform] Failed to open file {abs_path}: {e}")
+    except LAUNCH_ERRORS as e:
+        logger.warning("Failed to open file %s: %s", abs_path, e)
         return False
 
 
@@ -53,8 +60,8 @@ def reveal_in_file_manager(file_path: str, os_info: Optional[OSInfo] = None) -> 
         else:
             return False
         return True
-    except Exception as e:
-        print(f"[Platform] Failed to reveal file {abs_path}: {e}")
+    except LAUNCH_ERRORS as e:
+        logger.warning("Failed to reveal file %s: %s", abs_path, e)
         return False
 
 

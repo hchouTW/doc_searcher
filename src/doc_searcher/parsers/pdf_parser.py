@@ -7,9 +7,22 @@
 #   - Requires pymupdf.
 #   - Returns PageSegment per page with 1-based page numbers.
 
+import logging
 import os
 from typing import List
 from .base import BaseParser, ExtractedDoc, PageSegment, ParseStatus
+
+
+_messages_routed = False
+
+
+def _route_mupdf_messages(pymupdf) -> None:
+    """MuPDF prints warnings such as "MuPDF error: ..." to stdout by default, which would mix
+    with CLI results and corrupt the MCP stdio stream; send them to Python logging instead."""
+    global _messages_routed
+    if not _messages_routed:
+        pymupdf.set_messages(pylogging_name=__name__, pylogging_level=logging.WARNING)
+        _messages_routed = True
 
 
 class PdfParser(BaseParser):
@@ -21,6 +34,8 @@ class PdfParser(BaseParser):
 
         try:
             import pymupdf
+
+            _route_mupdf_messages(pymupdf)
         except ImportError:
             return ExtractedDoc.failed(
                 abs_path, "pdf", ParseStatus.DEPENDENCY_MISSING, "pymupdf is not installed."

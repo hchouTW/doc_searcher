@@ -1703,7 +1703,7 @@ class MainWindow(QMainWindow):
             )
         )
         worker.search_failed.connect(
-            lambda message, source=worker: self._on_search_failed(source, message)
+            lambda message, code, source=worker: self._on_search_failed(source, message, code)
         )
         worker.finished.connect(lambda source=worker: self._on_search_worker_finished(source))
         worker.start()
@@ -1733,9 +1733,9 @@ class MainWindow(QMainWindow):
                 tr(self.language, "search_found", count=count, elapsed=elapsed_ms)
             )
 
-    def _on_search_failed(self, worker: SearchWorker, message: str):
+    def _on_search_failed(self, worker: SearchWorker, message: str, code: str = ""):
         if worker is self.search_worker and self.scheduler.pending_search is None:
-            key = search_filters.query_error_key(message)
+            key = search_filters.query_error_key(code)
             if key:
                 message = tr(self.language, key)
             self.results_count_label.setText(tr(self.language, "search_failed", message=message))

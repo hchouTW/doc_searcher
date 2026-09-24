@@ -8,6 +8,7 @@
 # Usage notes, dependencies, or assumptions:
 #   - Integrates parsers, database, and doc_searcher.search.text_helper.
 
+import logging
 import os
 import threading
 from typing import Callable, Optional, List, Dict
@@ -15,6 +16,8 @@ from typing import Callable, Optional, List, Dict
 from doc_searcher.parsers import ParseStatus, parse_file
 from doc_searcher.search.text_helper import tokenize_for_fts
 from doc_searcher.storage.database import Database
+
+logger = logging.getLogger(__name__)
 
 
 class DocumentIndexer:
@@ -69,7 +72,7 @@ class DocumentIndexer:
             ctime = getattr(st, "st_birthtime", st.st_ctime)
             ext = os.path.splitext(abs_path)[1].lower().lstrip(".")
         except Exception as e:
-            print(f"[Indexer] Cannot stat {abs_path}: {e}")
+            logger.warning("Cannot stat %s: %s", abs_path, e)
             return False
 
         # parse_file never raises for document problems; a bad file becomes an error record.

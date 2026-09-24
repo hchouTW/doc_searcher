@@ -10,20 +10,26 @@
 # Usage notes, dependencies, or assumptions:
 #   - Uses SQLite FTS5 functions and doc_searcher.search.text_helper.
 
-import os
 import html
+import logging
+import os
 import re
+import sqlite3
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Iterable, Optional
 import jieba
 
 from doc_searcher.storage.database import Database
+from doc_searcher.storage.errors import classify
 from doc_searcher.indexing.scanner import is_absolute_pattern
 from doc_searcher.search.text_helper import (
     extract_keywords_from_query,
     generate_highlighted_snippets,
     generate_regex_highlighted_snippets,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -48,7 +54,30 @@ class SearchResultItem:
 
 
 class SearchQueryError(ValueError):
-    """Raised when a user query has invalid boolean or quote syntax."""
+    """Raised when a user query has invalid boolean, quote, or regex syntax.
+
+    code is stable for callers (UI translation, tests): unpaired_phrase, operator_position,
+    repeated_operator, filename_empty, filename_quotes, regex_syntax. The message is the
+    Traditional Chinese text shown when no translation is available.
+    """
+
+    def __init__(self, message: str, code: str):
+        super().__init__(message)
+        self.code = code
+
+
+# SQLite reports FTS5 query-language problems (not database faults) with these messages.
+_FTS_QUERY_ERRORS = (
+    "fts5: syntax error",
+    "unterminated string",
+    "no such column",
+    "malformed match",
+)
+
+
+def _is_fts_query_error(exc: sqlite3.OperationalError) -> bool:
+    message = str(exc).lower()
+    return any(fragment in message for fragment in _FTS_QUERY_ERRORS)
 
 
 class DocumentSearcher:
@@ -153,8 +182,15 @@ class DocumentSearcher:
         try:
             cursor = conn.execute(sql, params)
             rows = cursor.fetchall()
-        except Exception as e:
-            print(f"[Searcher] FTS search error: {e}, falling back to LIKE query")
+        except sqlite3.OperationalError as e:
+            # Only an FTS query-language problem justifies the slower LIKE search; locks,
+            # corruption, and programming errors must surface instead of changing algorithms.
+            if not _is_fts_query_error(e):
+                storage_error = classify(e, self.db.db_path)
+                if storage_error is None:
+                    raise
+                raise storage_error from e
+            logger.info("FTS query %r rejected (%s); using LIKE search", fts_query, e)
             rows = self._fallback_like_search(keywords, filter_clause, filter_params, limit)
 
         return self._aggregate_rows(rows, keywords, limit, clean_query, match_case, whole_word)
@@ -333,14 +369,14 @@ class DocumentSearcher:
             return None
         filename_query = query[match.end() :].strip()
         if not filename_query:
-            raise SearchQueryError("請在 filename: 或 檔名: 後輸入檔名關鍵字。")
+            raise SearchQueryError("請在 filename: 或 檔名: 後輸入檔名關鍵字。", "filename_empty")
         if filename_query.startswith('"') or filename_query.endswith('"'):
             if not (
                 len(filename_query) >= 2
                 and filename_query.startswith('"')
                 and filename_query.endswith('"')
             ):
-                raise SearchQueryError("檔名搜尋的雙引號未成對。")
+                raise SearchQueryError("檔名搜尋的雙引號未成對。", "filename_quotes")
             filename_query = filename_query[1:-1].strip()
         return filename_query
 
@@ -475,7 +511,7 @@ class DocumentSearcher:
                 expression = rf"(?<!\w)(?:{expression})(?!\w)"
             pattern = re.compile(expression, 0 if match_case else re.IGNORECASE)
         except re.error as exc:
-            raise SearchQueryError(f"Regex 語法錯誤：{exc}") from exc
+            raise SearchQueryError(f"Regex 語法錯誤：{exc}", "regex_syntax") from exc
 
         rows = self.db.get_connection().execute(
             f"""
@@ -531,17 +567,17 @@ class DocumentSearcher:
     def _build_fts5_query(self, query: str) -> str:
         """Convert query string into FTS5 expression using tokenized_content column."""
         if query.count('"') % 2:
-            raise SearchQueryError("精確片語的雙引號未成對。")
+            raise SearchQueryError("精確片語的雙引號未成對。", "unpaired_phrase")
         if re.search(r"^(?:AND|OR|NOT)\b", query, re.IGNORECASE) or re.search(
             r"\b(?:AND|OR|NOT)$", query, re.IGNORECASE
         ):
-            raise SearchQueryError("AND、OR、NOT 前後都必須有搜尋詞。")
+            raise SearchQueryError("AND、OR、NOT 前後都必須有搜尋詞。", "operator_position")
         if re.search(
             r"\b(?:AND|OR|NOT)\s+(?:AND|OR|NOT)\b",
             query,
             re.IGNORECASE,
         ):
-            raise SearchQueryError("AND、OR、NOT 不可連續使用。")
+            raise SearchQueryError("AND、OR、NOT 不可連續使用。", "repeated_operator")
 
         parts = re.split(r'(\s+AND\s+|\s+OR\s+|\s+NOT\s+|".*?")', query, flags=re.IGNORECASE)
 
@@ -572,10 +608,10 @@ class DocumentSearcher:
 
         operators = {"AND", "OR", "NOT"}
         if built_parts[0].upper() in operators or built_parts[-1].upper() in operators:
-            raise SearchQueryError("AND、OR、NOT 前後都必須有搜尋詞。")
+            raise SearchQueryError("AND、OR、NOT 前後都必須有搜尋詞。", "operator_position")
         for previous, current in zip(built_parts, built_parts[1:], strict=False):
             if previous.upper() in operators and current.upper() in operators:
-                raise SearchQueryError("AND、OR、NOT 不可連續使用。")
+                raise SearchQueryError("AND、OR、NOT 不可連續使用。", "repeated_operator")
 
         final_tokens = []
         for i, part in enumerate(built_parts):

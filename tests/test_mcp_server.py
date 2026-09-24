@@ -103,7 +103,7 @@ def test_unindexed_document_resource_is_not_found(indexed_service):
 
 
 def test_stdio_server_round_trip_survives_stray_prints(tmp_path):
-    """Launch the real server; a broken config.json makes AppConfig print to stdout."""
+    """Launch the real server; a broken config.json makes AppConfig log a warning."""
     data_dir = tmp_path / "data"
     data_dir.mkdir()
     (data_dir / "config.json").write_text("{not json", encoding="utf-8")
@@ -125,8 +125,8 @@ def test_stdio_server_round_trip_survives_stray_prints(tmp_path):
 
     status = anyio.run(main)
 
-    # The print really happened (diverted to the child's stderr) and the protocol survived it.
-    assert "[Config] Failed to load config" in errlog_path.read_text(encoding="utf-8")
+    # The warning really happened (on the child's stderr) and the protocol survived it.
+    assert "Failed to load config" in errlog_path.read_text(encoding="utf-8")
     assert not status.is_error
     assert status.structured_content["total_documents"] == 0
     assert status.structured_content["index_path"] == str(data_dir / "index.db")
@@ -146,3 +146,53 @@ def test_unusable_index_becomes_a_tool_error(tmp_path, monkeypatch):
     result = run_client(scenario)
     assert result.is_error
     assert "damaged" in result.content[0].text
+
+
+def _broken_pdf(path):
+    """A damaged PDF: MuPDF reports 'MuPDF error: ...' while extracting it."""
+    import pymupdf
+
+    doc = pymupdf.open()
+    doc.new_page().insert_text((72, 72), "hello world")
+    raw = doc.tobytes()
+    doc.close()
+    # Opens fine, but MuPDF reports "object is not a stream" while extracting the page.
+    path.write_bytes(raw.replace(b"stream", b"strean", 1))
+
+
+def test_stdio_protocol_stays_valid_while_mupdf_reports_errors(tmp_path):
+    data_dir = tmp_path / "data"
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    _broken_pdf(docs / "broken.pdf")
+    (docs / "ok.txt").write_text("keyword", encoding="utf-8")
+    data_dir.mkdir()
+    (data_dir / "config.json").write_text(
+        json.dumps({"directories": [str(docs)]}), encoding="utf-8"
+    )
+    params = StdioServerParameters(
+        command=sys.executable,
+        args=["-m", "doc_searcher.integrations.mcp_server"],
+        env={"DOC_SEARCHER_DATA_DIR": str(data_dir), "PYTHONPATH": str(SRC_DIR)},
+        cwd=str(tmp_path),
+    )
+    errlog_path = tmp_path / "server_stderr.log"
+
+    async def main():
+        with open(errlog_path, "w", encoding="utf-8") as errlog:
+            async with Client(
+                stdio_client(params, errlog=errlog), read_timeout_seconds=60
+            ) as client:
+                await client.call_tool("reindex_directory", {})
+                for _ in range(300):
+                    status = await client.call_tool("get_index_status", {})
+                    if status.structured_content["reindex"]["state"] != "running":
+                        break
+                    await anyio.sleep(0.1)
+                search = await client.call_tool("search_documents", {"query": "keyword"})
+                return status, search
+
+    status, search = anyio.run(main)
+    assert status.structured_content["reindex"]["state"] == "completed"
+    assert not search.is_error and search.structured_content["result_count"] == 1
+    assert "MuPDF error" in errlog_path.read_text(encoding="utf-8")  # logged on stderr, not stdout

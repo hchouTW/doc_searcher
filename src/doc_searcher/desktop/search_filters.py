@@ -5,7 +5,7 @@
 #     the numeric boundaries DocumentSearcher.search() accepts.
 #   - validate() reports an invalid date range, regex syntax error, or invalid size range.
 #   - signature() gives a comparable value for discarding results of superseded searches.
-#   - query_error_key() maps DocumentSearcher's query-syntax messages to i18n keys.
+#   - query_error_key() maps SearchQueryError.code values to i18n keys.
 # Usage notes, dependencies, or assumptions:
 #   - Standard library only, so every rule is unit-testable without a QApplication.
 
@@ -24,12 +24,13 @@ SIZE_PRESETS = {
 }
 SIZE_UNITS = {"KB": 1024, "MB": MB, "GB": MB * 1024}
 
+# SearchQueryError.code -> i18n key (regex_syntax keeps the re.error text as its message).
 QUERY_ERROR_KEYS = {
-    "精確片語的雙引號未成對。": "error_unpaired_phrase",
-    "AND、OR、NOT 前後都必須有搜尋詞。": "error_operator_position",
-    "AND、OR、NOT 不可連續使用。": "error_repeated_operator",
-    "請在 filename: 或 檔名: 後輸入檔名關鍵字。": "error_filename_empty",
-    "檔名搜尋的雙引號未成對。": "error_filename_quotes",
+    "unpaired_phrase": "error_unpaired_phrase",
+    "operator_position": "error_operator_position",
+    "repeated_operator": "error_repeated_operator",
+    "filename_empty": "error_filename_empty",
+    "filename_quotes": "error_filename_quotes",
 }
 
 
@@ -131,5 +132,5 @@ def signature(
     )
 
 
-def query_error_key(message: str) -> Optional[str]:
-    return QUERY_ERROR_KEYS.get(message)
+def query_error_key(code: str) -> Optional[str]:
+    return QUERY_ERROR_KEYS.get(code)

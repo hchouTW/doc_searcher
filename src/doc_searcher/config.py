@@ -16,6 +16,7 @@
 #   - Standard library only.
 
 import json
+import logging
 import os
 import shutil
 import sys
@@ -43,6 +44,8 @@ THEMES = ("light", "dark")
 THEME_MODES = ("auto", "dark", "light")
 MAX_DEBOUNCE_MS = 2000
 DATA_DIR_ENV = "DOC_SEARCHER_DATA_DIR"
+
+logger = logging.getLogger(__name__)
 
 
 class ConfigError(Exception):
@@ -276,13 +279,15 @@ class AppConfig:
                 raise ValueError("top level is not a JSON object")
         except (OSError, ValueError) as e:
             backup = self._backup_unreadable_file()
-            print(f"[Config] Failed to load config: {e}. Using defaults; original kept at {backup}")
+            logger.warning(
+                "Failed to load config: %s. Using defaults; original kept at %s", e, backup
+            )
             return
         known = {spec.name for spec in fields(Settings)}
         self.settings, problems = _validate(raw, self.default_db_path)
         self._extra = {key: value for key, value in raw.items() if key not in known}
         if problems:
-            print(f"[Config] Ignored invalid values, using defaults for: {', '.join(problems)}")
+            logger.warning("Ignored invalid values, using defaults for: %s", ", ".join(problems))
 
     def _backup_unreadable_file(self) -> Optional[Path]:
         backup = self.config_path.with_name(
@@ -302,7 +307,7 @@ class AppConfig:
         try:
             atomic_write_json(self.config_path, self.to_dict())
         except OSError as e:
-            print(f"[Config] Failed to save config to {self.config_path}: {e}", file=sys.stderr)
+            logger.error("Failed to save config to %s: %s", self.config_path, e)
 
     @property
     def directories(self) -> List[str]:

@@ -190,7 +190,7 @@ doc-searcher --dir /path/to/documents --search "專案預算"
 doc-searcher --dir /path/to/documents --search "專案預算" --type excel
 ```
 
-CLI 只會更新 `--dir` 目錄內的索引，其他目錄的索引不受影響。`--dir` 與 `--search` 必須同時指定。結束代碼：`0` 成功、`1` 目錄無法存取（既有索引保留不變）、`2` 參數錯誤、`3` 無可寫入的資料資料夾。
+CLI 的標準輸出只包含搜尋結果；進度與診斷訊息寫入標準錯誤（可用 `DOC_SEARCHER_LOG_LEVEL=INFO` 或 `DEBUG` 顯示更多記錄）。CLI 只會更新 `--dir` 目錄內的索引，其他目錄的索引不受影響。`--dir` 與 `--search` 必須同時指定。結束代碼：`0` 成功、`1` 目錄無法存取（既有索引保留不變）、`2` 參數錯誤、`3` 無可寫入的資料資料夾。
 
 ### 4. 打包成免安裝獨立程式
 

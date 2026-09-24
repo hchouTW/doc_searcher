@@ -42,7 +42,7 @@ def test_legacy_config_loads_without_visible_changes(tmp_path):
     assert saved["search_filters"] == {**DEFAULT_SEARCH_FILTERS, **legacy["search_filters"]}
 
 
-def test_invalid_fields_fall_back_individually(tmp_path, capsys):
+def test_invalid_fields_fall_back_individually(tmp_path, caplog):
     path = write(
         tmp_path / "config.json",
         {
@@ -75,7 +75,7 @@ def test_invalid_fields_fall_back_individually(tmp_path, capsys):
     assert filters["min_size"] == 2.0
     assert filters["file_type"] == "pdf"
     assert filters["max_size"] == 0.0
-    reported = capsys.readouterr().out
+    reported = caplog.text
     for name in (
         "include_subdirectories",
         "language",

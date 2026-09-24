@@ -12,9 +12,7 @@
 #   - Shares ~/.doc_searcher/index.db and config.json with the GUI (override with
 #     DOC_SEARCHER_DATA_DIR). Search folders are managed in the GUI.
 
-import sys
-from contextlib import asynccontextmanager
-from typing import Annotated, Any, AsyncIterator, Literal, Optional
+from typing import Annotated, Any, Literal, Optional
 
 from mcp.server.mcpserver import MCPServer, ResourceSecurity
 from mcp.server.mcpserver.exceptions import ResourceNotFoundError, ToolError
@@ -22,27 +20,12 @@ from mcp.types import ToolAnnotations
 from pydantic import Field
 
 from doc_searcher.config import ConfigError
+from doc_searcher.diagnostics import configure_logging
 from doc_searcher.search.search_service import DOCUMENT_URI_PREFIX, MAX_SEARCH_LIMIT, SearchService
 from doc_searcher.storage.errors import StorageError
 from doc_searcher.version import APP_VERSION
 
 FormatGroup = Literal["pdf", "word", "excel", "ppt", "text"]
-
-
-@asynccontextmanager
-async def _stdout_to_stderr(_server: MCPServer) -> AsyncIterator[None]:
-    """Send stray print() output to stderr while serving.
-
-    The core modules print diagnostics. The SDK diverts fd 1, but sys.stdout's block buffer can
-    still flush onto the stdio wire after the fd is restored. The lifespan runs after the
-    transport has taken its private copy of stdout, so swapping sys.stdout here is safe.
-    """
-    original = sys.stdout
-    sys.stdout = sys.stderr
-    try:
-        yield
-    finally:
-        sys.stdout = original
 
 
 mcp = MCPServer(
@@ -53,7 +36,6 @@ mcp = MCPServer(
         "indexed by the DocSearcher desktop app. Use search_documents to find passages, then "
         "read a hit's resource_uri for the full document text."
     ),
-    lifespan=_stdout_to_stderr,
 )
 
 _service: Optional[SearchService] = None
@@ -152,7 +134,12 @@ def read_document(path: str) -> str:
 
 
 def main() -> None:
-    """Console-script entry point (doc-searcher-mcp): serve over stdio."""
+    """Console-script entry point (doc-searcher-mcp): serve over stdio.
+
+    stdout is the protocol stream: DocSearcher logs to stderr (configure_logging) and routes
+    MuPDF's messages into logging, so sys.stdout is never swapped.
+    """
+    configure_logging()
     mcp.run("stdio")
 
 

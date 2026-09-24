@@ -12,6 +12,7 @@ import sys
 from PySide6.QtWidgets import QApplication, QMessageBox
 from PySide6.QtCore import Qt
 from doc_searcher.config import AppConfig, ConfigError
+from doc_searcher.diagnostics import configure_logging
 from doc_searcher.storage.errors import StorageError
 from doc_searcher.desktop.theme import get_active_theme, generate_qss
 from .main_window import MainWindow
@@ -19,6 +20,7 @@ from .main_window import MainWindow
 
 def run_app():
     """Start the PySide6 Desktop Application with theme adaptation."""
+    configure_logging()
     # Support high-DPI displays
     if hasattr(Qt, "AA_EnableHighDpiScaling"):
         QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
