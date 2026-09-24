@@ -6,6 +6,7 @@
 #   - Prunes hidden/system folders and user-configurable glob/name exclusions. Relative patterns
 #     only apply below each scanned root; absolute patterns (/... or C:/...) match the full path.
 #   - Compares with indexed metadata to identify new, modified, and deleted files.
+#   - Reports paths in canonical form (platform.paths: NFC on macOS) so one file has one path.
 # Usage notes, dependencies, or assumptions:
 #   - Uses standard library os and pathlib.
 
@@ -15,6 +16,7 @@ import re
 from typing import Callable, List, Dict, Optional, Set, Tuple
 
 from doc_searcher.parsers import SUPPORTED_EXTENSIONS
+from doc_searcher.platform.paths import canonical_path, canonical_text
 
 
 _ABSOLUTE_PATTERN_RE = re.compile(r"^(/|[A-Za-z]:/)")
@@ -52,14 +54,15 @@ class FileScanner:
         With root, relative patterns only see the part of path below root, so a folder above
         the search folder (e.g. pattern "temp" and root ~/temp/docs) never excludes it.
         """
+        path = canonical_text(path)
         normalized = path.replace("\\", "/")
         relative = normalized
         if root is not None and cls.is_path_within_directory(path, root):
-            relative = "/" + os.path.relpath(path, root).replace("\\", "/")
+            relative = "/" + os.path.relpath(path, canonical_text(root)).replace("\\", "/")
         name = os.path.basename(normalized)
         parts = relative.split("/")
         for raw_pattern in patterns:
-            pattern = raw_pattern.strip().replace("\\", "/")
+            pattern = canonical_text(raw_pattern.strip().replace("\\", "/"))
             if not pattern:
                 continue
             if is_absolute_pattern(pattern):
@@ -76,8 +79,8 @@ class FileScanner:
     @staticmethod
     def is_path_within_directory(path: str, directory: str) -> bool:
         """Return whether path is inside directory, including cross-drive safety."""
-        abs_path = os.path.normcase(os.path.abspath(path))
-        abs_directory = os.path.normcase(os.path.abspath(directory))
+        abs_path = os.path.normcase(canonical_path(path))
+        abs_directory = os.path.normcase(canonical_path(directory))
         try:
             return os.path.commonpath([abs_path, abs_directory]) == abs_directory
         except ValueError:
@@ -87,7 +90,7 @@ class FileScanner:
         """Remove duplicate and nested roots that would scan the same files twice."""
         normalized: List[str] = []
         for directory in directories:
-            candidate = os.path.abspath(directory)
+            candidate = canonical_path(directory)
             if any(self.is_path_within_directory(candidate, existing) for existing in normalized):
                 continue
 
@@ -137,7 +140,7 @@ class FileScanner:
             if checkpoint and not checkpoint():
                 return found_files
 
-            abs_dir = os.path.abspath(dir_path)
+            abs_dir = canonical_path(dir_path)
             if not os.path.isdir(abs_dir):
                 continue
 
@@ -181,7 +184,7 @@ class FileScanner:
                         return found_files
 
                     if self.is_valid_document_file(f):
-                        full_path = os.path.abspath(os.path.join(root, f))
+                        full_path = canonical_path(os.path.join(root, f))
                         if self.matches_exclusion(full_path, exclude_patterns, abs_dir):
                             continue
                         if full_path in seen_paths:

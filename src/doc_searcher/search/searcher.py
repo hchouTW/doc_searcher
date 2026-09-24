@@ -22,6 +22,7 @@ import jieba
 
 from doc_searcher.storage.database import Database
 from doc_searcher.storage.errors import classify
+from doc_searcher.platform.paths import canonical_path, canonical_text
 from doc_searcher.search.regex_engine import (
     Deadline,
     RegexError,
@@ -328,7 +329,7 @@ class DocumentSearcher:
                 clauses.append(expression)
                 params.append(value)
 
-        normalized_paths = [os.path.abspath(path) for path in (include_paths or []) if path]
+        normalized_paths = [canonical_path(path) for path in (include_paths or []) if path]
         if normalized_paths:
             path_clauses = []
             for path in normalized_paths:
@@ -341,7 +342,7 @@ class DocumentSearcher:
         # Relative patterns see only the part below the containing search root (starting with a
         # separator), so folders above a search folder never exclude it. Longest root first.
         roots = sorted(
-            {os.path.abspath(root).rstrip("/\\") for root in (search_roots or []) if root},
+            {canonical_path(root).rstrip("/\\") for root in (search_roots or []) if root},
             key=len,
             reverse=True,
         )
@@ -357,7 +358,7 @@ class DocumentSearcher:
             relative_sql = "CASE " + " ".join(cases) + " ELSE d.path END"
 
         for raw_pattern in exclude_patterns or []:
-            pattern = raw_pattern.strip().replace("\\", "/")
+            pattern = canonical_text(raw_pattern.strip().replace("\\", "/"))
             if not pattern:
                 continue
             escaped = cls._escape_like(pattern).replace("*", "%").replace("?", "_")
@@ -409,7 +410,7 @@ class DocumentSearcher:
     ) -> List[SearchResultItem]:
         """Search document names without requiring a matching content segment."""
         conn = self.db.get_connection()
-        escaped_query = filename_query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        escaped_query = self._escape_like(canonical_text(filename_query))
         params: List[Any] = [f"%{escaped_query}%", *filter_params, limit]
         rows = conn.execute(
             f"""
@@ -667,8 +668,8 @@ class DocumentSearcher:
     ) -> List[Any]:
         """Fallback search using SQL LIKE if FTS query encounters syntax anomaly."""
         conn = self.db.get_connection()
-        like_clauses = " AND ".join(["s.content LIKE ?"] * len(keywords))
-        params: List[Any] = [f"%{k}%" for k in keywords]
+        like_clauses = " AND ".join(["s.content LIKE ? ESCAPE '\\'"] * len(keywords))
+        params: List[Any] = [f"%{self._escape_like(k)}%" for k in keywords]
 
         sql = f"""
             SELECT 

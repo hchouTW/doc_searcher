@@ -16,6 +16,7 @@ from typing import Callable, Optional, List, Dict
 from doc_searcher.parsers import ParseStatus, parse_file
 from doc_searcher.search.text_helper import tokenize_for_fts
 from doc_searcher.storage.database import Database
+from doc_searcher.platform.paths import canonical_path
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +61,7 @@ class DocumentIndexer:
 
     def index_single_file(self, file_path: str) -> bool:
         """Parse and index a single document file."""
-        abs_path = os.path.abspath(file_path)
+        abs_path = canonical_path(file_path)
         if not os.path.exists(abs_path):
             self.db.delete_document(abs_path)
             return False

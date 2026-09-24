@@ -2,6 +2,7 @@
 # What the code does:
 #   - Opens index.db, checks FTS5, and applies versioned migrations (storage.migrations).
 #   - Manages per-thread connections, transactions, index updates, deletions, and querying.
+#   - Stores and looks up documents by canonical path (platform.paths).
 # Usage notes, dependencies, or assumptions:
 #   - Requires sqlite3 with FTS5; environmental failures raise storage.errors.StorageError.
 #   - Enables foreign keys and WAL mode for high concurrency.
@@ -13,7 +14,13 @@ import time
 from typing import Optional, Dict, Any, List, Tuple
 
 from doc_searcher.storage.errors import classify
+from doc_searcher.platform.paths import canonical_path
 from doc_searcher.storage.migrations import migrate
+
+
+def _path_spellings(file_path: str) -> Tuple[str, str]:
+    """The path as given (how v1.2.0 stored it) and its canonical form (how it is stored now)."""
+    return os.path.abspath(file_path), canonical_path(file_path)
 
 
 def _enable_wal(conn: sqlite3.Connection, timeout: float = 5.0) -> None:
@@ -89,11 +96,12 @@ class Database:
             raise storage_error from exc
 
     def get_document_by_path(self, file_path: str) -> Optional[Dict[str, Any]]:
-        """Retrieve document metadata by absolute path."""
+        """Retrieve document metadata by path, in canonical or legacy (as-stored) spelling."""
         conn = self.get_connection()
         cursor = conn.execute(
-            "SELECT id, path, filename, file_type, file_size, mtime, ctime, total_segments, error FROM documents WHERE path = ?",
-            (os.path.abspath(file_path),),
+            "SELECT id, path, filename, file_type, file_size, mtime, ctime, total_segments, error "
+            "FROM documents WHERE path IN (?, ?) ORDER BY path = ? DESC",
+            (*_path_spellings(file_path), canonical_path(file_path)),
         )
         row = cursor.fetchone()
         return dict(row) if row else None
@@ -131,13 +139,17 @@ class Database:
         }
 
     def delete_document(self, file_path: str):
-        """Remove a document, its segments, and its FTS entries."""
-        abs_path = os.path.abspath(file_path)
+        """Remove a document, its segments, and its FTS entries.
+
+        The path must be spelled exactly as stored (reconciliation passes stored paths): a legacy
+        spelling and the canonical one can both exist, and only the stale one may be removed.
+        """
         conn = self.get_connection()
         with conn:
-            cursor = conn.execute("SELECT id FROM documents WHERE path = ?", (abs_path,))
-            row = cursor.fetchone()
-            if row:
+            cursor = conn.execute(
+                "SELECT id FROM documents WHERE path = ?", (os.path.abspath(file_path),)
+            )
+            for row in cursor.fetchall():
                 doc_id = row["id"]
                 conn.execute("DELETE FROM doc_fts WHERE doc_id = ?", (str(doc_id),))
                 conn.execute("DELETE FROM doc_segments WHERE doc_id = ?", (doc_id,))
@@ -154,7 +166,7 @@ class Database:
         ctime: Optional[float] = None,
     ) -> int:
         """Insert or replace document and index its segments."""
-        abs_path = os.path.abspath(file_path)
+        abs_path = canonical_path(file_path)
         filename = os.path.basename(abs_path)
         now = time.time()
         creation_time = mtime if ctime is None else ctime
