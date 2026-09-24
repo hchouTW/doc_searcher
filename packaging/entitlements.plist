@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Hardened-runtime entitlements for the PyInstaller DocSearcher.app (used by packaging/sign_mac.sh).
+     The embedded Python interpreter maps unsigned executable memory (ctypes/cffi callbacks), and
+     bundled third-party dylibs are not signed by Apple or our team before we re-sign the bundle. -->
+<plist version="1.0">
+<dict>
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+</dict>
+</plist>

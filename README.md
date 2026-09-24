@@ -208,6 +208,7 @@ CLI 的標準輸出只包含搜尋結果；進度與診斷訊息寫入標準錯�
 - 若需 Windows 安裝程式，先建置 `DocSearcher.exe`，再以 Inno Setup 6 編譯 `packaging/installer_inno.iss`，輸出至 `setup_output/`。
 - GitHub Actions：`tests.yml` 執行品質檢查與 Linux／Windows／macOS 測試；`build.yml` 在 macOS Apple Silicon、macOS Intel 與 Windows 建置並以自我檢查驗證，成品名稱與發行檔名相同（`DocSearcher-macOS-arm64.zip`、`DocSearcher-macOS-x86_64.zip`、`DocSearcher-Windows-x64.exe`）。
 - 發布版本：先修改 `src/doc_searcher/version.py` 的 `APP_VERSION`，再推送相同版本的 `vX.Y.Z` 標籤（或在 GitHub「Draft a new release」頁面建立該標籤）。`release.yml` 先以數秒檢查標籤與版本是否一致（不一致即停止，不進行安裝或打包），接著重用 `tests.yml` 與 `build.yml`；只有全部測試與三個平台建置都成功，才會上傳三個成品與 `SHA256SUMS.txt`。每個標籤只會觸發一次，同一標籤的執行會排隊而不會互相中斷。
+- 程式碼簽署與公證（macOS Developer ID／notarization、Windows Authenticode）預設關閉；設定憑證後以儲存庫變數 `SIGNING_ENABLED=true` 啟用，詳見 [docs/signing.md](docs/signing.md)。啟用後任何簽署或驗證失敗都會阻止發布。
 - 試跑發布：在 Actions 手動執行 `Release`，輸入既有標籤並保持 `publish` 未勾選，成品與校驗碼會以 `release-dry-run` 上傳而不建立 Release。
 - 版本號只需修改 `src/doc_searcher/version.py` 的 `APP_VERSION`：macOS `.app`、Windows `.exe` 檔案資訊與 Inno Setup 安裝程式皆自動沿用。
 - 程式內讀取打包資源請使用 `utils.resource_path.resource_path("assets/...")`，它會在打包後自動改用 `sys._MEIPASS`。
