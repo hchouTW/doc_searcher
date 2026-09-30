@@ -24,8 +24,8 @@ cannot run here, reason given. **Covered** already tested elsewhere in the suite
 | LANG-12 | Pass | valid/invalid regex; catastrophic patterns are covered by `tests/performance/test_regex_limits.py` |
 | LANG-13 / 14 | Pass | empty, whitespace, 3,000-term query under 10 s; mixed Chinese and English |
 | FMT-01..07b | Pass | pdf page 2, pptx slide 2, xlsx sheet `Summary` reported correctly; docx, txt, md, csv found |
-| FMT `.xls` | Skipped here | `xlwt` not installed; runs when it is |
-| FMT `.doc`, `.ppt` | Blocked | no Office-authored files (OQ-6). Legacy `.doc` parsing is covered by `tests/unit/parsers/test_parser_outcomes.py`; `.ppt` has no fixture anywhere |
+| FMT `.xls` | Pass | generated `fmt/marker.xls` when `xlwt` is installed (skipped otherwise); `tests/sample_files/sample_legacy_financial.xls` is always searched (`test_fmt_xls_legacy_workbook_*`) |
+| FMT-10 `.doc`, `.ppt` | Pass | Word- and PowerPoint-authored `tests/sample_files/sample_contract.doc` and `sample_presentation.ppt` (twins of the `.docx`/`.pptx` samples): both index, are found by their keywords (`保密協定條款`, `組織願景`, ...) and by the Simplified spelling, report `doc` / `ppt` types, and highlight. The extracted text also contains style/font noise (README known limitation); `.ppt` is one slide-1 block. |
 | FMT-08 | Pass | `.json`, `.log`, `.png`, `.exe` never reach the index |
 | FMT-09 | Pass, 1 xfail | UTF-8 BOM, UTF-16, UTF-32, Big5 decode. BOM-less GBK is read as Big5 (garbled, README limitation), strict xfail `test_fmt_09_gbk_without_bom_body_decodes` |
 | FMT-11 / 12 | Pass | every sheet indexed; modified, deleted and unplugged-folder rescans |
@@ -33,7 +33,7 @@ cannot run here, reason given. **Covered** already tested elsewhere in the suite
 | DIR-01 / 02 / 04 / 05 / 06 | Pass | subfolders off/on, nested and duplicate roots, symlink loop, exclusions, awkward paths |
 | DIR-03 | Characterised | turning subfolders off purges the deeper entries on the next scan (OQ-7 open) |
 | IDX-01..05 | Pass | pause holds after the in-flight file, resume completes, stop leaves a valid DB, rescan has no duplicates, search works during a scan, bad files recorded |
-| IDX-06 | Manual | kill the app mid-scan |
+| IDX-06 | Pass | `test_idx_06_*`: a child process indexing 1,500 files is SIGKILLed after 100; the database passes `integrity_check`, a rescan indexes all 1,500 without duplicates, and the FTS table matches (skips itself if indexing finishes before the kill) |
 | FLT-01 / 02 / 03 | Pass | engine filters; GUI badge and chips are **Covered** by `tests/test_ui_features.py` |
 | FLT-04 | Manual + Covered | column sorting and visibility persistence (PR #5 tests) |
 | PRV-01, 02, 03, 04, 06 | Pass | metadata, zoom clamping, wrap-around, highlights equal stored text, clipboard path |
@@ -70,9 +70,7 @@ data folder (`DOC_SEARCHER_DATA_DIR=$(mktemp -d)`); never the real index.
 - [ ] **LANG-01** search `升等`: hits are highlighted yellow and bold in the preview.
 - [ ] **IDX-01** scan a folder of a few thousand files, click ⏸ 暫停 then ▶ 繼續: status shows 已暫停, progress holds, then finishes.
 - [ ] **IDX-02** click ⏹ 停止 mid-scan, then 🔄 掃描索引: stops after the current file, next scan completes.
-- [ ] **IDX-06** kill the app during a scan, relaunch, scan again: no error dialog, counts correct.
 - [ ] **FLT-01 / FLT-04** format chip filters the list and shows a removable badge; sort by each column; hide and restore columns.
 - [ ] **PRV-05** 開啟檔案 (and Enter / double-click) opens the file in its default app.
 - [ ] **PRV-07** right-click, reveal in Finder/Explorer selects the file.
 - [ ] **PRV-08** switch light/dark and 中文/English: highlight stays legible, selection and scroll position kept.
-- [ ] **FMT `.doc` / `.ppt` / `.xls`** with real Office-authored files: keyword found.

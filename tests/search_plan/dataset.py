@@ -304,7 +304,8 @@ def _fmt(b: _Builder) -> None:
         b.skip(
             f"fmt/marker.{extension}",
             "fmt",
-            "no pure-Python writer; supply a real Office-authored file (test plan OQ-6)",
+            "no pure-Python writer; tested with the Office-authored tests/sample_files/sample_contract.doc "
+            "and sample_presentation.ppt instead (test_formats.py, FMT-10)",
         )
 
 
