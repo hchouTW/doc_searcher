@@ -13,7 +13,7 @@ cannot run here, reason given. **Covered** already tested elsewhere in the suite
 
 | ID | Status | Where / note |
 | --- | --- | --- |
-| LANG-01 | Pass | `test_lang.py::test_lang_01_*`. Quoted `"升等"` returns exactly the 5 documents; unquoted also returns `zh/unrelated.txt` (see DEF-02) |
+| LANG-01 | Pass | `test_lang.py::test_lang_01_*`. Quoted and unquoted `升等` both return exactly the 5 documents (DEF-02 fixed) |
 | LANG-02 | Pass | Word order is not significant: `記錄會議` returns the same documents as `會議記錄` |
 | LANG-03 / 04 / 05 | Pass | case-insensitive equality; match case; whole word |
 | LANG-06a-c, e, f | Pass | `tests/unit/search/test_script_fold.py` |
@@ -48,11 +48,12 @@ cannot run here, reason given. **Covered** already tested elsewhere in the suite
 ## Findings
 
 - **DEF-01** punctuation queries returned nothing. Fixed in #12.
-- **DEF-02 (open, precision)** an unquoted Chinese word that jieba does not know as one word
-  (升等 is cut into 升 and 等) matches any document that has those characters as separate
-  words, e.g. `zh/unrelated.txt` ("升 and 等 ..."). Quoted `"升等"` is exact. Options: treat a
-  multi-character CJK term as a phrase, or rank exact matches first. Needs a product decision;
-  `test_lang_01_unquoted_*` records the current behaviour.
+- **DEF-02 (fixed on `fix/unsegmented-cjk-terms`, precision)** an unquoted Chinese word that
+  jieba does not know as one word (升等 is cut into 升 and 等) matched any document holding
+  those characters as separate words, e.g. `zh/unrelated.txt`; `NOT 升等` also wrongly excluded
+  such documents. Now such terms are confirmed against the stored text like punctuation terms,
+  and `NOT` on them is decided by that check instead of FTS. Words jieba does segment keep
+  their AND, word-order-free behaviour (`記錄會議` still finds `會議記錄`).
 - **DEF-03 (open, minor)** "開啟檔案" on a result whose file was deleted does nothing and shows no
   message. `open_file_with_default_app` returns False and the panel ignores it.
 - **Observation** `PRAGMA integrity_check` on a long-lived connection that saw the table before

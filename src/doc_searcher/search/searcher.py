@@ -9,8 +9,9 @@
 #   - Executes FTS queries against tokenized and raw content with BM25 ranking.
 #   - Punctuation-only terms (-, _, (, /) never reach the FTS expression, because the index holds
 #     no such tokens and an AND with them matches nothing. Queries containing punctuation are
-#     narrowed by FTS on their words, then confirmed by a literal check on the stored text; a
-#     query made only of punctuation is answered with the LIKE search.
+#     narrowed by FTS on their words, then confirmed by a literal check on the stored text, as are
+#     Chinese terms jieba cannot segment into words (升等 would otherwise match 升 and 等 apart);
+#     a query made only of punctuation is answered with the LIKE search.
 #   - Folds Simplified/Traditional Chinese (search.script_fold) in queries, literal re-checks,
 #     filename search and the LIKE fallback; regex mode matches stored text exactly as written.
 #   - Generates snippet contexts with highlighted HTML <mark> tags and location indicators.
@@ -88,6 +89,10 @@ _FTS_QUERY_ERRORS = (
     "no such column",
     "malformed match",
 )
+
+
+def _is_cjk(char: str) -> bool:
+    return "\u4e00" <= char <= "\u9fff"
 
 
 def _is_fts_query_error(exc: sqlite3.OperationalError) -> bool:
@@ -175,7 +180,7 @@ class DocumentSearcher:
             return []
 
         fts_query = self._build_fts5_query(clean_query)
-        verify_literal = match_case or whole_word or self._has_punctuation_term(clean_query)
+        verify_literal = match_case or whole_word or self._needs_literal_check(clean_query)
         if not fts_query:
             # Only punctuation: the index has nothing to match, so scan the stored text.
             rows = self._fallback_like_search(keywords, filter_clause, filter_params, limit)
@@ -595,15 +600,42 @@ class DocumentSearcher:
         return [w for w in (t.strip() for t in jieba.cut(fold(text))) if w and has_word_char(w)]
 
     @staticmethod
-    def _has_punctuation_term(query: str) -> bool:
-        """True when a query term contains punctuation that FTS cannot match on its own."""
-        for phrase, operator, word in re.findall(
-            r'"([^\"]+)"|(\bAND\b|\bOR\b|\bNOT\b)|([^\s]+)', query, re.IGNORECASE
-        ):
-            term = phrase or word
-            if not operator and any(not (c.isalnum() or c.isspace()) for c in term):
-                return True
+    def _query_terms(query: str) -> List[str]:
+        """The words and quoted phrases of a query, without AND/OR/NOT."""
+        found = re.findall(r'"([^\"]+)"|(\bAND\b|\bOR\b|\bNOT\b)|([^\s]+)', query, re.IGNORECASE)
+        return [phrase or word for phrase, operator, word in found if not operator]
+
+    @classmethod
+    def _drop_negated_literal(cls, built_parts: List[str], term: str) -> bool:
+        """Leave "NOT term" out of the FTS expression when the literal check must decide.
+
+        FTS would exclude every segment holding the term's pieces anywhere (NOT 升等 would drop
+        text with 升 and 等 far apart); the literal re-check excludes only real occurrences.
+        """
+        if built_parts and built_parts[-1] == "NOT" and cls._term_needs_literal(term):
+            built_parts.pop()
+            return True
         return False
+
+    @classmethod
+    def _needs_literal_check(cls, query: str) -> bool:
+        """True when FTS alone cannot judge a term, so hits must be confirmed on the stored text.
+
+        Punctuation is not indexed, and a Chinese term jieba cannot segment into words (升等 is cut
+        into 升 and 等) becomes an AND of single characters that also matches text holding those
+        characters far apart.
+        """
+        return any(cls._term_needs_literal(term) for term in cls._query_terms(query))
+
+    @classmethod
+    def _term_needs_literal(cls, term: str) -> bool:
+        if any(not (c.isalnum() or c.isspace()) for c in term):
+            return True
+        words = cls._index_terms(term)
+        return any(
+            len(a) == 1 and len(b) == 1 and _is_cjk(a) and _is_cjk(b)
+            for a, b in zip(words, words[1:], strict=False)
+        )
 
     @staticmethod
     def _literal_matches(content: str, term: str, match_case: bool, whole_word: bool) -> bool:
@@ -670,11 +702,15 @@ class DocumentSearcher:
             elif p_strip.startswith('"') and p_strip.endswith('"') and len(p_strip) > 2:
                 inner = p_strip[1:-1]
                 cut_words = self._index_terms(inner)
+                if self._drop_negated_literal(built_parts, inner):
+                    continue
                 if cut_words:
                     phrase_query = " ".join(word.replace('"', '""') for word in cut_words)
                     built_parts.append(f'tokenized_content : "{phrase_query}"')
             else:
                 cut_words = self._index_terms(p_strip)
+                if self._drop_negated_literal(built_parts, p_strip):
+                    continue
                 if cut_words:
                     sub_expr = " AND ".join(
                         f'"{word.replace(chr(34), chr(34) * 2)}"' for word in cut_words
