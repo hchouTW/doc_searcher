@@ -113,10 +113,18 @@ def test_prv_02_zoom_is_clamped_and_reversible(env, preview):
     assert preview.browser.property("preview_font_px") == 13 and preview.btn_zoom_in.isEnabled()
 
 
-def test_prv_03_match_navigation_wraps_and_counts(env, preview):
-    item = env.results("outstanding")["en/cases.txt"]
+def test_prv_03_match_navigation_wraps_and_counts(scratch, tmp_path, preview):
+    # Distant hits give separate snippets; a hit is one snippet, as in the results list.
+    filler = "filler words go here. " * 30
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "far.txt").write_text(
+        f"outstanding {filler} outstanding {filler} outstanding", encoding="utf-8"
+    )
+    scratch.run([tmp_path / "docs"])
+    item = scratch.searcher.search("outstanding")[0]
     preview.display_result(item)
     total = preview.match_count
+    assert total == item.total_matches  # same count the results list shows
     assert total >= 2 and preview.match_counter_label.text() == f"1 / {total}"
     preview._previous_match()  # from the first match, wraps to the last
     assert preview.match_counter_label.text() == f"{total} / {total}"

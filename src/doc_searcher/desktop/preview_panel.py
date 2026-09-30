@@ -281,11 +281,8 @@ class PreviewPanel(QWidget):
         self.btn_reveal.setEnabled(True)
         self.btn_copy_path.setEnabled(True)
 
-        self.match_count = sum(
-            len(re.findall(r"<mark(?:\s[^>]*)?>", snippet, flags=re.IGNORECASE))
-            for segment in item.segments
-            for snippet in segment.snippets
-        )
+        # One match per snippet, the same unit as the results list's hit count.
+        self.match_count = sum(len(segment.snippets) for segment in item.segments)
         if reset_match or not 0 <= self.current_match < self.match_count:
             self.current_match = 0 if self.match_count else -1
         self._render_preview()
@@ -316,28 +313,32 @@ class PreviewPanel(QWidget):
 
             localized_snippets = []
             for snip in seg.snippets:
-
-                def add_anchor(match):
-                    nonlocal match_index
-                    is_active = match_index == self.current_match
-                    background = "#f97316" if is_active else c.mark_bg
-                    border = (
-                        f"2px solid {'#ffffff' if c.is_dark else '#1d4ed8'}"
-                        if is_active
-                        else "1px solid transparent"
-                    )
-                    anchor = (
-                        f'<a name="match-{match_index}"></a>'
-                        f'<mark style="background-color: {background}; color: {c.mark_text}; '
-                        f"font-weight: bold; padding: 1px 3px; border: {border}; "
-                        f'border-radius: 3px;">'
-                    )
-                    match_index += 1
-                    return anchor
-
-                localized_snippets.append(
-                    re.sub(r"<mark(?:\s[^>]*)?>", add_anchor, snip, flags=re.IGNORECASE)
+                is_active = match_index == self.current_match
+                background = "#f97316" if is_active else c.mark_bg
+                border = (
+                    f"2px solid {'#ffffff' if c.is_dark else '#1d4ed8'}"
+                    if is_active
+                    else "1px solid transparent"
                 )
+                first_mark = True
+
+                def style_mark(match):
+                    # Only the snippet's first mark shows the active state.
+                    nonlocal first_mark
+                    active_style = (
+                        f"background-color: {background}; border: {border};"
+                        if first_mark
+                        else f"background-color: {c.mark_bg}; border: 1px solid transparent;"
+                    )
+                    first_mark = False
+                    return (
+                        f'<mark style="{active_style} color: {c.mark_text}; '
+                        f'font-weight: bold; padding: 1px 3px; border-radius: 3px;">'
+                    )
+
+                styled = re.sub(r"<mark(?:\s[^>]*)?>", style_mark, snip, flags=re.IGNORECASE)
+                localized_snippets.append(f'<a name="match-{match_index}"></a>{styled}')
+                match_index += 1
 
             snippets_html = "".join(
                 f"""

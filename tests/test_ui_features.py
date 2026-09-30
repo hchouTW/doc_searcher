@@ -57,9 +57,9 @@ def _result(name: str, matches: int) -> SearchResultItem:
                 segment_id="1",
                 segment_type="text",
                 snippets=[
-                    'before <mark style="background-color: #ffeb3b">keyword</mark> after '
-                    '<mark style="background-color: #ffeb3b">keyword</mark>'
-                ],
+                    'before <mark style="background-color: #ffeb3b">keyword</mark> after'
+                ]
+                * matches,
             )
         ],
     )
@@ -444,7 +444,7 @@ def test_preview_counts_and_navigates_highlighted_matches():
     preview = PreviewPanel()
     preview.display_result(_result("preview.txt", 2))
 
-    assert preview.match_count == 2
+    assert preview.match_count == preview.current_item.total_matches == 2
     assert preview.match_counter_label.text() == "1 / 2"
     first_html = preview.browser.toHtml()
     assert "#f97316" in first_html.lower()
