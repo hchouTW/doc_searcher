@@ -1,11 +1,12 @@
 # Purpose: Text processing, jieba Chinese tokenization, and HTML snippet highlighting helper.
 # What the code does:
-#   - Tokenizes Chinese and English text using jieba.cut_for_search for FTS5 index.
+#   - Tokenizes Chinese and English text using jieba.cut_for_search for FTS5 index, after folding
+#     Traditional characters to Simplified so both scripts share the same tokens.
 #   - Extracts safe literal or regex snippet contexts with HTML <mark> tags, pulling only the
 #     first few matches lazily.
 #   - Sanitizes and escapes HTML characters safely.
 # Usage notes, dependencies, or assumptions:
-#   - Requires jieba.
+#   - Requires jieba; script folding lives in search.script_fold.
 #   - Used by indexer, searcher, and UI preview panel.
 
 import html
@@ -16,6 +17,7 @@ from typing import Any, List, Optional, Tuple
 import jieba
 
 from doc_searcher.search.regex_engine import Deadline
+from doc_searcher.search.script_fold import fold, script_regex
 
 # Longest part of a single match shown in a snippet (e.g. ".*" over a whole 5 MB segment).
 MAX_MATCH_CHARS = 300
@@ -26,7 +28,7 @@ def tokenize_for_fts(text: str) -> str:
     if not text:
         return ""
     # jieba.cut_for_search generates finer tokens for indexing
-    tokens = jieba.cut_for_search(text)
+    tokens = jieba.cut_for_search(fold(text))
     # Filter out empty or pure whitespace tokens
     clean_tokens = [t.strip() for t in tokens if t.strip()]
     return " ".join(clean_tokens)
@@ -51,7 +53,7 @@ def extract_keywords_from_query(query: str) -> List[str]:
             continue
         highlight_terms.add(term)
         # Add sub-tokens from jieba
-        for sub in jieba.cut(term):
+        for sub in jieba.cut(fold(term)):
             sub = sub.strip()
             if len(sub) >= 1 and sub not in {"*", "?", "-", "+"}:
                 highlight_terms.add(sub)
@@ -71,7 +73,7 @@ def generate_highlighted_snippets(
     if not content or not keywords:
         return []
 
-    escaped_kws = [re.escape(k) for k in keywords if k.strip()]
+    escaped_kws = [script_regex(k) for k in keywords if k.strip()]
     if not escaped_kws:
         return []
 

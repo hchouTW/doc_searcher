@@ -7,6 +7,8 @@
 #   - Supports case-sensitive, whole-word, and validated regular-expression modes; regex
 #     searches run under a time budget and can be cancelled (search.regex_engine).
 #   - Executes FTS queries against tokenized and raw content with BM25 ranking.
+#   - Folds Simplified/Traditional Chinese (search.script_fold) in queries, literal re-checks,
+#     filename search and the LIKE fallback; regex mode matches stored text exactly as written.
 #   - Generates snippet contexts with highlighted HTML <mark> tags and location indicators.
 # Usage notes, dependencies, or assumptions:
 #   - Uses SQLite FTS5 functions and doc_searcher.search.text_helper.
@@ -23,6 +25,7 @@ import jieba
 from doc_searcher.storage.database import Database
 from doc_searcher.storage.errors import classify
 from doc_searcher.platform.paths import canonical_path, canonical_text
+from doc_searcher.search.script_fold import fold, script_regex
 from doc_searcher.search.regex_engine import (
     Deadline,
     RegexError,
@@ -410,13 +413,14 @@ class DocumentSearcher:
     ) -> List[SearchResultItem]:
         """Search document names without requiring a matching content segment."""
         conn = self.db.get_connection()
-        escaped_query = self._escape_like(canonical_text(filename_query))
+        conn.create_function("fold", 1, fold, deterministic=True)
+        escaped_query = self._escape_like(fold(canonical_text(filename_query)))
         params: List[Any] = [f"%{escaped_query}%", *filter_params, limit]
         rows = conn.execute(
             f"""
                 SELECT id, path, filename, file_type, file_size, mtime, ctime
                 FROM documents d
-                WHERE d.filename LIKE ? ESCAPE '\\'
+                WHERE fold(d.filename) LIKE ? ESCAPE '\\'
                   {filter_clause}
                 ORDER BY d.filename COLLATE NOCASE
                 LIMIT ?
@@ -564,7 +568,7 @@ class DocumentSearcher:
 
     @staticmethod
     def _literal_matches(content: str, term: str, match_case: bool, whole_word: bool) -> bool:
-        expression = re.escape(term)
+        expression = script_regex(term)
         if whole_word:
             expression = rf"(?<!\w){expression}(?!\w)"
         return re.search(expression, content, 0 if match_case else re.IGNORECASE) is not None
@@ -626,12 +630,12 @@ class DocumentSearcher:
                 built_parts.append(upper_p)
             elif p_strip.startswith('"') and p_strip.endswith('"') and len(p_strip) > 2:
                 inner = p_strip[1:-1]
-                cut_words = [w.strip() for w in jieba.cut(inner) if w.strip()]
+                cut_words = [w.strip() for w in jieba.cut(fold(inner)) if w.strip()]
                 if cut_words:
                     phrase_query = " ".join(word.replace('"', '""') for word in cut_words)
                     built_parts.append(f'tokenized_content : "{phrase_query}"')
             else:
-                cut_words = [w.strip() for w in jieba.cut(p_strip) if w.strip()]
+                cut_words = [w.strip() for w in jieba.cut(fold(p_strip)) if w.strip()]
                 if cut_words:
                     sub_expr = " AND ".join(
                         f'"{word.replace(chr(34), chr(34) * 2)}"' for word in cut_words
@@ -668,8 +672,9 @@ class DocumentSearcher:
     ) -> List[Any]:
         """Fallback search using SQL LIKE if FTS query encounters syntax anomaly."""
         conn = self.db.get_connection()
-        like_clauses = " AND ".join(["s.content LIKE ? ESCAPE '\\'"] * len(keywords))
-        params: List[Any] = [f"%{self._escape_like(k)}%" for k in keywords]
+        conn.create_function("fold", 1, fold, deterministic=True)
+        like_clauses = " AND ".join(["fold(s.content) LIKE ? ESCAPE '\\'"] * len(keywords))
+        params: List[Any] = [f"%{self._escape_like(fold(k))}%" for k in keywords]
 
         sql = f"""
             SELECT 
