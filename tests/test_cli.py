@@ -106,3 +106,20 @@ def test_cli_search_pagination_and_locations(tmp_path, monkeypatch, capsys):
     assert main(args + ["--locations", str(page["items"][0]["doc_id"])]) == 0
     locations = json.loads(capsys.readouterr().out)
     assert len(locations["locations"]) == 8
+
+
+def test_cli_quality_and_unchanged_reprocessing(data_dir, roots, capsys):
+    import json
+    root, _ = roots
+    assert run("--dir", str(root), "--search", "alpha") == 0
+    capsys.readouterr()
+    assert run("--quality") == 0
+    quality = json.loads(capsys.readouterr().out)
+    assert quality["stats"]["searchable_documents"] == 2
+    db = Database(AppConfig().db_path)
+    old = db.revision()
+    db.close()
+    assert run("--dir", str(root), "--reprocess", str(root / "alpha.txt")) == 0
+    db = Database(AppConfig().db_path)
+    assert db.revision() > old
+    db.close()

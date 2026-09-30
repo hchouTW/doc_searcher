@@ -177,3 +177,24 @@ def test_global_format_continuation(make_service, docs):
         if not cursor:
             break
     assert len(all_ids) == len(set(all_ids)) == 3
+
+
+def test_quality_summary_and_selected_reprocess(make_service, tmp_path):
+    folder = tmp_path / "docs"
+    folder.mkdir()
+    path = folder / "a.txt"
+    path.write_text("meeting")
+    (folder / "empty.txt").write_text("")
+    service = make_service([folder])
+    reindex(service)
+    status = service.index_status()
+    assert status["discovered_documents"] == 2
+    assert status["searchable_documents"] == 1
+    assert service.problem_documents()["documents"][0]["parse_status"] == "empty"
+    old_revision = service.db.revision()
+    assert service.start_reprocess([str(path)])["status"] == "started"
+    service.wait_for_reindex(10)
+    assert service.db.revision() > old_revision
+    assert service.index_status()["reindex"]["result"]["indexed"] == 1
+    with pytest.raises(ValueError):
+        service.start_reprocess([str(tmp_path / "outside.txt")])

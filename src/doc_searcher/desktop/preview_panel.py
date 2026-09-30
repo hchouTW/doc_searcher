@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QApplication,
 )
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import QTimer, Signal
 from doc_searcher.search.searcher import SearchResultItem
 from doc_searcher.platform.platform_helper import (
     open_file_with_default_app,
@@ -36,6 +36,7 @@ NOTICE_MILLISECONDS = 8000
 
 
 class PreviewPanel(QWidget):
+    reprocess_requested = Signal(str)
     """Panel displaying file details, matched snippets, and action buttons."""
 
     def __init__(self, parent=None):
@@ -56,6 +57,10 @@ class PreviewPanel(QWidget):
         self.layout().addWidget(self.btn_context)
         self.btn_context.clicked.connect(lambda: self._request_context(full_segment=True,
             text_offset=self._active_context.get("next_offset") or 0 if self._active_context else 0))
+        self.btn_reprocess = QPushButton(tr(self.language, "reprocess_selected"))
+        self.layout().addWidget(self.btn_reprocess)
+        self.btn_reprocess.setEnabled(False)
+        self.btn_reprocess.clicked.connect(lambda: self.reprocess_requested.emit(self.current_item.path) if self.current_item else None)
         self.apply_theme(self.theme)
 
     def _init_ui(self):
@@ -143,6 +148,8 @@ class PreviewPanel(QWidget):
         self.language = language
         if hasattr(self, "btn_context"):
             self.btn_context.setText(tr(language, "more_context"))
+        if hasattr(self, "btn_reprocess"):
+            self.btn_reprocess.setText(tr(language, "reprocess_selected"))
         self.btn_open.setText(tr(language, "open_file"))
         self.btn_reveal.setText(tr(language, "reveal_file"))
         self.btn_copy_path.setText(tr(language, "copy_path"))
@@ -249,6 +256,8 @@ class PreviewPanel(QWidget):
         self.title_label.setText(tr(self.language, "preview_empty_title"))
         self.meta_label.setText(tr(self.language, "preview_empty_body"))
         self.path_label.setText("")
+        if hasattr(self, "btn_reprocess"):
+            self.btn_reprocess.setEnabled(False)
         self.btn_open.setEnabled(False)
         self.btn_reveal.setEnabled(False)
         self.btn_copy_path.setEnabled(False)
@@ -334,7 +343,12 @@ class PreviewPanel(QWidget):
             )
         )
         self.path_label.setText(item.path)
+        quality = tr(self.language, "quality_" + item.parse_status)
+        self.meta_label.setText(self.meta_label.text() + " | " + quality)
+        if item.warnings:
+            self.meta_label.setToolTip(str(item.warnings))
 
+        self.btn_reprocess.setEnabled(True)
         self.btn_open.setEnabled(True)
         self.btn_reveal.setEnabled(True)
         self.btn_copy_path.setEnabled(True)

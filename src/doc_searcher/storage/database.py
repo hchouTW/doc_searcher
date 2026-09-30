@@ -7,6 +7,7 @@
 #   - Requires sqlite3 with FTS5; environmental failures raise storage.errors.StorageError.
 #   - Enables foreign keys and WAL mode for high concurrency.
 
+import json
 import os
 import sqlite3
 import threading
@@ -100,21 +101,21 @@ class Database:
         """Retrieve document metadata by path, in canonical or legacy (as-stored) spelling."""
         conn = self.get_connection()
         cursor = conn.execute(
-            "SELECT id, path, filename, file_type, file_size, mtime, ctime, total_segments, error "
+            "SELECT * "
             "FROM documents WHERE path IN (?, ?) ORDER BY path = ? DESC",
             (*_path_spellings(file_path), canonical_path(file_path)),
         )
         row = cursor.fetchone()
-        return dict(row) if row else None
+        return self._quality_record(dict(row)) if row else None
 
     def get_document_segments(self, doc_id: int) -> List[Dict[str, Any]]:
         """Return a document's extracted segments in their original order."""
         conn = self.get_connection()
         cursor = conn.execute(
-            "SELECT segment_id, segment_type, content FROM doc_segments WHERE doc_id = ? ORDER BY id",
+            "SELECT id, segment_id, segment_type, content, sources FROM doc_segments WHERE doc_id = ? ORDER BY id",
             (doc_id,),
         )
-        return [dict(row) for row in cursor.fetchall()]
+        return [{**dict(row), "sources": json.loads(row["sources"])} for row in cursor.fetchall()]
 
     def get_all_indexed_paths(self) -> Dict[str, Tuple[float, int]]:
         """Return dict of {path: (mtime, file_size)} for incremental scanning."""
@@ -131,7 +132,13 @@ class Database:
         seg_count = cursor.fetchone()[0]
         cursor = conn.execute("SELECT MAX(indexed_at) FROM documents")
         last_indexed_at = cursor.fetchone()[0]
+        discovered = conn.execute("SELECT COUNT(*) FROM documents").fetchone()[0]
+        searchable = conn.execute("SELECT COUNT(*) FROM documents d WHERE EXISTS (SELECT 1 FROM doc_segments s WHERE s.doc_id=d.id AND LENGTH(TRIM(s.content))>0)").fetchone()[0]
+        quality = dict(conn.execute("SELECT parse_status, COUNT(*) FROM documents GROUP BY parse_status").fetchall())
         return {
+            "discovered_documents": discovered,
+            "searchable_documents": searchable,
+            "quality_counts": quality,
             "total_docs": doc_count or 0,
             "total_size": total_size or 0,
             "total_segments": seg_count or 0,
@@ -164,9 +171,10 @@ class Database:
         file_type: str,
         file_size: int,
         mtime: float,
-        segments: List[Dict[str, str]],
+        segments: List[Dict[str, Any]],
         error: Optional[str] = None,
         ctime: Optional[float] = None,
+        parse_status: Optional[str] = None, warnings=None, omitted_locations=None, parser_version=None,
     ) -> int:
         """Insert or replace document and index its segments."""
         abs_path = canonical_path(file_path)
@@ -223,8 +231,11 @@ class Database:
                 )
                 doc_id = cursor.lastrowid
 
-            # Insert segments and FTS entries
-            if segments and not error:
+            conn.execute("UPDATE documents SET parse_status=?, warnings=?, omitted_locations=?, parser_version=? WHERE id=?",
+                (parse_status or "unknown", json.dumps(warnings or [], ensure_ascii=False, default=str),
+                 json.dumps(omitted_locations or [], ensure_ascii=False), parser_version or "", doc_id))
+            # Useful partial text remains searchable alongside quality diagnostics.
+            if segments and (not error or parse_status == "partial"):
                 seg_rows = []
                 fts_rows = []
                 for seg in segments:
@@ -233,13 +244,13 @@ class Database:
                     content = seg["content"]
                     tokenized = seg.get("tokenized_content", "")
 
-                    seg_rows.append((doc_id, seg_id, seg_type, content))
+                    seg_rows.append((doc_id, seg_id, seg_type, content, json.dumps(seg.get("sources", []), ensure_ascii=False, default=str)))
                     fts_rows.append((str(doc_id), seg_id, seg_type, content, tokenized))
 
                 conn.executemany(
                     """
-                    INSERT INTO doc_segments (doc_id, segment_id, segment_type, content)
-                    VALUES (?, ?, ?, ?)
+                    INSERT INTO doc_segments (doc_id, segment_id, segment_type, content, sources)
+                    VALUES (?, ?, ?, ?, ?)
                 """,
                     seg_rows,
                 )
@@ -261,3 +272,22 @@ class Database:
     def revision(self) -> int:
         """Revision used to invalidate continuation and original-text locations."""
         return self.get_connection().execute("SELECT revision FROM index_state WHERE id = 1").fetchone()[0]
+
+    @staticmethod
+    def _quality_record(row):
+        from doc_searcher.parsers.base import parser_version_for
+        for key in ("warnings", "omitted_locations"):
+            row[key] = json.loads(row[key])
+        row["reprocess_eligible"] = row["parse_status"] == "unknown" or row["parser_version"] != parser_version_for(row["file_type"])
+        return row
+
+    def problem_documents(self, *, offset=0, limit=100):
+        """Paginated unknown/no-text/partial/failed extraction records, including warnings."""
+        if offset < 0 or not 1 <= limit <= 1000:
+            raise ValueError("Invalid problem-document page")
+        rows = self.get_connection().execute(
+            "SELECT * FROM documents WHERE parse_status != 'success' OR warnings != '[]' ORDER BY id LIMIT ? OFFSET ?",
+            (limit + 1, offset)).fetchall()
+        more = len(rows) > limit
+        return dict(documents=[self._quality_record(dict(r)) for r in rows[:limit]],
+                    next_offset=offset + limit if more else None, has_more=more)

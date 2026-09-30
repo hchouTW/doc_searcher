@@ -28,7 +28,7 @@ EXIT_DATA = 3
 TYPE_FILTERS = ("all", "pdf", "word", "doc", "excel", "xls", "ppt", "powerpoint", "text")
 
 
-def run_cli_mode(folder: str, query: str, type_filter: str = "all", *, limit=200, cursor=None, locations=None, context=None, json_output=False, offset=0, revision=None, regex=False, match_case=False, whole_word=False) -> int:
+def run_cli_mode(folder: str, query: str, type_filter: str = "all", *, limit=200, cursor=None, locations=None, context=None, json_output=False, offset=0, revision=None, regex=False, match_case=False, whole_word=False, reprocess=None) -> int:
     """Run headless search via terminal for quick testing or scripts; returns an exit code."""
     from doc_searcher.config import AppConfig, ConfigError
     from doc_searcher.storage.database import Database
@@ -59,13 +59,15 @@ def run_cli_mode(folder: str, query: str, type_filter: str = "all", *, limit=200
         return EXIT_DATA
     try:
         # Scope = the requested root: entries owned by other roots are never reconciled.
-        request = IndexRequest(roots=[abs_dir], scope=[abs_dir])
+        request = IndexRequest(roots=[abs_dir], scope=[abs_dir], force_paths=list(reprocess or []), reprocess_only=bool(reprocess))
         try:
             stats = IndexingService(db, scanner).run(request)
         except StorageError as exc:
             print(f"[!] {exc}", file=sys.stderr)
             return EXIT_DATA
         print(f"[*] 找到 {stats['scanned']} 個支援的文件檔案。", file=sys.stderr)
+        quality_stats = db.get_stats()
+        print(f"[*] 已發現 {quality_stats['discovered_documents']} 份文件；{quality_stats['searchable_documents']} 份含可搜尋文字；擷取品質 {quality_stats['quality_counts']}", file=sys.stderr)
         if stats["indexed"] or stats["deleted"] or stats["failed"]:
             summary = {key: stats[key] for key in ("indexed", "deleted", "failed", "cancelled")}
             print(f"[✓] 索引更新完成：{summary}", file=sys.stderr)
@@ -140,6 +142,8 @@ def main(argv=None) -> int:
     parser.add_argument("--regex", action="store_true", help="Bounded regular-expression search")
     parser.add_argument("--match-case", action="store_true", help="Match original letter case")
     parser.add_argument("--whole-word", action="store_true", help="Match whole words")
+    parser.add_argument("--quality", action="store_true", help="List extraction quality/problems as JSON")
+    parser.add_argument("--reprocess", action="append", metavar="PATH", help="Force selected files to be reparsed")
     args = parser.parse_args(argv)
     configure_logging()
 
@@ -150,6 +154,25 @@ def main(argv=None) -> int:
     if args.report:
         parser.error("--report 只能與 --self-check 一起使用")
 
+    if args.quality:
+        from doc_searcher.config import AppConfig
+        from doc_searcher.storage.database import Database
+        from doc_searcher.storage.errors import StorageError
+        try:
+            db = Database(AppConfig().db_path)
+            try:
+                print(json.dumps(dict(stats=db.get_stats(), **db.problem_documents(offset=args.offset,
+                    limit=min(args.limit, 1000))), ensure_ascii=False))
+                return EXIT_OK
+            finally:
+                db.close()
+        except StorageError as exc:
+            print(f"[!] {exc}", file=sys.stderr)
+            return EXIT_DATA
+    if args.reprocess:
+        if not args.dir:
+            parser.error("--reprocess requires --dir to define the allowed folder")
+        return run_cli_mode(args.dir, args.search or "", args.type, reprocess=args.reprocess)
     if args.dir is not None or args.search is not None:
         if not (args.dir and args.search):
             parser.error("CLI 模式需要同時指定 --dir 與 --search")

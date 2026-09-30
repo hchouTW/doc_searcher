@@ -11,7 +11,7 @@
 import logging
 import os
 import threading
-from typing import Callable, Optional, List, Dict
+from typing import Any, Callable, Optional, List, Dict
 
 from doc_searcher.parsers import ParseStatus, parse_file
 from doc_searcher.search.text_helper import tokenize_for_fts
@@ -78,10 +78,11 @@ class DocumentIndexer:
 
         # parse_file never raises for document problems; a bad file becomes an error record.
         extracted = parse_file(abs_path)
+        assert extracted.status is not None  # ExtractedDoc.__post_init__ always derives an outcome.
         if extracted.status is ParseStatus.UNSUPPORTED:
             return False
 
-        if extracted.error:
+        if extracted.status not in {ParseStatus.SUCCESS, ParseStatus.EMPTY, ParseStatus.PARTIAL}:
             self.db.save_document_index(
                 file_path=abs_path,
                 file_type=ext,
@@ -89,15 +90,17 @@ class DocumentIndexer:
                 mtime=mtime,
                 ctime=ctime,
                 segments=[],
-                error=extracted.error,
+                error=extracted.error, parse_status=extracted.status.value,
+                warnings=extracted.warnings, omitted_locations=extracted.omitted_locations,
+                parser_version=extracted.parser_version,
             )
             return False
 
         # Process and tokenize segments
-        prepared_segments: List[Dict[str, str]] = []
+        prepared_segments: List[Dict[str, Any]] = []
         for seg in extracted.segments:
-            text = seg.text.strip()
-            if not text:
+            text = seg.text
+            if not text.strip():
                 continue
             tokenized = tokenize_for_fts(text)
             prepared_segments.append(
@@ -106,6 +109,7 @@ class DocumentIndexer:
                     "segment_type": seg.segment_type,
                     "content": text,
                     "tokenized_content": tokenized,
+                    "sources": seg.sources,
                 }
             )
 
@@ -116,7 +120,9 @@ class DocumentIndexer:
             mtime=mtime,
             ctime=ctime,
             segments=prepared_segments,
-            error=None,
+            error=extracted.error, parse_status=extracted.status.value,
+            warnings=extracted.warnings, omitted_locations=extracted.omitted_locations,
+            parser_version=extracted.parser_version,
         )
         return True
 

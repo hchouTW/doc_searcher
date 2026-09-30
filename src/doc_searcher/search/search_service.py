@@ -122,6 +122,8 @@ class SearchService:
             "segment_count": item.segment_count,
             "snippet_count": item.snippet_count,
             "count_complete": item.count_complete,
+            "parse_status": item.parse_status,
+            "warnings": item.warnings,
             "matches": [
                 {
                     "location_type": segment.segment_type,
@@ -139,6 +141,9 @@ class SearchService:
         self.config.load()
         stats = self.db.get_stats()
         return {
+            "discovered_documents": stats["discovered_documents"],
+            "searchable_documents": stats["searchable_documents"],
+            "quality_counts": stats["quality_counts"],
             "app_version": APP_VERSION,
             "index_path": self.db.db_path,
             "total_documents": stats["total_docs"],
@@ -188,6 +193,42 @@ class SearchService:
             )
             self._reindex_thread.start()
         return {"status": "started", "reindex": dict(self._reindex_state)}
+
+    def problem_documents(self, *, offset=0, limit=100):
+        return self.db.problem_documents(offset=offset, limit=limit)
+
+    def start_reprocess(self, paths: Sequence[str]) -> Dict[str, Any]:
+        """Explicitly reparse selected indexed files, without reconciling other documents."""
+        self.config.load()
+        paths = list(dict.fromkeys(os.path.abspath(os.path.expanduser(p)) for p in paths))
+        if not paths:
+            raise ValueError("Select at least one indexed document.")
+        for path in paths:
+            if not self.db.get_document_by_path(path) or not any(
+                    self.scanner.is_path_within_directory(path, root) for root in self.config.directories):
+                raise ValueError(f"{path} is not an indexed document inside a configured folder.")
+        with self._reindex_lock:
+            if self._reindex_thread is not None and self._reindex_thread.is_alive():
+                return {"status": "already_running", "reindex": dict(self._reindex_state)}
+            self._reindex_state = {"state": "running", "operation": "reprocess", "paths": paths,
+                                  "started_at": _iso_time(time.time())}
+            self._reindex_thread = threading.Thread(target=self._run_reprocess, args=(paths,), daemon=True)
+            self._reindex_thread.start()
+        return {"status": "started", "reindex": dict(self._reindex_state)}
+
+    def _run_reprocess(self, paths):
+        try:
+            request = IndexRequest(roots=list(self.config.directories),
+                include_subdirectories=self.config.include_subdirectories,
+                exclude_patterns=self.config.exclude_patterns, force_paths=paths, reprocess_only=True)
+            result = IndexingService(self.db, self.scanner).run(request)
+            state = "completed"
+        except Exception as exc:
+            result, state = {"error": str(exc)}, "failed"
+        finally:
+            self.db.close()
+        self._reindex_state = {**self._reindex_state, "state": state,
+                              "finished_at": _iso_time(time.time()), "result": result}
 
     def wait_for_reindex(self, timeout: Optional[float] = None) -> None:
         """Block until the current background re-index finishes (used by tests)."""

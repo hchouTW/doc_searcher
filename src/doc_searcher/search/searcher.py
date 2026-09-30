@@ -79,6 +79,8 @@ class SearchResultItem:
     segments: List[SegmentMatch] = field(default_factory=list)
     ctime: float = 0.0
     count_complete: bool = True
+    parse_status: str = "unknown"
+    warnings: List[dict] = field(default_factory=list)
 
     @property
     def segment_count(self):
@@ -139,17 +141,24 @@ class DocumentSearcher:
     def search(self, *args, **options):
         """Search in one consistent snapshot, including during background index updates."""
         conn = self.db.get_connection()
-        if conn.in_transaction:
-            return self._search(*args, **options)
-        with conn:
-            conn.execute("BEGIN")
-            try:
-                return self._search(*args, **options)
-            except sqlite3.OperationalError as exc:
-                error = classify(exc, self.db.db_path)
-                if error is not None:
-                    raise error from exc
-                raise
+        try:
+            if conn.in_transaction:
+                return self._attach_quality(self._search(*args, **options))
+            with conn:
+                conn.execute("BEGIN")
+                return self._attach_quality(self._search(*args, **options))
+        except sqlite3.OperationalError as exc:
+            error = classify(exc, self.db.db_path)
+            if error is not None:
+                raise error from exc
+            raise
+
+    def _attach_quality(self, items):
+        for item in items:
+            row = self.db.get_connection().execute("SELECT parse_status, warnings FROM documents WHERE id=?", (item.doc_id,)).fetchone()
+            item.parse_status = row["parse_status"]
+            item.warnings = json.loads(row["warnings"])
+        return items
 
     def _search(
         self,
@@ -245,6 +254,7 @@ class DocumentSearcher:
                     except sqlite3.OperationalError as exc:
                         if not _is_fts_query_error(exc):
                             raise
+                        logger.info("FTS query %r rejected (%s); using stored-text scan", expression, exc)
                         hits.update(r[0] for r in conn.execute("SELECT id FROM doc_segments"))
                 else:
                     hits.update(r[0] for r in conn.execute("SELECT id FROM doc_segments"))

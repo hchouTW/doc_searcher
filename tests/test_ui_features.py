@@ -959,3 +959,44 @@ def test_preview_ignores_context_after_deselection(tmp_path):
     assert preview.current_item is None and preview.match_count == 0
     assert "Select" in preview.browser.toPlainText() or "選" in preview.browser.toPlainText()
     db.close()
+
+
+@pytest.mark.parametrize("language,theme", [("zh-TW", DARK_PALETTE), ("en-US", LIGHT_PALETTE)])
+def test_quality_list_and_force_reprocess_ui(tmp_path, language, theme):
+    from doc_searcher.storage.database import Database
+    from doc_searcher.indexing.service import IndexingService, IndexRequest
+    from PySide6.QtWidgets import QListWidget
+    app = _app()
+    root = tmp_path / "docs"
+    root.mkdir()
+    path = root / "a.txt"
+    path.write_text("會議 " * 8)
+    (root / "empty.txt").write_text("")
+    config = AppConfig(tmp_path / "config.json")
+    config.db_path = str(tmp_path / "index.db")
+    config.directories = [str(root)]
+    config.language = language
+    config.save()
+    db = Database(config.db_path)
+    IndexingService(db).run(IndexRequest([str(root)]))
+    db.close()
+    window = MainWindow(config)
+    window.apply_theme(theme)
+    window._show_quality_problems()
+    listing = window._quality_dialog.findChild(QListWidget)
+    deadline = time.monotonic() + 3
+    while listing.count() == 0 and time.monotonic() < deadline:
+        app.processEvents()
+        time.sleep(.01)
+    assert listing.count() == 1
+    assert tr(language, "quality_empty") in listing.item(0).text()
+    assert "2" in window.index_summary_label.text() and "1" in window.index_summary_label.text()
+    old_revision = window.db.revision()
+    window._reprocess_selected([str(path)])
+    deadline = time.monotonic() + 3
+    while window.db.revision() == old_revision and time.monotonic() < deadline:
+        app.processEvents()
+        time.sleep(.01)
+    assert window.db.revision() > old_revision
+    window.close()
+    app.processEvents()

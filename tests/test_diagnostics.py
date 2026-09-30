@@ -97,6 +97,13 @@ class _FailingConnection:
     def __getattr__(self, name):
         return getattr(self._conn, name)
 
+    def __enter__(self):
+        self._conn.__enter__()
+        return self
+
+    def __exit__(self, *args):
+        return self._conn.__exit__(*args)
+
 
 @pytest.fixture
 def searcher(tmp_path):
@@ -130,7 +137,7 @@ def test_fts_syntax_error_falls_back_to_like_search(searcher, monkeypatch, caplo
     with caplog.at_level(logging.INFO, logger="doc_searcher.search.searcher"):
         results = engine.search("budget")
     assert [r.filename for r in results] == ["a.txt"]
-    assert "using LIKE search" in caplog.text
+    assert "using stored-text scan" in caplog.text
 
 
 def test_locked_database_is_not_hidden_by_the_fallback(searcher, monkeypatch):

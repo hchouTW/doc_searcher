@@ -126,6 +126,19 @@ def _v4_cjk(conn: sqlite3.Connection) -> None:
                          [(r[0], cjk_tokens(r[1])) for r in batch])
 
 
+def _v5_quality(conn: sqlite3.Connection) -> None:
+    """Older quality is unknown; source spans are populated only by explicit reprocessing."""
+    columns = {r[1] for r in conn.execute("PRAGMA table_info(documents)")}
+    for name, definition in (("parse_status", "TEXT NOT NULL DEFAULT 'unknown'"),
+                              ("warnings", "TEXT NOT NULL DEFAULT '[]'"),
+                              ("omitted_locations", "TEXT NOT NULL DEFAULT '[]'"),
+                              ("parser_version", "TEXT NOT NULL DEFAULT ''")):
+        if name not in columns:
+            conn.execute(f"ALTER TABLE documents ADD COLUMN {name} {definition}")
+    if "sources" not in {r[1] for r in conn.execute("PRAGMA table_info(doc_segments)")}:
+        conn.execute("ALTER TABLE doc_segments ADD COLUMN sources TEXT NOT NULL DEFAULT '[]'")
+
+
 Migration = Tuple[int, str, Callable[[sqlite3.Connection], None]]
 
 MIGRATIONS: List[Migration] = [
@@ -133,6 +146,7 @@ MIGRATIONS: List[Migration] = [
     (2, "fold Simplified/Traditional Chinese in tokenized_content", _v2_fold_scripts),
     (3, "English stemming (porter tokenizer)", _v3_stemming),
     (4, "Chinese literal candidate index and continuation revision", _v4_cjk),
+    (5, "Persist extraction quality and source spans", _v5_quality),
 ]
 
 

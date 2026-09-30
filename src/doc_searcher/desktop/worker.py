@@ -47,6 +47,7 @@ class IndexWorker(QThread):
         include_subdirectories: bool = True,
         exclude_patterns: Optional[List[str]] = None,
         clear_index: bool = False,
+        force_paths=None,
     ):
         super().__init__()
         self.db = db
@@ -54,6 +55,8 @@ class IndexWorker(QThread):
             roots=list(directories),
             include_subdirectories=include_subdirectories,
             exclude_patterns=list(exclude_patterns or []),
+            force_paths=list(force_paths or []),
+            reprocess_only=bool(force_paths),
         )
         self.clear_index = clear_index
         self.service = IndexingService(db)
@@ -189,5 +192,23 @@ class ContextWorker(QThread):
         except Exception as exc:
             if not self._cancelled.is_set():
                 self.failed.emit(str(exc))
+        finally:
+            self.db.close()
+
+
+class QualityWorker(QThread):
+    """Retrieve a bounded extraction-problem page away from the UI thread."""
+    ready = Signal(dict)
+    failed = Signal(str)
+
+    def __init__(self, db, offset=0):
+        super().__init__()
+        self.db, self.offset = db, offset
+
+    def run(self):
+        try:
+            self.ready.emit(self.db.problem_documents(offset=self.offset))
+        except Exception as exc:
+            self.failed.emit(str(exc))
         finally:
             self.db.close()

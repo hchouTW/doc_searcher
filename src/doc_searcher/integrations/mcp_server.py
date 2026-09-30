@@ -166,5 +166,23 @@ def get_match_context(location: dict[str, Any], full_segment: bool = False, text
         raise ToolError(str(exc)) from exc
 
 
+@mcp.tool(annotations=ToolAnnotations(read_only_hint=True, open_world_hint=False))
+def get_problem_documents(offset: int = 0, limit: int = 100) -> dict[str, Any]:
+    """List unknown/no-text/partial/failed extraction, warnings and reprocessing eligibility."""
+    try:
+        return get_service().problem_documents(offset=offset, limit=limit)
+    except ValueError as exc:
+        raise ToolError(str(exc)) from exc
+
+
+@mcp.tool(annotations=ToolAnnotations(read_only_hint=False, destructive_hint=False, open_world_hint=False))
+def reprocess_documents(paths: list[str]) -> dict[str, Any]:
+    """Reparse explicitly selected indexed documents even when size/mtime are unchanged; poll get_index_status."""
+    try:
+        return get_service().start_reprocess(paths)
+    except ValueError as exc:
+        raise ToolError(str(exc)) from exc
+
+
 if __name__ == "__main__":
     main()

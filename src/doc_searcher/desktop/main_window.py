@@ -48,7 +48,7 @@ from PySide6.QtWidgets import (
     QTextBrowser,
     QDialogButtonBox,
 )
-from PySide6.QtCore import Qt, QTimer, QDate
+from PySide6.QtCore import QThread, Qt, QTimer, QDate
 from PySide6.QtGui import QIcon, QKeySequence, QShortcut, QTextDocument
 
 from doc_searcher.config import AppConfig
@@ -142,12 +142,18 @@ class MainWindow(QMainWindow):
         self.exclude_reindex_timer.timeout.connect(self._start_indexing)
 
         self._init_ui()
+        self._force_paths: List[str] = []
+        self._quality_workers: List[QThread] = []
         self._loaded_results: List[SearchResultItem] = []
         self._result_page = None
         self.load_more_button = QPushButton(tr(self.language, "load_more"))
         self.load_more_button.hide()
         self.load_more_button.clicked.connect(self._load_more_results)
         self.results_count_label.parentWidget().layout().addWidget(self.load_more_button)
+        self.quality_button = QPushButton(tr(self.language, "quality_problems"))
+        self.quality_button.clicked.connect(self._show_quality_problems)
+        self.results_count_label.parentWidget().layout().addWidget(self.quality_button)
+        self.preview.reprocess_requested.connect(lambda path: self._reprocess_selected([path]))
         self._apply_language()
         self._restore_filter_settings()
         self.apply_theme(self.theme)
@@ -839,6 +845,8 @@ class MainWindow(QMainWindow):
     def _apply_language(self):
         if hasattr(self, "load_more_button"):
             self.load_more_button.setText(tr(self.language, "load_more"))
+        if hasattr(self, "quality_button"):
+            self.quality_button.setText(tr(self.language, "quality_problems"))
         """Refresh every persistent visible label after a locale change."""
         self.setWindowTitle(tr(self.language, "app_title"))
         self.btn_settings.setText(
@@ -1195,7 +1203,9 @@ class MainWindow(QMainWindow):
             self.config.include_subdirectories,
             self.config.exclude_patterns,
             clear_index=clear_index,
+            force_paths=self._force_paths,
         )
+        self._force_paths = []
         self.index_worker.progress.connect(self._on_indexing_progress)
         self.index_worker.state_changed.connect(self._set_index_state)
         self.index_worker.indexing_finished.connect(self._on_indexing_finished)
@@ -1317,8 +1327,9 @@ class MainWindow(QMainWindow):
 
     def _update_db_status(self, update_main_status: bool = True):
         stats = self.db.get_stats()
-        docs = stats.get("total_docs", 0)
-        self.index_summary_label.setText(tr(self.language, "indexed_summary", count=docs))
+        self.index_summary_label.setText(tr(self.language, "quality_summary",
+            discovered=stats["discovered_documents"], searchable=stats["searchable_documents"]))
+        self.index_summary_label.setToolTip(str(stats["quality_counts"]))
         self._refresh_last_updated_label(stats)
         if update_main_status:
             self.status_label.setText(self._idle_status_text(stats))
@@ -1814,6 +1825,54 @@ class MainWindow(QMainWindow):
             if query == self.search_input.text().strip() and type_filter == self.active_type_filter:
                 self._start_search(query, type_filter, self._current_search_filters())
 
+    def _reprocess_selected(self, paths):
+        if not paths:
+            return
+        self._force_paths = list(dict.fromkeys([*self._force_paths, *paths]))
+        self._start_indexing()
+
+    def _show_quality_problems(self):
+        from PySide6.QtWidgets import QDialog, QVBoxLayout, QListWidget, QListWidgetItem
+        from .worker import QualityWorker
+        dialog = QDialog(self)
+        dialog.setWindowTitle(tr(self.language, "quality_problems"))
+        dialog.resize(720, 420)
+        layout = QVBoxLayout(dialog)
+        listing = QListWidget()
+        listing.setSelectionMode(QListWidget.SelectionMode.ExtendedSelection)
+        layout.addWidget(listing)
+        reprocess = QPushButton(tr(self.language, "reprocess_selected"))
+        more = QPushButton(tr(self.language, "load_more"))
+        layout.addWidget(reprocess)
+        layout.addWidget(more)
+        def load(offset=0):
+            more.setEnabled(False)
+            worker = QualityWorker(self.db, offset)
+            self._quality_workers.append(worker)
+            def ready(page):
+                more.setEnabled(True)
+                for row in page["documents"]:
+                    label = tr(self.language, "quality_" + row["parse_status"])
+                    item = QListWidgetItem(f'{label} | {row["path"]}')
+                    item.setData(Qt.ItemDataRole.UserRole, row["path"])
+                    item.setToolTip(str(row["warnings"] or row["error"] or row["omitted_locations"]))
+                    listing.addItem(item)
+                more.setVisible(page["has_more"])
+                more.setProperty("offset", page["next_offset"])
+            worker.ready.connect(ready)
+            worker.failed.connect(lambda message: more.setText(message))
+            def finished():
+                self._quality_workers.remove(worker)
+                worker.deleteLater()
+            worker.finished.connect(finished)
+            worker.start()
+        more.clicked.connect(lambda: load(more.property("offset") or 0))
+        reprocess.clicked.connect(lambda: self._reprocess_selected(
+            [item.data(Qt.ItemDataRole.UserRole) for item in listing.selectedItems()]))
+        self._quality_dialog = dialog
+        dialog.show()
+        load()
+
     def _load_more_results(self):
         page = getattr(self, "_result_page", None)
         if not page or not page.next_cursor or self.search_worker:
@@ -1834,6 +1893,8 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         self.preview.shutdown()
+        for worker in self._quality_workers:
+            worker.wait()
         self.advanced_dialog.close()
         self.scheduler.pending_search = None
         if self.index_worker and self.index_worker.isRunning():

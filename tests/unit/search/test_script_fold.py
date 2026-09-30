@@ -156,7 +156,7 @@ def test_migration_refolds_existing_index_without_source_files(tmp_path):
     assert not (tmp_path / "gone").exists()
 
     reopened = Database(str(path))
-    assert reopened.applied_migrations == [2, 3, 4]
+    assert reopened.applied_migrations == [2, 3, 4, 5]
     assert names(DocumentSearcher(reopened).search("会议记录")) == {"trad.txt"}
     counts = (
         reopened.get_connection()

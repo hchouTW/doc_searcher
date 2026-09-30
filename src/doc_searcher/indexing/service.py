@@ -23,6 +23,7 @@ from typing import Any, Callable, Dict, List, Optional
 from doc_searcher.indexing.indexer import DocumentIndexer
 from doc_searcher.indexing.scanner import FileScanner
 from doc_searcher.storage.database import Database
+from doc_searcher.platform.paths import canonical_path
 
 ProgressCallback = Callable[[int, int, str], None]
 PhaseCallback = Callable[[str], None]  # "scanning", "indexing", "completed", "cancelled"
@@ -42,6 +43,8 @@ class IndexRequest:
     include_subdirectories: bool = True
     exclude_patterns: List[str] = field(default_factory=list)
     scope: Optional[List[str]] = None
+    force_paths: List[str] = field(default_factory=list)
+    reprocess_only: bool = False
 
 
 class IndexingService:
@@ -102,6 +105,13 @@ class IndexingService:
                 self._indexed_in_scope(request.scope),
                 preserved_directories=[*unavailable, *scan_errors],
             )
+            force = {canonical_path(path) for path in request.force_paths}
+            permitted = [path for path, _, _ in current_files if path in force and
+                (request.scope is None or any(self.scanner.is_path_within_directory(path, root) for root in request.scope))]
+            if request.reprocess_only:
+                to_index, to_delete = permitted, []
+            else:
+                to_index = list(dict.fromkeys([*to_index, *permitted]))
             if to_index or to_delete:
                 phase("indexing")
             stats: Dict[str, Any] = self.indexer.run_batch_indexing(
@@ -110,6 +120,7 @@ class IndexingService:
             stats.update(
                 skipped=not available,
                 scanned=len(current_files),
+                reprocess_skipped=sorted(force - set(permitted)),
                 unavailable_directories=unavailable,
                 scan_error_paths=scan_errors,
                 elapsed=time.time() - start,
