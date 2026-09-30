@@ -33,7 +33,7 @@ cannot run here, reason given. **Covered** already tested elsewhere in the suite
 | DIR-01 / 02 / 04 / 05 / 06 | Pass | subfolders off/on, nested and duplicate roots, symlink loop, exclusions, awkward paths |
 | DIR-03 | Characterised | turning subfolders off purges the deeper entries on the next scan (OQ-7 open) |
 | IDX-01..05 | Pass | pause holds after the in-flight file, resume completes, stop leaves a valid DB, rescan has no duplicates, search works during a scan, bad files recorded |
-| IDX-06 | Manual | kill the app mid-scan |
+| IDX-06 | Pass | `test_idx_06_*`: a child process indexing 1,500 files is SIGKILLed after 100; the database passes `integrity_check`, a rescan indexes all 1,500 without duplicates, and the FTS table matches (skips itself if indexing finishes before the kill) |
 | FLT-01 / 02 / 03 | Pass | engine filters; GUI badge and chips are **Covered** by `tests/test_ui_features.py` |
 | FLT-04 | Manual + Covered | column sorting and visibility persistence (PR #5 tests) |
 | PRV-01, 02, 03, 04, 06 | Pass | metadata, zoom clamping, wrap-around, highlights equal stored text, clipboard path |
@@ -70,7 +70,6 @@ data folder (`DOC_SEARCHER_DATA_DIR=$(mktemp -d)`); never the real index.
 - [ ] **LANG-01** search `升等`: hits are highlighted yellow and bold in the preview.
 - [ ] **IDX-01** scan a folder of a few thousand files, click ⏸ 暫停 then ▶ 繼續: status shows 已暫停, progress holds, then finishes.
 - [ ] **IDX-02** click ⏹ 停止 mid-scan, then 🔄 掃描索引: stops after the current file, next scan completes.
-- [ ] **IDX-06** kill the app during a scan, relaunch, scan again: no error dialog, counts correct.
 - [ ] **FLT-01 / FLT-04** format chip filters the list and shows a removable badge; sort by each column; hide and restore columns.
 - [ ] **PRV-05** 開啟檔案 (and Enter / double-click) opens the file in its default app.
 - [ ] **PRV-07** right-click, reveal in Finder/Explorer selects the file.
