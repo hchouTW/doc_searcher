@@ -20,6 +20,8 @@ class ParseStatus(str, Enum):
     """Stable parse outcomes; values are safe to persist or show in diagnostics."""
 
     SUCCESS = "success"  # text extracted
+    PARTIAL = "partial"  # usable text with omitted sources or extraction warnings
+    UNKNOWN = "unknown"  # legacy indexes lack persisted quality
     EMPTY = "empty"  # valid document without extractable text
     UNSUPPORTED = "unsupported"  # no parser for this extension
     UNREADABLE = "unreadable"  # missing file or OS/permission error
@@ -41,6 +43,7 @@ class PageSegment:
     segment_id: str
     segment_type: str
     text: str
+    sources: List[dict] = field(default_factory=list)
 
 
 @dataclass
@@ -63,14 +66,19 @@ class ExtractedDoc:
     segments: List[PageSegment] = field(default_factory=list)
     error: Optional[str] = None
     status: Optional[ParseStatus] = None
+    warnings: List[dict] = field(default_factory=list)
+    omitted_locations: List[str] = field(default_factory=list)
+    parser_version: Optional[str] = None
 
     def __post_init__(self):
+        if self.parser_version is None:
+            self.parser_version = parser_version_for(self.file_type)
         if self.status is None:
             if self.error:
                 self.status = ParseStatus.CORRUPT
             else:
                 has_text = any(seg.text.strip() for seg in self.segments)
-                self.status = ParseStatus.SUCCESS if has_text else ParseStatus.EMPTY
+                self.status = (ParseStatus.PARTIAL if self.warnings else ParseStatus.SUCCESS) if has_text else ParseStatus.EMPTY
 
     @classmethod
     def failed(
@@ -111,3 +119,33 @@ class BaseParser(ABC):
             ExtractedDoc containing segments and metadata.
         """
         pass
+
+
+def parser_version_for(file_type: str) -> str:
+    """Versions identify files eligible for explicit extraction reprocessing."""
+    return "2" if file_type in {"docx", "xlsx", "pdf"} else "1"
+
+
+class SourceTextBuilder:
+    """Build original text together with spans; never strip it after recording offsets."""
+    def __init__(self):
+        self.parts = []
+        self.sources = []
+        self.length = 0
+
+    def append(self, text, source, separator="\n"):
+        if not text:
+            return
+        if self.parts:
+            self.parts.append(separator)
+            self.length += len(separator)
+        start = self.length
+        self.parts.append(text)
+        self.length += len(text)
+        if self.sources and self.sources[-1]["source"] == source and not separator:
+            self.sources[-1]["end"] = self.length
+        else:
+            self.sources.append(dict(start=start, end=self.length, source=source))
+
+    def segment(self, segment_id, segment_type):
+        return PageSegment(segment_id, segment_type, "".join(self.parts), self.sources)

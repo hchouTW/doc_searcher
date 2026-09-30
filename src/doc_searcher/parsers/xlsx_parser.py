@@ -1,8 +1,9 @@
 # Purpose: Modern Excel (.xlsx) workbook text extraction parser.
 # What the code does:
-#   - Uses openpyxl with read_only=True and data_only=True for low-memory streaming.
+#   - Streams source formulas and cached values separately without evaluating formulas.
 #   - Iterates through worksheets and non-empty rows.
-#   - Formats rows as readable tabular text segments keyed by sheet name.
+#   - Preserves worksheets (including hidden sheets) and cell-level original-text spans.
+#   - Reports missing cached formula results instead of silently treating them as empty.
 # Usage notes, dependencies, or assumptions:
 #   - Requires openpyxl.
 #   - Returns PageSegment per worksheet.
@@ -26,40 +27,38 @@ class XlsxParser(BaseParser):
                 abs_path, "xlsx", ParseStatus.DEPENDENCY_MISSING, "openpyxl is not installed."
             )
 
-        wb = None
+        source_wb = cached_wb = None
         try:
-            wb = openpyxl.load_workbook(abs_path, read_only=True, data_only=True)
-            sheet_names = wb.sheetnames
-
-            for sheet_name in sheet_names:
-                sheet = wb[sheet_name]
-                row_lines = []
-
-                for row in sheet.iter_rows(values_only=True):
-                    # Filter non-None cells
-                    row_vals = [
-                        str(cell).strip() for cell in row if cell is not None and str(cell).strip()
-                    ]
-                    if row_vals:
-                        row_lines.append(" | ".join(row_vals))
-
-                sheet_text = "\n".join(row_lines).strip()
-                if sheet_text:
-                    segments.append(
-                        PageSegment(segment_id=sheet_name, segment_type="sheet", text=sheet_text)
-                    )
-
-            return ExtractedDoc(
-                file_path=abs_path,
-                file_type="xlsx",
-                total_segments=len(sheet_names),
-                segments=segments,
-            )
+            from .base import SourceTextBuilder
+            source_wb = openpyxl.load_workbook(abs_path, read_only=True, data_only=False)
+            cached_wb = openpyxl.load_workbook(abs_path, read_only=True, data_only=True)
+            warnings = []
+            for sheet_name in source_wb.sheetnames:
+                builder = SourceTextBuilder()
+                source_sheet, cached_sheet = source_wb[sheet_name], cached_wb[sheet_name]
+                for source_row, cached_row in zip(source_sheet.iter_rows(), cached_sheet.iter_rows(), strict=True):
+                    for cell, cached in zip(source_row, cached_row, strict=True):
+                        value = cell.value
+                        if value is None:
+                            continue  # includes merged-cell followers
+                        source = dict(worksheet=sheet_name, cell=cell.coordinate,
+                                      location=f"{sheet_name}!{cell.coordinate}", kind="value")
+                        if cell.data_type == "f":
+                            builder.append(str(value), {**source, "kind": "formula", "cached_value": cached.value}, " | ")
+                            if cached.value is None:
+                                warnings.append(dict(code="missing_cached_result", location=source["location"],
+                                    message="Formula source indexed; cached result missing; formula not evaluated."))
+                            elif str(cached.value).strip() and str(value) != '="' + str(cached.value).replace('"', '""') + '"':
+                                builder.append(str(cached.value), source, " | ")
+                        elif str(value).strip():
+                            builder.append(str(value), source, " | ")
+                segment = builder.segment(sheet_name, "sheet")
+                if segment.text.strip():
+                    segments.append(segment)
+            return ExtractedDoc(abs_path, "xlsx", len(source_wb.sheetnames), segments, warnings=warnings)
         except Exception as e:
             return ExtractedDoc.from_exception(abs_path, "xlsx", "Error reading xlsx file", e)
         finally:
-            if wb is not None:
-                try:
-                    wb.close()
-                except Exception:
-                    pass
+            for workbook in (source_wb, cached_wb):
+                if workbook is not None:
+                    workbook.close()

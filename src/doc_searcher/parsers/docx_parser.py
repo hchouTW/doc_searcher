@@ -1,7 +1,7 @@
 # Purpose: Modern Word (.docx) document text extraction parser.
 # What the code does:
-#   - Uses python-docx to extract paragraphs, tables, and structural text.
-#   - Extracts table cell contents in reading order.
+#   - Traverses explicit Word text nodes in XML order, with body/header/footer/text-box sources.
+#   - Shared header/footer parts and physical merged cells are extracted once.
 #   - Handles protected or malformed files gracefully without unhandled exceptions.
 # Usage notes, dependencies, or assumptions:
 #   - Requires python-docx.
@@ -32,55 +32,48 @@ class DocxParser(BaseParser):
             return ExtractedDoc.from_exception(abs_path, "docx", "Cannot open docx file", e)
 
         try:
-            # Collect paragraphs
-            para_texts = []
-            for p in doc.paragraphs:
-                text = p.text.strip()
-                if text:
-                    para_texts.append(text)
-
-            # Collect tables
-            table_texts = []
-            for table_idx, table in enumerate(doc.tables, start=1):
-                row_strings = []
-                for row in table.rows:
-                    row_data = [cell.text.strip() for cell in row.cells if cell.text.strip()]
-                    # Deduplicate repeated cells from merged columns
-                    unique_cells: List[str] = []
-                    for c in row_data:
-                        if not unique_cells or unique_cells[-1] != c:
-                            unique_cells.append(c)
-                    if unique_cells:
-                        row_strings.append(" | ".join(unique_cells))
-                if row_strings:
-                    table_texts.append(f"[Table {table_idx}]\n" + "\n".join(row_strings))
-
-            # Group content into coherent segments
-            seg_idx = 1
-            if para_texts:
-                segments.append(
-                    PageSegment(
-                        segment_id=f"Section {seg_idx} (Paragraphs)",
-                        segment_type="section",
-                        text="\n\n".join(para_texts),
-                    )
-                )
-                seg_idx += 1
-
-            if table_texts:
-                segments.append(
-                    PageSegment(
-                        segment_id=f"Section {seg_idx} (Tables)",
-                        segment_type="section",
-                        text="\n\n".join(table_texts),
-                    )
-                )
-
-            return ExtractedDoc(
-                file_path=abs_path,
-                file_type="docx",
-                total_segments=len(segments),
-                segments=segments,
-            )
+            from docx.oxml.ns import qn
+            from docx.opc.constants import RELATIONSHIP_TYPE as RT
+            from .base import SourceTextBuilder
+            warnings, omitted = [], []
+            parts = [(str(doc.part.partname), "body", doc.element.body)]
+            seen = set()
+            for relation in doc.part.rels.values():
+                if relation.reltype in (RT.HEADER, RT.FOOTER):
+                    part = relation.target_part
+                    name = str(part.partname)
+                    if name not in seen:
+                        seen.add(name)
+                        parts.append((name, "header" if relation.reltype == RT.HEADER else "footer", part.element))
+            for part_name, part_kind, root in parts:
+                builder, previous = SourceTextBuilder(), None
+                paragraphs = {node: i for i, node in enumerate(root.iter(qn("w:p")), 1)}
+                for node in root.iter():
+                    if node.tag in (qn("w:altChunk"), qn("w:object")):
+                        location = f"{part_name}:{node.getroottree().getpath(node)}"
+                        warnings.append(dict(code="unsupported_object", location=location,
+                                             message="Embedded Office objects are not extracted."))
+                        omitted.append(location)
+                    if node.tag not in (qn("w:t"), qn("w:tab"), qn("w:br"), qn("w:cr")):
+                        continue
+                    ancestors = list(node.iterancestors())
+                    paragraph = next((a for a in ancestors if a.tag == qn("w:p")), None)
+                    if paragraph is None:
+                        continue
+                    kind = part_kind
+                    if any(a.tag == qn("w:txbxContent") for a in ancestors):
+                        kind = "text_box"
+                    elif part_kind == "body":
+                        kind = "table_cell" if any(a.tag == qn("w:tc") for a in ancestors) else "paragraph"
+                    source = dict(kind=kind, part=part_name, paragraph=paragraphs[paragraph],
+                                  location=paragraph.getroottree().getpath(paragraph))
+                    text = node.text or "" if node.tag == qn("w:t") else "\t" if node.tag == qn("w:tab") else "\n"
+                    builder.append(text, source, "" if source == previous else "\n\n")
+                    previous = source
+                segment = builder.segment(part_name, "section")
+                if segment.text.strip():
+                    segments.append(segment)
+            return ExtractedDoc(abs_path, "docx", len(segments), segments,
+                                warnings=warnings, omitted_locations=omitted)
         except Exception as e:
             return ExtractedDoc.from_exception(abs_path, "docx", "Error reading docx content", e)

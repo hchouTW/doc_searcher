@@ -2,7 +2,7 @@
 # What the code does:
 #   - Uses pymupdf (fitz) to extract text page-by-page.
 #   - Reports ENCRYPTED only when a user password is required to read the text.
-#   - Catches corrupted or invalid PDFs without crashing.
+#   - Preserves readable pages and reports failed/no-native-text page locations.
 # Usage notes, dependencies, or assumptions:
 #   - Requires pymupdf.
 #   - Returns PageSegment per page with 1-based page numbers.
@@ -53,6 +53,7 @@ class PdfParser(BaseParser):
                     abs_path, "pdf", ParseStatus.ENCRYPTED, "Document is password protected."
                 )
 
+            warnings, omitted = [], []
             total_pages = len(doc)
             for page_idx in range(total_pages):
                 try:
@@ -64,12 +65,18 @@ class PdfParser(BaseParser):
                                 segment_id=str(page_idx + 1), segment_type="page", text=text
                             )
                         )
-                except Exception:
-                    # Skip problematic individual page but continue
-                    continue
+                    else:
+                        warnings.append(dict(code="no_native_text", location=f"page {page_idx + 1}",
+                                             message="No native text extracted; blank or image-only page."))
+                except Exception as exc:
+                    location = f"page {page_idx + 1}"
+                    warnings.append(dict(code="page_failed", location=location, message=str(exc)))
+                    omitted.append(location)
 
             return ExtractedDoc(
-                file_path=abs_path, file_type="pdf", total_segments=total_pages, segments=segments
+                file_path=abs_path, file_type="pdf", total_segments=total_pages, segments=segments,
+                warnings=warnings, omitted_locations=omitted,
+                status=ParseStatus.PARTIAL if omitted else None
             )
         finally:
             doc.close()
