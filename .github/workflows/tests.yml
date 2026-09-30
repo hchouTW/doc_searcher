@@ -167,8 +167,14 @@ jobs:
         if ($actual -ne $expected) { throw "AutoHotkey download checksum mismatch: $actual" }
         Expand-Archive -Path $archive -DestinationPath $install
         $script = (Resolve-Path 'examples/center_on_screen/center_on_screen.ahk').Path
-        & (Join-Path $install 'AutoHotkey64.exe') '/ErrorStdOut=UTF-8' '/Validate' $script
-        if ($LASTEXITCODE -ne 0) { throw "AutoHotkey validation failed with exit code $LASTEXITCODE" }
+        # AutoHotkey64.exe is a GUI-subsystem program: PowerShell does not wait for it or set
+        # $LASTEXITCODE, so wait explicitly and capture its error output.
+        $out = Join-Path $env:RUNNER_TEMP 'ahk-validate.txt'
+        $proc = Start-Process -FilePath (Join-Path $install 'AutoHotkey64.exe') `
+          -ArgumentList '/ErrorStdOut=UTF-8', '/Validate', "`"$script`"" `
+          -Wait -PassThru -NoNewWindow -RedirectStandardOutput $out
+        if (Test-Path $out) { Get-Content $out }
+        if ($proc.ExitCode -ne 0) { throw "AutoHotkey validation failed with exit code $($proc.ExitCode)" }
 
     - name: Run pytest
       run: python -m pytest tests/ -v
