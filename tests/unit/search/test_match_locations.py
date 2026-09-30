@@ -57,3 +57,11 @@ def test_zero_width_regex_count_and_cancellation(tmp_path):
         searcher.search("a", regex=True, cancel_check=lambda: True)
     assert exc.value.code == "cancelled"
     db.close()
+
+
+def test_stemmed_phrase_is_one_complete_original_interval(tmp_path):
+    db, searcher = indexed(tmp_path, "The quick brown foxes jumped.")
+    page = searcher.search_page('"quick brown fox"')
+    locations = searcher.match_locations('"quick brown fox"', page.items[0].doc_id, revision=page.revision)
+    assert [(x.start, x.end) for x in locations.locations] == [(4, 21)]
+    db.close()

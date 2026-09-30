@@ -54,7 +54,7 @@ def test_lists_tools_and_document_template(indexed_service):
 
     tools, templates = run_client(scenario)
     by_name = {tool.name: tool for tool in tools.tools}
-    assert set(by_name) == {"search_documents", "get_index_status", "reindex_directory"}
+    assert set(by_name) == {"search_documents", "get_index_status", "reindex_directory", "get_match_locations", "get_match_context"}
     schema = by_name["search_documents"].input_schema
     assert schema["required"] == ["query"]
     assert schema["properties"]["limit"]["maximum"] == 100

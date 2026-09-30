@@ -142,6 +142,12 @@ class MainWindow(QMainWindow):
         self.exclude_reindex_timer.timeout.connect(self._start_indexing)
 
         self._init_ui()
+        self._loaded_results: List[SearchResultItem] = []
+        self._result_page = None
+        self.load_more_button = QPushButton(tr(self.language, "load_more"))
+        self.load_more_button.hide()
+        self.load_more_button.clicked.connect(self._load_more_results)
+        self.results_count_label.parentWidget().layout().addWidget(self.load_more_button)
         self._apply_language()
         self._restore_filter_settings()
         self.apply_theme(self.theme)
@@ -831,6 +837,8 @@ class MainWindow(QMainWindow):
             return tr(self.language, "theme_light")
 
     def _apply_language(self):
+        if hasattr(self, "load_more_button"):
+            self.load_more_button.setText(tr(self.language, "load_more"))
         """Refresh every persistent visible label after a locale change."""
         self.setWindowTitle(tr(self.language, "app_title"))
         self.btn_settings.setText(
@@ -1701,6 +1709,8 @@ class MainWindow(QMainWindow):
         self._trigger_search()
 
     def _trigger_search(self):
+        self.preview.display_result(None)
+        self.load_more_button.hide()
         query = self.search_input.text().strip()
         filters = self._current_search_filters()
         problem = search_filters.validate(self._filter_state(), query, filters)
@@ -1765,8 +1775,17 @@ class MainWindow(QMainWindow):
         if not self.scheduler.accepts_results(worker is self.search_worker, finished, current):
             return
 
+        page = getattr(worker, "page", None)
+        if worker.search_filters.get("cursor"):
+            results = self._loaded_results + results
+        self._loaded_results = results
+        self._result_page = page
+        self.load_more_button.setVisible(bool(page and page.has_more))
         self.table.set_results(results)
         count = len(results)
+        if page and page.has_more:
+            self.results_count_label.setText(tr(self.language, "loaded_results", count=count))
+            return
         if count == 0:
             self.results_count_label.setText(tr(self.language, "search_none", elapsed=elapsed_ms))
         else:
@@ -1795,13 +1814,26 @@ class MainWindow(QMainWindow):
             if query == self.search_input.text().strip() and type_filter == self.active_type_filter:
                 self._start_search(query, type_filter, self._current_search_filters())
 
+    def _load_more_results(self):
+        page = getattr(self, "_result_page", None)
+        if not page or not page.next_cursor or self.search_worker:
+            return
+        options = self._current_search_filters()
+        options["cursor"] = page.next_cursor
+        self._start_search(self.search_input.text().strip(), self.active_type_filter, options)
+
     def _on_table_item_selected(self, item: Optional[SearchResultItem]):
+        page = getattr(self, "_result_page", None)
+        if page:
+            self.preview.set_search_context(self.db, self.search_input.text().strip(),
+                                            self._current_search_filters(), page.revision)
         self.preview.display_result(item)
 
     def _on_file_action_failed(self, action: str, item: SearchResultItem):
         self.preview.show_file_action_failure(action, item)
 
     def closeEvent(self, event):
+        self.preview.shutdown()
         self.advanced_dialog.close()
         self.scheduler.pending_search = None
         if self.index_worker and self.index_worker.isRunning():

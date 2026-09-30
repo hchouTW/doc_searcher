@@ -86,3 +86,23 @@ def test_corrupt_index_is_reported_without_touching_it(data_dir, roots, capsys):
     assert run("--dir", str(roots[0]), "--search", "keyword") == 3
     assert "damaged" in capsys.readouterr().err
     assert (data_dir / "index.db").read_bytes() == garbage
+
+
+def test_cli_search_pagination_and_locations(tmp_path, monkeypatch, capsys):
+    import json
+    from doc_searcher.cli import main
+    monkeypatch.setenv("DOC_SEARCHER_DATA_DIR", str(tmp_path / "data"))
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    for i in range(3):
+        (docs / f"{i}.txt").write_text("會議 " * 8)
+    args = ["--dir", str(docs), "--search", "會議"]
+    assert main(args + ["--json", "--limit", "1"]) == 0
+    page = json.loads(capsys.readouterr().out)
+    assert page["has_more"] and page["items"][0]["total_matches"] == 8
+    assert main(args + ["--json", "--limit", "1", "--cursor", page["next_cursor"]]) == 0
+    second = json.loads(capsys.readouterr().out)
+    assert page["items"][0]["doc_id"] != second["items"][0]["doc_id"]
+    assert main(args + ["--locations", str(page["items"][0]["doc_id"])]) == 0
+    locations = json.loads(capsys.readouterr().out)
+    assert len(locations["locations"]) == 8

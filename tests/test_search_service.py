@@ -144,3 +144,36 @@ def test_document_text_only_serves_indexed_documents(make_service, docs):
         service.document_text(str(docs / "missing.pdf"))
     with pytest.raises(LookupError):
         service.document_text(str(SAMPLE_DIR.parent / "test_parsers.py"))
+
+
+def test_occurrence_pages_context_and_invalidation(make_service, tmp_path):
+    folder = tmp_path / "docs"
+    folder.mkdir()
+    (folder / "eight.txt").write_text("😀" + "會議 " * 8)
+    service = make_service([folder])
+    reindex(service)
+    found = service.search("會議", limit=1)
+    assert found["results"][0]["match_count"] == 8
+    assert found["complete"] and "next_cursor" in found
+    item = found["results"][0]
+    page = service.match_locations("會議", item["doc_id"], revision=found["revision"], limit=3)
+    assert page["total_matches"] == 8 and page["next_offset"] == 3
+    assert [(x["start"], x["end"]) for x in page["locations"]] == [(1, 3), (4, 6), (7, 9)]
+    context = service.match_context(page["locations"][0])
+    assert "😀" in context["text"] and context["active_start"] == 1
+    service.db.delete_document(item["path"])
+    with pytest.raises(ValueError):
+        service.match_context(page["locations"][0])
+
+
+def test_global_format_continuation(make_service, docs):
+    service = make_service([docs])
+    reindex(service)
+    all_ids, cursor = [], None
+    while True:
+        page = service.search("預算", ["excel", "pdf", "excel"], limit=1, cursor=cursor)
+        all_ids.extend(x["doc_id"] for x in page["results"])
+        cursor = page["next_cursor"]
+        if not cursor:
+            break
+    assert len(all_ids) == len(set(all_ids)) == 3

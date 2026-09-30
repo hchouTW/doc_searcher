@@ -44,9 +44,18 @@ class PreviewPanel(QWidget):
         self.language = "zh-TW"
         self.match_count = 0
         self.current_match = -1
+        self._search_context = None
+        self._context_workers = []
+        self._context_generation = 0
+        self._active_context = None
         self.zoom_steps = 0
         self.theme: ThemeColors = get_active_theme()
         self._init_ui()
+        from PySide6.QtWidgets import QPushButton
+        self.btn_context = QPushButton(tr(self.language, "more_context"))
+        self.layout().addWidget(self.btn_context)
+        self.btn_context.clicked.connect(lambda: self._request_context(full_segment=True,
+            text_offset=self._active_context.get("next_offset") or 0 if self._active_context else 0))
         self.apply_theme(self.theme)
 
     def _init_ui(self):
@@ -132,6 +141,8 @@ class PreviewPanel(QWidget):
     def set_language(self, language: str):
         """Apply translated labels and re-render current content."""
         self.language = language
+        if hasattr(self, "btn_context"):
+            self.btn_context.setText(tr(language, "more_context"))
         self.btn_open.setText(tr(language, "open_file"))
         self.btn_reveal.setText(tr(language, "reveal_file"))
         self.btn_copy_path.setText(tr(language, "copy_path"))
@@ -253,10 +264,57 @@ class PreviewPanel(QWidget):
             </div>
         """)
 
+    def set_search_context(self, db, query, options, revision):
+        self._search_context = (db, query, dict(options), revision)
+        self._context_generation += 1
+        self._active_context = None
+        for worker in self._context_workers:
+            worker.cancel()
+
+    def shutdown(self):
+        for worker in list(self._context_workers):
+            worker.cancel()
+            worker.wait()
+        self._context_workers.clear()
+
+    def _request_context(self, *, full_segment=False, text_offset=0):
+        from doc_searcher.desktop.worker import ContextWorker
+        if not self._search_context or not self.current_item or self.current_match < 0:
+            return
+        self._context_generation += 1
+        generation = self._context_generation
+        for worker in self._context_workers:
+            worker.cancel()
+        db, query, options, revision = self._search_context
+        worker = ContextWorker(db, query, self.current_item.doc_id, revision,
+            self.current_match, options, full_segment=full_segment, text_offset=text_offset)
+        self._context_workers.append(worker)
+        def ready(context):
+            if generation != self._context_generation or not self.current_item:
+                return
+            self._active_context = context
+            self._render_preview()
+        def failed(message):
+            if generation == self._context_generation:
+                self.notice_label.setText(tr(self.language, "locations_stale") + " " + message)
+                self.notice_label.show()
+        worker.ready.connect(ready)
+        worker.failed.connect(failed)
+        def finished():
+            if worker in self._context_workers:
+                self._context_workers.remove(worker)
+            worker.deleteLater()
+        worker.finished.connect(finished)
+        worker.start()
+
     def display_result(self, item: SearchResultItem, reset_match: bool = True):
         """Display a result, optionally retaining its current highlighted match."""
         if reset_match:
             self._hide_notice()
+            self._context_generation += 1
+            self._active_context = None
+            for worker in self._context_workers:
+                worker.cancel()
         self.current_item = item
         if not item:
             self._set_empty_state()
@@ -281,18 +339,34 @@ class PreviewPanel(QWidget):
         self.btn_reveal.setEnabled(True)
         self.btn_copy_path.setEnabled(True)
 
-        # One match per snippet, the same unit as the results list's hit count.
-        self.match_count = sum(len(segment.snippets) for segment in item.segments)
+        # Occurrence count is independent of the number of initial snippets.
+        self.match_count = item.total_matches
         if reset_match or not 0 <= self.current_match < self.match_count:
             self.current_match = 0 if self.match_count else -1
         self._render_preview()
         self._update_match_controls()
+        if self._search_context and reset_match:
+            self._request_context()
 
     def _render_preview(self):
         """Render snippets at the selected scale with one visibly active match."""
         if not self.current_item:
             return
 
+        if self._search_context:
+            context = self._active_context
+            if context is not None:
+                import html
+                location = str(context.get("source") or context["segment_id"])
+                font_px = 13 + self.zoom_steps * 2
+                self.browser.setHtml(f'<body style="font-size:{font_px}px; color:{self.theme.text_primary};">'
+                    f'<b>{html.escape(location)}</b><p>{context["html"]}</p></body>')
+                self.browser.setProperty("active_match_index", self.current_match)
+                self.browser.setProperty("preview_font_px", font_px)
+            else:
+                self.browser.setHtml(tr(self.language, "loading_context"))
+                self.browser.setProperty("active_match_index", -1)
+            return
         # Build rich HTML snippets using theme colors
         item = self.current_item
         c = self.theme
@@ -322,7 +396,7 @@ class PreviewPanel(QWidget):
                 )
                 first_mark = True
 
-                def style_mark(match):
+                def style_mark(match, background=background, border=border):
                     # Only the snippet's first mark shows the active state.
                     nonlocal first_mark
                     active_style = (
@@ -396,6 +470,9 @@ class PreviewPanel(QWidget):
         if not self.match_count:
             return
         self.current_match = (self.current_match + offset) % self.match_count
+        if self._search_context:
+            self._active_context = None
+            self._request_context()
         self._render_preview()
         self._update_match_controls()
 

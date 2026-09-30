@@ -75,15 +75,18 @@ def search_documents(
     limit: Annotated[
         int, Field(ge=1, le=MAX_SEARCH_LIMIT, description="Maximum documents to return.")
     ] = 20,
+    cursor: Optional[str] = None,
+    match_case: bool = False,
+    whole_word: bool = False,
+    regex: bool = False,
 ) -> dict[str, Any]:
     """Search indexed local documents and return ranked hits with highlighted snippets.
 
-    Each result has the file path, type, size, modified time, match_count (number of matching
-    pages/sheets/slides/sections), per-location snippets with hits in **bold**, and a
+    Each result has the file path, type, size, modified time, match_count (number of original-text occurrences), per-location snippets with hits in **bold**, and a
     resource_uri for reading the full text.
     """
     try:
-        return get_service().search(query, formats, limit)
+        return get_service().search(query, formats, limit, cursor=cursor, match_case=match_case, whole_word=whole_word, regex=regex)
     except ValueError as exc:
         raise ToolError(str(exc)) from exc
 
@@ -141,6 +144,26 @@ def main() -> None:
     """
     configure_logging()
     mcp.run("stdio")
+
+
+
+
+@mcp.tool(annotations=ToolAnnotations(read_only_hint=True, open_world_hint=False))
+def get_match_locations(query: str, doc_id: int, revision: int, offset: int = 0, limit: int = 100, match_case: bool = False, whole_word: bool = False, regex: bool = False) -> dict[str, Any]:
+    """Load a bounded page of original-text occurrences for an indexed document."""
+    try:
+        return get_service().match_locations(query, doc_id, revision=revision, offset=offset, limit=limit, match_case=match_case, whole_word=whole_word, regex=regex)
+    except (ValueError, LookupError) as exc:
+        raise ToolError(str(exc)) from exc
+
+
+@mcp.tool(annotations=ToolAnnotations(read_only_hint=True, open_world_hint=False))
+def get_match_context(location: dict[str, Any], full_segment: bool = False, text_offset: int = 0) -> dict[str, Any]:
+    """Read occurrence context or a 2048-character original segment page; never reads disk files."""
+    try:
+        return get_service().match_context(location, full_segment=full_segment, text_offset=text_offset)
+    except (ValueError, LookupError) as exc:
+        raise ToolError(str(exc)) from exc
 
 
 if __name__ == "__main__":

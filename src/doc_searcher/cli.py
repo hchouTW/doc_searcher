@@ -13,6 +13,8 @@
 #   - CLI exit codes: 0 success, 1 directory unavailable (index left unchanged), 2 usage error,
 #     3 data folder or index.db unusable (no writable folder, locked/corrupt/too-new index).
 
+import json
+from dataclasses import asdict
 import sys
 import os
 import argparse
@@ -26,7 +28,7 @@ EXIT_DATA = 3
 TYPE_FILTERS = ("all", "pdf", "word", "doc", "excel", "xls", "ppt", "powerpoint", "text")
 
 
-def run_cli_mode(folder: str, query: str, type_filter: str = "all") -> int:
+def run_cli_mode(folder: str, query: str, type_filter: str = "all", *, limit=200, cursor=None, locations=None, context=None, json_output=False, offset=0, revision=None, regex=False, match_case=False, whole_word=False) -> int:
     """Run headless search via terminal for quick testing or scripts; returns an exit code."""
     from doc_searcher.config import AppConfig, ConfigError
     from doc_searcher.storage.database import Database
@@ -72,13 +74,29 @@ def run_cli_mode(folder: str, query: str, type_filter: str = "all") -> int:
 
         print(f"[*] 執行檢索關鍵字：'{query}' (篩選: {type_filter})", file=sys.stderr)
         searcher = DocumentSearcher(db)
-        results = searcher.search(query, type_filter=type_filter)
+        try:
+            if locations is not None:
+                print(json.dumps(asdict(searcher.match_locations(query, locations, revision=db.revision() if revision is None else revision, offset=offset, regex=regex, match_case=match_case, whole_word=whole_word)), ensure_ascii=False))
+                return EXIT_OK
+            if context is not None:
+                print(json.dumps(searcher.match_context(json.loads(context)), ensure_ascii=False))
+                return EXIT_OK
+            page = searcher.search_page(query, type_filter=type_filter, limit=limit, cursor=cursor, regex=regex, match_case=match_case, whole_word=whole_word)
+        except (ValueError, LookupError) as exc:
+            print(f"[!] {exc}", file=sys.stderr)
+            return 2
+        results = page.items
+        if json_output:
+            print(json.dumps(asdict(page), ensure_ascii=False))
+            return EXIT_OK
+        if page.has_more:
+            print(f"[*] 已載入 {len(results)} 份文件，尚有更多結果。 --cursor {page.next_cursor}", file=sys.stderr)
 
         print(f"\n===== 檢索結果：共找到 {len(results)} 份文件 =====")
         for idx, r in enumerate(results, start=1):
             print(f"\n[{idx}] {r.filename} ({r.file_type.upper()}, {r.file_size} bytes)")
             print(f"    路徑: {r.path}")
-            print(f"    命中區塊數: {r.total_matches}")
+            print(f"    命中次數: {r.total_matches}；命中區塊數: {r.segment_count}")
             for seg in r.segments:
                 print(f"    - [{seg.segment_type} {seg.segment_id}]")
                 for snip in seg.snippets:
@@ -112,6 +130,16 @@ def main(argv=None) -> int:
         help="格式過濾 (all, pdf, word, excel, ppt, text)",
     )
 
+    parser.add_argument("--limit", type=int, default=200, help="Maximum documents per page")
+    parser.add_argument("--cursor", help="Continuation cursor from a previous search")
+    parser.add_argument("--locations", type=int, metavar="DOC_ID", help="Return occurrence locations as JSON")
+    parser.add_argument("--context", metavar="LOCATION_JSON", help="Read bounded occurrence context")
+    parser.add_argument("--json", action="store_true", help="Return search page as JSON")
+    parser.add_argument("--offset", type=int, default=0, help="Occurrence-page offset")
+    parser.add_argument("--revision", type=int, help="Revision returned by search")
+    parser.add_argument("--regex", action="store_true", help="Bounded regular-expression search")
+    parser.add_argument("--match-case", action="store_true", help="Match original letter case")
+    parser.add_argument("--whole-word", action="store_true", help="Match whole words")
     args = parser.parse_args(argv)
     configure_logging()
 
@@ -125,6 +153,10 @@ def main(argv=None) -> int:
     if args.dir is not None or args.search is not None:
         if not (args.dir and args.search):
             parser.error("CLI 模式需要同時指定 --dir 與 --search")
+        if args.cursor or args.locations is not None or args.context or args.json or args.limit != 200 or args.regex or args.match_case or args.whole_word or args.offset or args.revision is not None:
+            return run_cli_mode(args.dir, args.search, args.type, limit=args.limit, cursor=args.cursor,
+                                locations=args.locations, context=args.context, json_output=args.json, offset=args.offset, revision=args.revision,
+                                regex=args.regex, match_case=args.match_case, whole_word=args.whole_word)
         return run_cli_mode(args.dir, args.search, args.type)
 
     # Launch PySide6 GUI

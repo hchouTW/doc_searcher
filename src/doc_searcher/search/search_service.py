@@ -10,8 +10,9 @@
 # Usage notes, dependencies, or assumptions:
 #   - Shares AppConfig / index.db with the GUI (~/.doc_searcher, or DOC_SEARCHER_DATA_DIR).
 #   - Raises ValueError for invalid caller input and LookupError for unknown documents.
-#   - No Qt or MCP imports; keeps the core package's Python 3.8 compatibility.
+#   - No Qt or MCP imports; requires Python 3.10 or newer.
 
+from dataclasses import asdict
 import html
 import os
 import re
@@ -71,6 +72,7 @@ class SearchService:
         query: str,
         formats: Optional[Sequence[str]] = None,
         limit: int = 20,
+        *, cursor: Optional[str] = None, match_case=False, whole_word=False, regex=False,
     ) -> Dict[str, Any]:
         """Search the index; formats limits results to format groups (all when empty)."""
         if not query or not query.strip():
@@ -85,29 +87,41 @@ class SearchService:
             )
 
         try:
-            if groups:
-                items: List[SearchResultItem] = []
-                for group in dict.fromkeys(groups):
-                    items.extend(self.searcher.search(query, type_filter=group, limit=limit))
-                # Lower rank_score is better in every search mode.
-                items.sort(key=lambda item: item.rank_score)
-            else:
-                items = self.searcher.search(query, limit=limit)
+            page = self.searcher.search_page(query, type_filter=sorted(set(groups)) or "all",
+                                             limit=limit, cursor=cursor, match_case=match_case, whole_word=whole_word, regex=regex)
+        except SearchQueryError as exc:
+            raise ValueError(str(exc)) from exc
+        results = [self._result_to_dict(item) for item in page.items]
+        return {"query": query, "result_count": len(results), "results": results,
+                "next_cursor": page.next_cursor, "has_more": page.has_more,
+                "total_documents": page.total_documents, "complete": page.complete,
+                "revision": page.revision}
+
+    def match_locations(self, query, doc_id, **options):
+        try:
+            return asdict(self.searcher.match_locations(query, doc_id, **options))
         except SearchQueryError as exc:
             raise ValueError(str(exc)) from exc
 
-        results = [self._result_to_dict(item) for item in items[:limit]]
-        return {"query": query, "result_count": len(results), "results": results}
+    def match_context(self, location, **options):
+        try:
+            return self.searcher.match_context(location, **options)
+        except SearchQueryError as exc:
+            raise ValueError(str(exc)) from exc
 
     @staticmethod
     def _result_to_dict(item: SearchResultItem) -> Dict[str, Any]:
         return {
+            "doc_id": item.doc_id,
             "path": item.path,
             "filename": item.filename,
             "file_type": item.file_type,
             "size_bytes": item.file_size,
             "modified": _iso_time(item.mtime),
             "match_count": item.total_matches,
+            "segment_count": item.segment_count,
+            "snippet_count": item.snippet_count,
+            "count_complete": item.count_complete,
             "matches": [
                 {
                     "location_type": segment.segment_type,

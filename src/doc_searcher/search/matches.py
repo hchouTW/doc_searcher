@@ -10,7 +10,7 @@ from typing import Optional
 
 from doc_searcher.search.regex_engine import Deadline
 from doc_searcher.search.script_fold import script_regex
-from doc_searcher.search.stemming import stem_spec
+from doc_searcher.search.stemming import stem_spec, stem_regex_source, matches_stem
 from doc_searcher.search.text_helper import _highlight_pattern, MAX_MATCH_CHARS
 
 
@@ -40,6 +40,18 @@ class MatchPage:
     revision: int
 
 
+def english_phrase_matches(content, term):
+    """Porter phrase forms occupy one interval, with token separators preserved in text."""
+    words = term.split()
+    specs = [stem_spec(word) for word in words]
+    expressions = [stem_regex_source(spec) if spec else rf"\b{re.escape(word)}\b"
+                   for word, spec in zip(words, specs, strict=True)]
+    pattern = re.compile(r"\W+".join(f"({x})" for x in expressions), re.IGNORECASE)
+    for match in pattern.finditer(content):
+        if all(spec is None or matches_stem(spec, match.group(i + 1)) for i, spec in enumerate(specs)):
+            yield match
+
+
 def iter_locations(content, positive_terms, *, regex_pattern=None, deadline=None,
                    cancel_check=None, match_case=False, whole_word=False, stemming=True):
     """Yield merged intervals in original Python character coordinates, without buffering hits."""
@@ -62,7 +74,9 @@ def iter_locations(content, positive_terms, *, regex_pattern=None, deadline=None
             if not term:
                 continue
             use_stem = stemming and not (match_case or whole_word) and stem_spec(term) is not None
-            if use_stem:
+            if stemming and not (match_case or whole_word) and re.fullmatch(r"[a-zA-Z]+(?:\s+[a-zA-Z]+)+", term):
+                streams.append(checked(english_phrase_matches(content, term), term))
+            elif use_stem:
                 pattern = _highlight_pattern((term,), match_case, whole_word, True)
                 streams.append(checked(pattern.finditer(content), term))
             else:

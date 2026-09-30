@@ -77,7 +77,7 @@ def parse_query(query: str) -> ParsedQuery:
     if query.count('"') % 2:
         raise QuerySyntaxError("unpaired_phrase")
     tokens = re.findall(r'"[^\"]*"|\S+', query)
-    parts = []
+    parts: list = []
     operators = {"AND", "OR", "NOT"}
     for token in tokens:
         operator = token.upper() if token.upper() in operators else None

@@ -145,18 +145,49 @@ class SearchWorker(QThread):
     def run(self):
         try:
             start = time.perf_counter()
-            results = self.searcher.search(
+            self.page = self.searcher.search_page(
                 self.query,
                 type_filter=self.type_filter,
                 cancel_check=self._cancelled.is_set,
                 **self.search_filters,
             )
             elapsed_ms = (time.perf_counter() - start) * 1000.0
-            self.search_finished.emit(results, self.query, elapsed_ms)
+            self.search_finished.emit(self.page.items, self.query, elapsed_ms)
         except SearchQueryError as exc:
             self.search_failed.emit(str(exc), exc.code)
         except Exception as exc:  # Reported in the UI; the worker thread must not die silently.
             logger.exception("Search failed")
             self.search_failed.emit(str(exc), "")
+        finally:
+            self.db.close()
+
+
+class ContextWorker(QThread):
+    """Load a single occurrence and bounded context away from Qt's UI thread."""
+    ready = Signal(dict)
+    failed = Signal(str)
+
+    def __init__(self, db, query, doc_id, revision, ordinal, options, *, full_segment=False, text_offset=0):
+        super().__init__()
+        self.db, self.query, self.doc_id, self.revision = db, query, doc_id, revision
+        self.ordinal, self.options = ordinal, options
+        self.full_segment, self.text_offset = full_segment, text_offset
+        self._cancelled = threading.Event()
+
+    def cancel(self):
+        self._cancelled.set()
+
+    def run(self):
+        try:
+            searcher = DocumentSearcher(self.db)
+            page = searcher.match_locations(self.query, self.doc_id, revision=self.revision,
+                offset=self.ordinal, limit=1, cancel_check=self._cancelled.is_set, **self.options)
+            if page.locations and not self._cancelled.is_set():
+                context = searcher.match_context(page.locations[0], full_segment=self.full_segment,
+                                               text_offset=self.text_offset)
+                self.ready.emit(context)
+        except Exception as exc:
+            if not self._cancelled.is_set():
+                self.failed.emit(str(exc))
         finally:
             self.db.close()

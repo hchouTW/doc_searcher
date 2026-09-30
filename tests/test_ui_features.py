@@ -463,11 +463,40 @@ def test_preview_zoom_changes_rendered_css_font_size():
     preview.display_result(_result("zoom.txt", 2))
 
     assert preview.browser.property("preview_font_px") == 13
+
     preview._zoom_in()
     assert preview.browser.property("preview_font_px") == 15
     assert "font-size:15px" in preview.browser.toHtml().replace(" ", "").lower()
     preview._zoom_out()
     assert preview.browser.property("preview_font_px") == 13
+
+
+def test_preview_navigates_actual_occurrences_asynchronously(tmp_path):
+    from doc_searcher.storage.database import Database
+    from doc_searcher.search.searcher import DocumentSearcher
+    from doc_searcher.search.text_helper import tokenize_for_fts
+    import time
+    app = _app()
+    db = Database(str(tmp_path / "index.db"))
+    text = "會議 " * 8 + "x" * 100_000
+    db.save_document_index(str(tmp_path / "eight.txt"), "txt", len(text), 1,
+        [{"segment_id": "1", "segment_type": "section", "content": text,
+          "tokenized_content": tokenize_for_fts(text)}])
+    page = DocumentSearcher(db).search_page("會議")
+    preview = PreviewPanel()
+    preview.set_search_context(db, "會議", {}, page.revision)
+    preview.display_result(page.items[0])
+    for i in range(8):
+        deadline = time.monotonic() + 3
+        while preview.browser.property("active_match_index") != i and time.monotonic() < deadline:
+            app.processEvents()
+            time.sleep(.01)
+        assert preview.browser.property("active_match_index") == i
+        assert preview.match_count == 8
+        assert len(preview.browser.toHtml()) < 10_000
+        preview._next_match()
+    preview.shutdown()
+    db.close()
 
 
 def test_combo_popup_expands_for_long_labels():
@@ -911,3 +940,22 @@ def test_selected_row_bar_and_contrast(theme):
     assert _contrast_ratio(theme.selected_bar, theme.bg_table) >= 3.0
     assert theme.bg_selected not in (theme.bg_table, theme.bg_table_alt)
     table.close()
+
+
+def test_preview_ignores_context_after_deselection(tmp_path):
+    from doc_searcher.storage.database import Database
+    from doc_searcher.search.searcher import DocumentSearcher
+    app = _app()
+    db = Database(str(tmp_path / "index.db"))
+    db.save_document_index(str(tmp_path / "a.txt"), "txt", 10, 1,
+        [{"segment_id": "1", "segment_type": "section", "content": "會議", "tokenized_content": "会议"}])
+    page = DocumentSearcher(db).search_page("會議")
+    preview = PreviewPanel()
+    preview.set_search_context(db, "會議", {}, page.revision)
+    preview.display_result(page.items[0])
+    preview.display_result(None)
+    preview.shutdown()
+    app.processEvents()
+    assert preview.current_item is None and preview.match_count == 0
+    assert "Select" in preview.browser.toPlainText() or "選" in preview.browser.toPlainText()
+    db.close()

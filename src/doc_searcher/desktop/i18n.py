@@ -364,3 +364,15 @@ def tr(language: str, key: str, **values: Any) -> str:
         return template.format(**values)
     except (KeyError, ValueError):
         return template
+
+
+# Search completeness and incremental context labels.
+TRANSLATIONS_EXTRA = {
+    "zh-TW": {"load_more": "載入更多文件", "loaded_results": "已載入 {count} 份文件，尚有更多結果", "more_context": "載入更多原文",
+              "loading_context": "正在載入命中位置…", "locations_stale": "位置已失效，請重新搜尋。"},
+    "en-US": {"load_more": "Load more documents", "loaded_results": "Loaded {count} documents; more results available", "more_context": "Load more original text",
+           "loading_context": "Loading occurrence context…", "locations_stale": "Locations changed; search again."},
+}
+
+for _language, _labels in TRANSLATIONS_EXTRA.items():
+    TRANSLATIONS[_language].update(_labels)
