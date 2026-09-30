@@ -826,19 +826,29 @@ def test_visible_columns_fill_the_viewport(hidden):
 def test_file_name_gets_priority_elides_and_has_tooltips():
     from PySide6.QtWidgets import QLabel
 
+    from doc_searcher.desktop.result_table import FILENAME_MIN_WIDTH
+
     long_name = "a" * 60 + ".txt"
     app = _app()
     table = ResultTable()
-    table.resize(500, 300)
     item = _result(long_name, 2)
     table.set_results([item])
     table.show()
-    app.processEvents()
-
-    widths = {i: table.columnWidth(i) for i in range(len(COLUMN_IDS))}
     name_col = COLUMN_IDS.index("filename")
+
+    # Narrow: File Name never drops below its minimum (the table scrolls instead).
+    table.resize(500, 300)
+    app.processEvents()
+    assert table.columnWidth(name_col) >= FILENAME_MIN_WIDTH
+
+    # Realistic width: File Name is the widest column on every platform's fonts.
+    table.resize(1000, 300)
+    app.processEvents()
+    widths = {i: table.columnWidth(i) for i in range(len(COLUMN_IDS))}
     assert widths[name_col] == max(widths.values())
 
+    table.resize(500, 300)
+    app.processEvents()
     label = table.cellWidget(0, name_col).findChild(QLabel, "resultNameLabel")
     assert label.toolTip() == long_name
     assert label.text().endswith("…") and len(label.text()) < len(long_name)
