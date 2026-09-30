@@ -85,6 +85,8 @@
 
 開發者可在安裝專案後執行 `python scripts/capture_screenshots.py` 重建截圖。腳本使用 Qt offscreen 與暫存設定／資料庫，不會讀寫個人索引；字型與控制項細節可能隨平台而異。
 
+DocSearcher 啟動時會把主視窗置中；若也想讓其他應用程式的新視窗自動置中，請參閱[macOS／Windows 選用腳本與安裝說明](docs/center-on-screen.md)。
+
 ---
 
 ## 📂 專案目錄結構
@@ -412,6 +414,8 @@ Both appearances use the same demo data and selection so the text, selection col
 After expanding **Settings**, click the appearance button to cycle through "Auto → Dark → Light". Auto follows the system appearance; a manual choice stays as selected.
 
 Developers can rebuild the screenshots after installing the project with `python scripts/capture_screenshots.py`. The script uses Qt offscreen and a temporary config/database, so it never reads or writes a personal index; fonts and control details may vary by platform.
+
+DocSearcher centers its main window at startup. For optional scripts that center new windows in other apps, see the [macOS and Windows setup guide](docs/center-on-screen.md).
 
 ---
 

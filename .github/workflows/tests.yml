@@ -1,6 +1,7 @@
 # Purpose: Quality gate (format, lint, types, coverage) and the pytest suite across supported OS/Python.
-# What the code does: Installs the hashed lock (constraints/ci.txt) and the project, then runs pytest
-#                     headless. The pip cache is keyed by OS, architecture, Python, and lock hash;
+# What the code does: Installs the hashed lock (constraints/ci.txt) and the project, validates
+#                     the optional AutoHotkey v2 example on Windows, then runs pytest headless.
+#                     The pip cache is keyed by OS, architecture, Python, and lock hash;
 #                     --require-hashes re-verifies every file, including cache hits.
 # Usage notes: Python policy (pyproject.toml/README) is 3.10–3.14; 3.10 and 3.12 run on every OS,
 #              3.14 on Linux as the representative upper bound. Actions are pinned to commit SHAs.
@@ -152,6 +153,46 @@ jobs:
       run: |
         doc-searcher --version
         doc-searcher --help
+
+    - name: Validate AutoHotkey v2 example (Windows)
+      if: runner.os == 'Windows' && matrix.python == '3.12'
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = 'Stop'
+        $archive = Join-Path $env:RUNNER_TEMP 'AutoHotkey_2.0.28.zip'
+        $install = Join-Path $env:RUNNER_TEMP 'autohotkey-v2'
+        Invoke-WebRequest 'https://github.com/AutoHotkey/AutoHotkey/releases/download/v2.0.28/AutoHotkey_2.0.28.zip' -OutFile $archive
+        $expected = 'B63BE7548792B4AD0DFE424D91CC69376694ED2F758245B7A75A0C77D693B478'
+        $actual = (Get-FileHash -Algorithm SHA256 $archive).Hash
+        if ($actual -ne $expected) { throw "AutoHotkey download checksum mismatch: $actual" }
+        Expand-Archive -Path $archive -DestinationPath $install
+        $script = (Resolve-Path 'examples/center_on_screen/center_on_screen.ahk').Path
+        # AutoHotkey64.exe is a GUI-subsystem program: PowerShell does not wait for it or set
+        # $LASTEXITCODE, so wait explicitly and capture its error output.
+        $out = Join-Path $env:RUNNER_TEMP 'ahk-validate.txt'
+        $proc = Start-Process -FilePath (Join-Path $install 'AutoHotkey64.exe') `
+          -ArgumentList '/ErrorStdOut=UTF-8', '/Validate', "`"$script`"" `
+          -Wait -PassThru -NoNewWindow -RedirectStandardOutput $out
+        if (Test-Path $out) { Get-Content $out }
+        if ($proc.ExitCode -ne 0) { throw "AutoHotkey validation failed with exit code $($proc.ExitCode)" }
+
+    - name: Live-check AutoHotkey v2 example on the Windows desktop
+      if: runner.os == 'Windows' && matrix.python == '3.12'
+      shell: pwsh
+      timeout-minutes: 3
+      run: |
+        # Open real windows with the script running. The check runs in a child process with
+        # its output in a file so a hang or crash still leaves a readable log.
+        $ahkExe = Join-Path $env:RUNNER_TEMP 'autohotkey-v2\AutoHotkey64.exe'
+        $script = (Resolve-Path 'examples/center_on_screen/center_on_screen.ahk').Path
+        $check = (Resolve-Path 'tests/windows/center_on_screen_live.ps1').Path
+        $log = Join-Path $env:RUNNER_TEMP 'ahk-live.txt'
+        $child = Start-Process -FilePath pwsh -PassThru -NoNewWindow `
+          -ArgumentList '-NoProfile', '-File', "`"$check`"", '-AutoHotkey', "`"$ahkExe`"", '-Script', "`"$script`"" `
+          -RedirectStandardOutput $log -RedirectStandardError "$log.err"
+        if (-not $child.WaitForExit(120000)) { $child.Kill(); Write-Host 'Live check timed out' }
+        Get-Content $log, "$log.err" -ErrorAction SilentlyContinue
+        if ($child.ExitCode -ne 0) { throw "AutoHotkey live check failed (exit code $($child.ExitCode))" }
 
     - name: Run pytest
       run: python -m pytest tests/ -v

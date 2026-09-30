@@ -14,7 +14,7 @@ from types import SimpleNamespace
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QCoreApplication, QEvent, Qt
 from PySide6.QtWidgets import (
     QApplication,
     QDialog,
@@ -483,6 +483,9 @@ def test_combo_popup_expands_for_long_labels():
     assert combo.view().minimumWidth() == combo.content_popup_width()
     assert combo.view().textElideMode() == Qt.ElideNone
     combo.hidePopup()
+    # Flush popup teardown before the next test processes Qt timer events.
+    combo.deleteLater()
+    QCoreApplication.sendPostedEvents(None, QEvent.DeferredDelete)
 
 
 def test_filter_preferences_and_syntax_input(tmp_path):
