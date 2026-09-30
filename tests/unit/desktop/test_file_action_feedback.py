@@ -152,17 +152,16 @@ def test_table_reports_failed_open_from_double_click_enter_and_context_menu(tmp_
 
 
 def test_window_forwards_table_failures_to_the_preview(tmp_path, launcher):
-    app = _app()
-    launcher.result = False
+    _app()
     config = AppConfig(tmp_path / "config.json")
     config.db_path = str(tmp_path / "index.db")
     window = MainWindow(config)
     item = _item(tmp_path / "gone.txt")
-    window.table.set_results([item])
-    window.table.selectRow(0)
-    app.processEvents()
+    window.preview.display_result(item)
 
-    window.table._on_double_clicked(None)
+    # Emit the table's signal directly: the window's own start-up timers can clear the table
+    # asynchronously (seen on a slow CI run), which made a click-through version of this flaky.
+    window.table.file_action_failed.emit("open", item)
     assert not window.preview.notice_label.isHidden()
     assert "gone.txt" in window.preview.notice_label.text()
     window.close()
