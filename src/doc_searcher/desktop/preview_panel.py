@@ -3,9 +3,12 @@
 #   - Displays document metadata and rendered HTML snippets.
 #   - Adapts snippet background, border, text color, and highlight marks to dark/light theme.
 #   - Re-renders the active match with a distinct focus color and applies reliable CSS zoom.
+#   - Shows an inline notice when opening a file or revealing its folder fails (missing file,
+#     no handler), from its own buttons or from the results table via show_file_action_failure.
 # Usage notes, dependencies, or assumptions:
 #   - PySide6.QtWidgets, doc_searcher.desktop.theme.ThemeColors.
 
+import os
 import re
 from PySide6.QtWidgets import (
     QWidget,
@@ -27,6 +30,9 @@ from doc_searcher.platform.platform_helper import (
 )
 from doc_searcher.desktop.theme import ThemeColors, get_active_theme
 from doc_searcher.desktop.i18n import tr
+
+
+NOTICE_MILLISECONDS = 8000
 
 
 class PreviewPanel(QWidget):
@@ -87,6 +93,15 @@ class PreviewPanel(QWidget):
         btn_row.addStretch()
         header_layout.addLayout(btn_row)
 
+        # Explains a failed open/reveal; hidden until something goes wrong.
+        self.notice_label = QLabel("")
+        self.notice_label.setWordWrap(True)
+        self.notice_label.setHidden(True)
+        header_layout.addWidget(self.notice_label)
+        self._notice_timer = QTimer(self)
+        self._notice_timer.setSingleShot(True)
+        self._notice_timer.timeout.connect(self._hide_notice)
+
         layout.addWidget(self.header_card)
 
         nav_row = QHBoxLayout()
@@ -144,6 +159,9 @@ class PreviewPanel(QWidget):
             f"font-size: 16px; font-weight: bold; color: {theme.text_primary};"
         )
         self.meta_label.setStyleSheet(f"font-size: 12px; color: {theme.text_muted};")
+        self.notice_label.setStyleSheet(
+            f"font-size: 12px; font-weight: bold; color: {theme.error};"
+        )
         self.path_label.setStyleSheet(f"""
             font-size: 11px;
             color: {theme.text_secondary};
@@ -237,6 +255,8 @@ class PreviewPanel(QWidget):
 
     def display_result(self, item: SearchResultItem, reset_match: bool = True):
         """Display a result, optionally retaining its current highlighted match."""
+        if reset_match:
+            self._hide_notice()
         self.current_item = item
         if not item:
             self._set_empty_state()
@@ -397,12 +417,27 @@ class PreviewPanel(QWidget):
             self._update_match_controls()
 
     def _on_open_file(self):
-        if self.current_item:
-            open_file_with_default_app(self.current_item.path)
+        if self.current_item and not open_file_with_default_app(self.current_item.path):
+            self.show_file_action_failure("open", self.current_item)
 
     def _on_reveal_folder(self):
-        if self.current_item:
-            reveal_in_file_manager(self.current_item.path)
+        if self.current_item and not reveal_in_file_manager(self.current_item.path):
+            self.show_file_action_failure("reveal", self.current_item)
+
+    def show_file_action_failure(self, action: str, item: SearchResultItem):
+        """Explain why opening ("open") or revealing ("reveal") item's file did not work."""
+        if not os.path.exists(item.path):
+            key = "file_missing_notice"
+        else:
+            key = "file_open_failed_notice" if action == "open" else "file_reveal_failed_notice"
+        self.notice_label.setText(tr(self.language, key, name=item.filename))
+        self.notice_label.setHidden(False)
+        self._notice_timer.start(NOTICE_MILLISECONDS)
+
+    def _hide_notice(self):
+        self._notice_timer.stop()
+        self.notice_label.setHidden(True)
+        self.notice_label.setText("")
 
     def _on_copy_path(self):
         if self.current_item:

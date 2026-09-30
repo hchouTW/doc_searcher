@@ -3,6 +3,8 @@
 #   - Displays sortable metadata and highlighted matching excerpts in Dark and Light modes.
 #   - Synchronizes selection with preview panel.
 #   - Supports Enter / double-click to open file and right-click context menu.
+#     A failed open or reveal is reported through file_action_failed(action, item), which the
+#     window forwards to the preview panel's notice.
 #   - Columns can be hidden (File Name is always visible); widths adapt so the visible columns
 #     always fill the viewport, File Name has priority, and long names/paths elide with tooltips.
 #   - The selected row gets a 4 px left bar (theme.selected_bar) painted by a delegate.
@@ -121,6 +123,7 @@ class ResultTable(QTableWidget):
     """Table widget presenting search matches with adaptive high-contrast styling."""
 
     item_selected = Signal(object)  # Emits SearchResultItem or None
+    file_action_failed = Signal(str, object)  # ("open" | "reveal", SearchResultItem)
     visible_columns_changed = Signal(list)  # Emits the visible column ids after a change
 
     HEADER_KEYS = [
@@ -450,16 +453,20 @@ class ResultTable(QTableWidget):
         item = self.get_selected_item()
         self.item_selected.emit(item)
 
+    def _open_item(self, item: SearchResultItem):
+        if not open_file_with_default_app(item.path):
+            self.file_action_failed.emit("open", item)
+
     def _on_double_clicked(self, table_item):
         item = self.get_selected_item()
         if item:
-            open_file_with_default_app(item.path)
+            self._open_item(item)
 
     def keyPressEvent(self, event):
         if event.key() in (Qt.Key_Return, Qt.Key_Enter):
             item = self.get_selected_item()
             if item:
-                open_file_with_default_app(item.path)
+                self._open_item(item)
                 event.accept()
                 return
         super().keyPressEvent(event)
@@ -491,8 +498,9 @@ class ResultTable(QTableWidget):
 
         action = menu.exec(self.viewport().mapToGlobal(pos))
         if action == act_open:
-            open_file_with_default_app(item.path)
+            self._open_item(item)
         elif action == act_reveal:
-            reveal_in_file_manager(item.path)
+            if not reveal_in_file_manager(item.path):
+                self.file_action_failed.emit("reveal", item)
         elif action == act_copy_path:
             QApplication.clipboard().setText(item.path)

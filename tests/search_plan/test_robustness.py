@@ -63,7 +63,7 @@ def test_rob_01c_preview_cycles_do_not_grow_memory_without_bound():
     assert samples[-1] - samples[2] <= 10, samples  # flat, not climbing, over the last cycles
 
 
-def test_rob_02_result_for_a_file_deleted_after_indexing_does_not_crash_the_preview(
+def test_rob_02_result_for_a_file_deleted_after_indexing_explains_itself_in_the_preview(
     scratch, tmp_path, monkeypatch
 ):
     pytest.importorskip("PySide6")
@@ -83,7 +83,9 @@ def test_rob_02_result_for_a_file_deleted_after_indexing_does_not_crash_the_prev
     preview = PreviewPanel()
     preview.display_result(item)  # the stored snippets still render
     assert preview.title_label.text() == "victim.txt"
-    preview._on_open_file()  # DEF-03 (open): fails silently; no message tells the user why
+    preview._on_open_file()  # DEF-03: the panel now says the file is gone
+    assert not preview.notice_label.isHidden()
+    assert "victim.txt" in preview.notice_label.text()
     preview._on_reveal_folder()
     preview._on_copy_path()
 
