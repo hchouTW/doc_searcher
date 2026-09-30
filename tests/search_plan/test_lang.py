@@ -99,17 +99,30 @@ def test_lang_05_whole_word_skips_words_that_merely_contain_the_term(scratch, tm
     (tmp_path / "docs" / "plural.txt").write_text("Only outstandings remain.", encoding="utf-8")
     (tmp_path / "docs" / "single.txt").write_text("One outstanding result.", encoding="utf-8")
     scratch.run([tmp_path / "docs"])
-    assert scratch.names("outstandings") == {"plural.txt"}
-    assert scratch.names("outstanding") == {"single.txt"}  # exact token, no substring matching
+    # Stemming: every form finds every document. Whole word asks for the exact word only.
+    assert scratch.names("outstanding") == {"single.txt", "plural.txt"}
     assert scratch.names("outstanding", whole_word=True) == {"single.txt"}
     assert scratch.names("outstandings", whole_word=True) == {"plural.txt"}
 
 
-def test_lang_07_no_stemming_or_plural_matching_today(env):
-    # Characterisation (test plan OQ-2 is still open): only the exact token matches.
-    assert env.search("outstand") == {"en/cases.txt"}  # the literal word "outstand" in cases.txt
-    assert env.search("outstandings") == {"en/cases.txt"}
-    assert SYMBOLS not in env.search("outstand")
+def test_lang_07_english_word_forms_match_each_other(env):
+    # Decided 2026-09-30 (OQ-2): missing stemming is not acceptable. SQLite's porter tokenizer
+    # indexes outstand / outstanding / outstandings under one stem.
+    expected = {"en/cases.txt", SYMBOLS}
+    assert (
+        env.search("outstand")
+        == env.search("outstandings")
+        == env.search("outstanding")
+        == expected
+    )
+    assert env.search("Outstanding") == expected
+
+
+def test_lang_07_exact_options_switch_stemming_off(env):
+    assert env.search("outstand", whole_word=True) == {"en/cases.txt"}  # the literal word outstand
+    # match case is a literal check too: "outstanding" is in both files, "Outstanding" only one.
+    assert env.search("outstanding", match_case=True) == {"en/cases.txt", SYMBOLS}
+    assert env.search("Outstanding", match_case=True) == {"en/cases.txt"}
 
 
 def test_lang_11_boolean_operators(env):

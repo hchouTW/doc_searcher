@@ -12,6 +12,8 @@
 #     narrowed by FTS on their words, then confirmed by a literal check on the stored text, as are
 #     Chinese terms jieba cannot segment into words (升等 would otherwise match 升 and 等 apart);
 #     a query made only of punctuation is answered with the LIKE search.
+#   - English word forms match each other (the index uses SQLite's porter tokenizer); match case
+#     and whole word ask for the exact word and switch that off, as does filename search.
 #   - Folds Simplified/Traditional Chinese (search.script_fold) in queries, literal re-checks,
 #     filename search and the LIKE fallback; regex mode matches stored text exactly as written.
 #   - Generates snippet contexts with highlighted HTML <mark> tags and location indicators.
@@ -31,6 +33,7 @@ from doc_searcher.storage.database import Database
 from doc_searcher.storage.errors import classify
 from doc_searcher.platform.paths import canonical_path, canonical_text
 from doc_searcher.search.script_fold import fold, script_regex
+from doc_searcher.search.stemming import matches_stem, stem_regex_source, stem_spec
 from doc_searcher.search.regex_engine import (
     Deadline,
     RegexError,
@@ -458,7 +461,9 @@ class DocumentSearcher:
 
         results = []
         for row in rows:
-            if not self._literal_matches(row["filename"], filename_query, match_case, whole_word):
+            if not self._literal_matches(
+                row["filename"], filename_query, match_case, whole_word, stemming=False
+            ):
                 continue
             snippets = generate_highlighted_snippets(
                 row["filename"],
@@ -467,6 +472,7 @@ class DocumentSearcher:
                 context_chars=80,
                 case_sensitive=match_case,
                 whole_word=whole_word,
+                stemming=False,
             )
             results.append(
                 SearchResultItem(
@@ -638,7 +644,15 @@ class DocumentSearcher:
         )
 
     @staticmethod
-    def _literal_matches(content: str, term: str, match_case: bool, whole_word: bool) -> bool:
+    def _literal_matches(
+        content: str, term: str, match_case: bool, whole_word: bool, stemming: bool = True
+    ) -> bool:
+        spec = stem_spec(term) if stemming and not (match_case or whole_word) else None
+        if spec is not None:  # another form of the same English word counts, as in the index
+            return any(
+                matches_stem(spec, found.group(0))
+                for found in re.finditer(stem_regex_source(spec), content, re.IGNORECASE)
+            )
         expression = script_regex(term)
         if whole_word:
             expression = rf"(?<!\w){expression}(?!\w)"

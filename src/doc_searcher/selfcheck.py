@@ -57,6 +57,14 @@ def _script_fold() -> str:
     return "Traditional-to-Simplified table loaded"
 
 
+def _stemming() -> str:
+    from doc_searcher.search.stemming import stem
+
+    if stem("outstandings") != stem("outstanding"):
+        raise RuntimeError("FTS5 porter tokenizer is unavailable or does not stem")
+    return "porter stemmer works"
+
+
 def _fts5() -> str:
     conn = sqlite3.connect(":memory:")
     try:
@@ -93,6 +101,7 @@ def run_checks() -> List[CheckResult]:
     results.append(_check("jieba dictionary", _jieba))
     results.append(_check("script folding table", _script_fold))
     results.append(_check("sqlite fts5", _fts5))
+    results.append(_check("english stemming", _stemming))
     results.append(_check("qt widgets", _qt))
     results += [_check(f"asset {relative}", _asset(relative)) for relative in ASSETS]
     return results
