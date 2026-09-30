@@ -2,8 +2,11 @@
 
 import os
 import time
+from pathlib import Path
 
 import pytest
+
+from search_plan.helpers import make_scratch
 
 
 def locations(item):
@@ -149,3 +152,50 @@ def test_fmt_12_unavailable_folder_keeps_its_index(scratch, tmp_path):
     parked.rename(docs)
     scratch.run([docs])
     assert scratch.names("QAREMOVABLE") == {"file.txt"}
+
+
+# ---- legacy Office files (.doc, .ppt, .xls) from tests/sample_files -----------------------------
+SAMPLE_FILES = Path(__file__).resolve().parents[1] / "sample_files"
+
+
+@pytest.fixture(scope="module")
+def legacy(tmp_path_factory):
+    """tests/sample_files indexed: Word/PowerPoint-authored .doc/.ppt next to their modern twins."""
+    scratch = make_scratch(tmp_path_factory.mktemp("legacy"))
+    stats = scratch.run([SAMPLE_FILES])
+    assert stats["indexed"] >= 8 and stats["failed"] == 0
+    yield scratch
+    scratch.db.close()
+
+
+def _hits(legacy, query):
+    return {item.filename: item for item in legacy.searcher.search(query, limit=50)}
+
+
+def test_fmt_doc_word_authored_file_is_indexed_and_searchable(legacy):
+    hits = _hits(legacy, "保密協定條款")
+    assert {"sample_contract.doc", "sample_contract.docx"} <= set(hits)
+    item = hits["sample_contract.doc"]
+    assert item.file_type == "doc"
+    assert "<mark" in item.segments[0].snippets[0]
+    assert "sample_contract.doc" in _hits(legacy, "專案預算")
+
+
+def test_fmt_ppt_powerpoint_authored_file_is_indexed_and_searchable(legacy):
+    hits = _hits(legacy, "組織願景")
+    assert {"sample_presentation.ppt", "sample_presentation.pptx"} <= set(hits)
+    item = hits["sample_presentation.ppt"]
+    assert item.file_type == "ppt"
+    assert ("slide", "1") in locations(item)  # .ppt text arrives as one slide-1 block (README)
+    assert "sample_presentation.ppt" in _hits(legacy, "季度營運業務報告")
+
+
+def test_fmt_legacy_simplified_query_finds_traditional_text(legacy):
+    assert "sample_contract.doc" in _hits(legacy, "保密协定条款")
+    assert "sample_presentation.ppt" in _hits(legacy, "组织愿景")
+
+
+def test_fmt_xls_legacy_workbook_is_indexed_and_searchable(legacy):
+    hits = _hits(legacy, "預算")
+    assert "sample_legacy_financial.xls" in hits
+    assert hits["sample_legacy_financial.xls"].file_type == "xls"

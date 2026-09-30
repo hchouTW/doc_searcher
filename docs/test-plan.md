@@ -234,7 +234,7 @@ Platform figures measured on the CI runners (2026-09-30): Linux peaks at about 3
 - ~~OQ-3~~ **Resolved:** `.json`/`.log` not supported.
 - ~~OQ-4~~ **Resolved 2026-09-30:** budgets in Performance Budgets approved.
 - ~~OQ-5~~ **Resolved:** no OCR.
-- **OQ-6** Are real (non-synthetic) sample documents available, and are they safe to store in the repo?
+- ~~OQ-6~~ **Resolved 2026-09-30 for legacy formats:** Office-authored `.doc` and `.ppt` samples were added to `tests/sample_files/` and are used by `tests/search_plan/test_formats.py`. The generated dataset still cannot author them (see `unavailable` in its manifest).
 - **OQ-7** Should turning subfolders off after indexing purge or retain entries (DIR-03)?
 - **OQ-8** For one-to-many characters (發/髮, 干/幹/乾), is over-matching acceptable? Suggested: yes, prefer recall.
 - **OQ-9** Should highlights in the preview show the document's original characters (recommended) even when the query was typed in the other script?
