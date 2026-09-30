@@ -43,6 +43,9 @@ LANGUAGES = ("zh-TW", "en-US")
 THEMES = ("light", "dark")
 THEME_MODES = ("auto", "dark", "light")
 MAX_DEBOUNCE_MS = 2000
+# Result-table columns in their fixed display order; "filename" can never be hidden.
+COLUMN_IDS = ("type", "filename", "hits", "size", "modified", "path")
+REQUIRED_COLUMN = "filename"
 DATA_DIR_ENV = "DOC_SEARCHER_DATA_DIR"
 
 logger = logging.getLogger(__name__)
@@ -87,6 +90,7 @@ class Settings:
     last_updated_at: Optional[float] = None
     exclude_patterns: List[str] = field(default_factory=lambda: DEFAULT_EXCLUDE_PATTERNS.copy())
     search_filters: SearchFilters = field(default_factory=SearchFilters)
+    visible_columns: List[str] = field(default_factory=lambda: list(COLUMN_IDS))
 
 
 # ------------------------------------------------------------------ validation
@@ -105,6 +109,15 @@ def _validate_extensions(value: Any) -> Optional[List[str]]:
     if not items:
         return None
     return [item.lower() if item.startswith(".") else "." + item.lower() for item in items]
+
+
+def _validate_columns(value: Any) -> Optional[List[str]]:
+    """Known column ids in display order; the required column is always kept."""
+    if not isinstance(value, list):
+        return None
+    wanted = {item for item in value if isinstance(item, str)}
+    wanted.add(REQUIRED_COLUMN)
+    return [column for column in COLUMN_IDS if column in wanted]
 
 
 def _validate_filters(value: Any, problems: List[str]) -> SearchFilters:
@@ -174,6 +187,9 @@ def _validate(raw: Dict[str, Any], default_db_path: str) -> Tuple[Settings, List
     if "exclude_patterns" in raw:
         patterns = _string_list(raw["exclude_patterns"])
         take("exclude_patterns", patterns, patterns is not None)
+    if "visible_columns" in raw:
+        columns = _validate_columns(raw["visible_columns"])
+        take("visible_columns", columns, columns is not None)
     if "search_filters" in raw:
         settings.search_filters = _validate_filters(raw["search_filters"], problems)
     return settings, problems
@@ -368,6 +384,15 @@ class AppConfig:
     @language.setter
     def language(self, language: str):
         self.settings.language = language if language in LANGUAGES else "zh-TW"
+        self.save()
+
+    @property
+    def visible_columns(self) -> List[str]:
+        return self.settings.visible_columns
+
+    @visible_columns.setter
+    def visible_columns(self, columns: List[str]):
+        self.settings.visible_columns = _validate_columns(columns) or list(COLUMN_IDS)
         self.save()
 
     @property

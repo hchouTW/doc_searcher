@@ -126,3 +126,32 @@ def test_setters_normalize_values(tmp_path):
     config.search_filters = {"regex": True, "bogus": 1}
     assert config.search_filters["regex"] is True
     assert "bogus" not in config.search_filters
+
+
+def test_visible_columns_default_and_legacy_file(tmp_path):
+    from doc_searcher.config import COLUMN_IDS
+
+    path = write(tmp_path / "config.json", {"language": "en-US"})
+    assert AppConfig(path).visible_columns == list(COLUMN_IDS)
+
+
+@pytest.mark.parametrize(
+    "stored, expected",
+    [
+        (["hits", "filename"], ["filename", "hits"]),
+        (["size", "size", "bogus", 3], ["filename", "size"]),
+        ([], ["filename"]),
+        ("path", ["type", "filename", "hits", "size", "modified", "path"]),
+    ],
+)
+def test_visible_columns_are_validated(tmp_path, stored, expected):
+    path = write(tmp_path / "config.json", {"visible_columns": stored, "language": "en-US"})
+    config = AppConfig(path)
+    assert config.visible_columns == expected
+    assert config.language == "en-US"
+
+
+def test_visible_columns_round_trip_and_lock(tmp_path):
+    path = tmp_path / "config.json"
+    AppConfig(path).visible_columns = ["path"]
+    assert AppConfig(path).visible_columns == ["filename", "path"]
