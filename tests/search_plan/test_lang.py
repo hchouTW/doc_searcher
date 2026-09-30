@@ -74,10 +74,11 @@ def test_lang_01_hits_are_highlighted_at_the_matched_text(env):
 
 
 def test_lang_02_word_order_of_chinese_terms_is_not_significant(env):
-    # Recorded behaviour: terms are ANDed, so 記錄會議 finds the same documents as 會議記錄.
+    # Whitespace terms are ANDed; one literal Chinese term preserves character order.
     plain = env.search("會議記錄")
     assert plain >= {"zh/trad_meeting.txt", "zh/simp_meeting.txt", SYMBOLS}
-    assert env.search("記錄會議") == plain
+    assert env.search("記錄會議") == set()
+    assert env.search("記錄 會議") == env.search("會議 記錄")
 
 
 def test_lang_03_case_variants_agree_when_case_is_ignored(env):

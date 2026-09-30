@@ -31,7 +31,9 @@ def _v120_snippets(content, pattern, max_snippets=3, context_chars=50):
 
     matches = list(pattern.finditer(content))
     snippets, used_ranges = [], []
-    for match in matches[:max_snippets]:
+    for match in matches:
+        if len(snippets) >= max_snippets:
+            break
         start_idx = max(0, match.start() - context_chars)
         end_idx = min(len(content), match.end() + context_chars)
         if any(not (end_idx < u_start or start_idx > u_end) for u_start, u_end in used_ranges):
@@ -101,4 +103,4 @@ def test_huge_match_is_truncated():
 
 def test_zero_width_matches_produce_no_empty_marks():
     snippets = generate_regex_highlighted_snippets("foo bar", compile_user_regex(r"(?=bar)"))
-    assert snippets == ["foo bar"]  # the lookahead matches, but there is no text to highlight
+    assert "zero-width" in snippets[0] and "<mark" not in snippets[0] #  # the lookahead matches, but there is no text to highlight

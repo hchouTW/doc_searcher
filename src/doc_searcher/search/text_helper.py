@@ -13,7 +13,6 @@
 #   - Used by indexer, searcher, and UI preview panel.
 
 import html
-import itertools
 import re
 from functools import lru_cache
 from typing import Any, Dict, List, Optional, Tuple
@@ -151,7 +150,7 @@ def generate_regex_highlighted_snippets(
 ) -> List[str]:
     """Generate escaped snippets from an already validated regular expression.
 
-    Only the first max_snippets matches are examined, consumed lazily, so memory does not grow
+    Matches are examined until max_snippets contexts are rendered, lazily, so memory does not grow
     with the number of matches. A match longer than MAX_MATCH_CHARS is shown truncated. With a
     deadline, pattern must come from regex_engine (it accepts timeout=).
     """
@@ -163,7 +162,9 @@ def generate_regex_highlighted_snippets(
     matches = pattern.finditer(content, **Deadline.timeout_kwargs(deadline))
     # Like the original eager version, only the first max_snippets matches are considered
     # (overlapping ones are skipped), but they are pulled lazily: memory stays constant.
-    for match in itertools.islice(matches, max_snippets):
+    for match in matches:
+        if len(snippets) >= max_snippets:
+            break
         shown_end = min(match.end(), match.start() + MAX_MATCH_CHARS)
         start_idx = max(0, match.start() - context_chars)
         end_idx = min(len(content), shown_end + context_chars)
@@ -177,7 +178,10 @@ def generate_regex_highlighted_snippets(
         cursor = 0
         for local_match in pattern.finditer(chunk, **Deadline.timeout_kwargs(deadline)):
             if not local_match.group(0):
-                continue  # zero-width matches (e.g. lookarounds) have nothing to highlight
+                pieces.append(html.escape(chunk[cursor : local_match.start()]))
+                pieces.append('<span title="zero-width">│</span>')
+                cursor = local_match.end()
+                continue
             pieces.append(html.escape(chunk[cursor : local_match.start()]))
             pieces.append(
                 '<mark style="background-color: #ffeb3b; color: #000; '

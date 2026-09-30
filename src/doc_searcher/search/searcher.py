@@ -31,9 +31,10 @@ import os
 import re
 import sqlite3
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, Iterable, List, Optional
+from typing import Any, Callable, Iterable, List, Optional
 import jieba
 
+from doc_searcher.search.matches import iter_locations, occurrence_snippets
 from doc_searcher.search.cjk_index import candidate_expression
 from doc_searcher.search.query import parse_query, QuerySyntaxError
 from doc_searcher.storage.database import Database
@@ -49,7 +50,6 @@ from doc_searcher.search.regex_engine import (
 from doc_searcher.indexing.scanner import is_absolute_pattern
 from doc_searcher.search.text_helper import (
     generate_highlighted_snippets,
-    generate_regex_highlighted_snippets,
     has_word_char,
 )
 
@@ -62,6 +62,8 @@ class SegmentMatch:
     segment_id: str
     segment_type: str
     snippets: List[str]
+    segment_row_id: int = 0
+    match_count: int = 0
 
 
 @dataclass
@@ -76,6 +78,15 @@ class SearchResultItem:
     total_matches: int
     segments: List[SegmentMatch] = field(default_factory=list)
     ctime: float = 0.0
+    count_complete: bool = True
+
+    @property
+    def segment_count(self):
+        return len(self.segments)
+
+    @property
+    def snippet_count(self):
+        return sum(len(s.snippets) for s in self.segments)
 
 
 @dataclass
@@ -157,6 +168,8 @@ class DocumentSearcher:
         regex: bool = False,
         search_roots: Optional[List[str]] = None,
         cancel_check: Optional[Callable[[], bool]] = None,
+        page_after=None,
+        page_meta=None,
     ) -> List[SearchResultItem]:
         """Search documents matching query string and optional metadata filters.
 
@@ -187,7 +200,7 @@ class DocumentSearcher:
                 limit,
                 match_case,
                 whole_word,
-                cancel_check,
+                cancel_check, page_after, page_meta,
             )
         negative_only = re.fullmatch(r'NOT\s+(?:"([^"]+)"|(\S+))', clean_query, re.IGNORECASE)
         if negative_only:
@@ -256,7 +269,8 @@ class DocumentSearcher:
                     data["rank"] = ranks.get(sid, 0.0)
                     yield data
         keywords = [t for t in parsed.root.terms() if t]
-        return self._aggregate_rows(rows(), keywords, limit, clean_query, match_case, whole_word)
+        return self._aggregate_rows(rows(), keywords, limit, clean_query, match_case, whole_word,
+                                    cancel_check=cancel_check, page_after=page_after, page_meta=page_meta)
 
     @staticmethod
     def _parse(query):
@@ -271,7 +285,7 @@ class DocumentSearcher:
     def search_page(self, query_str, *, cursor=None, limit=200, **options):
         if limit < 1:
             raise ValueError("limit must be positive")
-        fingerprint = hashlib.sha256(json.dumps([query_str, options], sort_keys=True,
+        fingerprint = hashlib.sha256(json.dumps([query_str, {k: v for k, v in options.items() if k != "cancel_check"}], sort_keys=True,
             default=str).encode()).hexdigest()
         conn = self.db.get_connection()
         # All reads in a page share a SQLite snapshot while other threads may update the index.
@@ -287,13 +301,20 @@ class DocumentSearcher:
                     after = tuple(token[2])
                 except (ValueError, TypeError, KeyError, IndexError) as exc:
                     raise SearchQueryError("索引或搜尋條件已變更，請重新搜尋。", "stale_cursor") from exc
-            items = self.search(query_str, limit=2**63-1, **options)
-            items.sort(key=lambda x: (x.rank_score, x.doc_id))
-            total = len(items)
-            if after is not None:
-                items = [x for x in items if (x.rank_score, x.doc_id) > after]
-            more = len(items) > limit
-            items = items[:limit]
+            meta = {}
+            special = not options.get("regex") and (self._extract_filename_query(query_str.strip()) is not None
+                or re.fullmatch(r'NOT\s+(?:"[^\"]+"|\S+)', query_str.strip(), re.IGNORECASE))
+            if special:
+                items = self.search(query_str, limit=2**63-1, **options)
+                items.sort(key=lambda x: (x.rank_score, x.doc_id))
+                total = len(items)
+                if after is not None:
+                    items = [x for x in items if (x.rank_score, x.doc_id) > after]
+                more = len(items) > limit
+                items = items[:limit]
+            else:
+                items = self.search(query_str, limit=limit, page_after=after, page_meta=meta, **options)
+                total, more = meta.get("total", 0), meta.get("more", False)
             next_cursor = None
             if more:
                 last = items[-1]
@@ -312,67 +333,54 @@ class DocumentSearcher:
         regex_pattern: Optional[Any] = None,
         deadline: Optional[Deadline] = None,
         verify_literal: bool = False,
+        cancel_check=None, page_after=None, page_meta=None,
     ) -> List[SearchResultItem]:
         """Aggregate matching segment rows into ranked document results.
 
         verify_literal re-checks every term against the stored text (as match_case and
         whole_word already do); used when FTS could only search part of a term.
         """
-        doc_map: Dict[int, SearchResultItem] = {}
+        groups = {}
+        parsed = self._parse(query) if regex_pattern is None else None
         for row in rows:
-            doc_id = int(row["doc_id"])
-            seg_id = str(row["segment_id"])
-            seg_type = str(row["segment_type"])
+            if cancel_check and cancel_check():
+                raise SearchQueryError("搜尋已取消。", "cancelled")
             content = row["content"]
-            rank = float(row["rank"])
-
-            if regex_pattern is None and (match_case or whole_word or verify_literal):
-                if not self._matches_query_options(content, query, match_case, whole_word):
-                    continue
-
             if regex_pattern is not None:
-                snippets = generate_regex_highlighted_snippets(
-                    content, regex_pattern, max_snippets=3, context_chars=60, deadline=deadline
-                )
-            else:
-                snippets = generate_highlighted_snippets(
-                    content,
-                    keywords,
-                    max_snippets=3,
-                    context_chars=60,
-                    case_sensitive=match_case,
-                    whole_word=whole_word,
-                )
-            if not snippets:
+                if regex_pattern.search(content, **Deadline.timeout_kwargs(deadline)) is None:
+                    continue
+            elif verify_literal and not parsed.root.evaluate(lambda term, text=content: self._literal_matches(
+                    text, term, match_case, whole_word)):
                 continue
-
-            if doc_id not in doc_map:
-                doc_map[doc_id] = SearchResultItem(
-                    doc_id=doc_id,
-                    path=row["path"],
-                    filename=row["filename"],
-                    file_type=row["file_type"],
-                    file_size=row["file_size"],
-                    mtime=row["mtime"],
-                    ctime=row["ctime"],
-                    rank_score=rank,
-                    total_matches=len(snippets),
-                    segments=[
-                        SegmentMatch(segment_id=seg_id, segment_type=seg_type, snippets=snippets)
-                    ],
-                )
-            else:
-                doc_map[doc_id].total_matches += len(snippets)
-                # Keep the best (lowest) rank score
-                if rank < doc_map[doc_id].rank_score:
-                    doc_map[doc_id].rank_score = rank
-                doc_map[doc_id].segments.append(
-                    SegmentMatch(segment_id=seg_id, segment_type=seg_type, snippets=snippets)
-                )
-
-        results = list(doc_map.values())
-        results.sort(key=lambda item: (item.rank_score, item.doc_id))
-        return results[:limit]
+            doc_id = int(row["doc_id"])
+            groups.setdefault(doc_id, []).append(row)
+        ranking = sorted(groups, key=lambda doc_id: (min(float(r["rank"]) for r in groups[doc_id]), doc_id))
+        if page_meta is not None:
+            page_meta["total"] = len(ranking)
+        if page_after is not None:
+            ranking = [doc_id for doc_id in ranking if
+                       (min(float(r["rank"]) for r in groups[doc_id]), doc_id) > page_after]
+        if page_meta is not None:
+            page_meta["more"] = len(ranking) > limit
+        results = []
+        for doc_id in ranking[:limit]:
+            first = groups[doc_id][0]
+            item = SearchResultItem(doc_id, first["path"], first["filename"], first["file_type"],
+                first["file_size"], first["mtime"], min(float(r["rank"]) for r in groups[doc_id]),
+                0, ctime=first["ctime"])
+            for row in groups[doc_id]:
+                content = row["content"]
+                terms = keywords if parsed is None else parsed.root.positives(
+                    lambda term, text=content: self._literal_matches(text, term, match_case, whole_word))
+                options = dict(regex_pattern=regex_pattern, deadline=deadline, cancel_check=cancel_check,
+                               match_case=match_case, whole_word=whole_word)
+                count = sum(1 for _ in iter_locations(content, terms, **options))
+                snippets = occurrence_snippets(content, terms, **options)
+                sid = row["segment_row_id"] if "segment_row_id" in row.keys() else 0
+                item.total_matches += count
+                item.segments.append(SegmentMatch(str(row["segment_id"]), row["segment_type"], snippets, sid, count))
+            results.append(item)
+        return results
 
     @staticmethod
     def _build_type_clause(type_filter: str) -> str:
@@ -542,7 +550,7 @@ class DocumentSearcher:
                     mtime=row["mtime"],
                     ctime=row["ctime"],
                     rank_score=-1000.0,
-                    total_matches=1,
+                    total_matches=sum(1 for _ in iter_locations(row["filename"], [filename_query], match_case=match_case, whole_word=whole_word, stemming=False)),
                     segments=[
                         SegmentMatch(
                             segment_id="",
@@ -620,6 +628,7 @@ class DocumentSearcher:
         match_case: bool,
         whole_word: bool,
         cancel_check: Optional[Callable[[], bool]] = None,
+        page_after=None, page_meta=None,
     ) -> List[SearchResultItem]:
         """Run a validated user regular expression against indexed segments, within a budget."""
         try:
@@ -629,7 +638,7 @@ class DocumentSearcher:
 
         rows = self.db.get_connection().execute(
             f"""
-                SELECT s.doc_id, s.segment_id, s.segment_type, s.content,
+                SELECT s.id AS segment_row_id, s.doc_id, s.segment_id, s.segment_type, s.content,
                        0.0 AS rank, d.path, d.filename, d.file_type,
                        d.file_size, d.mtime, d.ctime
                 FROM doc_segments s
@@ -649,7 +658,8 @@ class DocumentSearcher:
 
         try:
             return self._aggregate_rows(
-                checked_rows(), [], limit, expression, regex_pattern=pattern, deadline=deadline
+                checked_rows(), [], limit, expression, regex_pattern=pattern, deadline=deadline,
+                cancel_check=cancel_check, page_after=page_after, page_meta=page_meta
             )
         except TimeoutError as exc:
             raise SearchQueryError(
