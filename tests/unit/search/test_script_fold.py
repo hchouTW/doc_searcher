@@ -1,5 +1,6 @@
 """Simplified/Traditional Chinese matching (test plan LANG-06a-c, e, f)."""
 
+import os
 import re
 import sqlite3
 
@@ -101,7 +102,7 @@ def test_case_and_whole_word_options_keep_cross_script_matching(
 
 def test_like_fallback_matches_across_scripts(searcher):
     rows = searcher._fallback_like_search(["会议记录"], "", [], 10)
-    assert {r["path"].rsplit("/", 1)[-1] for r in rows} == {"trad.txt", "simp.txt"}
+    assert {os.path.basename(r["path"]) for r in rows} == {"trad.txt", "simp.txt"}
 
 
 @pytest.mark.parametrize("query", ["会议记录", "會議記錄"])

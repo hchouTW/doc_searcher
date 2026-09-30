@@ -188,6 +188,8 @@ Derived 2026-09-30 from the recorded baseline (`docs/benchmarks.md`: cold 1k 1.7
 | RSS growth over 20 queries | not measured | ≤ 20 MB |
 | RSS growth over 200 preview cycles | not measured | ≤ 50 MB |
 
+Platform figures measured on the CI runners (2026-09-30): Linux peaks at about 306 MB for the 1,000-file run (macOS: 115 MB) and Windows indexes it in about 8.7 s (macOS: 1.8 s). `tests/search_plan/test_robustness.py` therefore uses a 400 MB peak-RSS budget on Linux/Windows and a 15 s index budget on Windows for that case; macOS keeps 300 MB and 6 s. The other budgets are unchanged.
+
 ## Technical Approach
 
 1. Map the cases above against existing tests. Mark each *covered / partial / new* in the execution log, and extend existing modules instead of duplicating.

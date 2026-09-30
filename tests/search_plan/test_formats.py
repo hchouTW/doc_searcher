@@ -99,7 +99,7 @@ def test_pdf_03_scanned_pdf_gives_no_hits_and_no_error(env):
     assert env.search("QASCANkeyword") == set()  # no OCR
     row = (
         env.db.get_connection()
-        .execute("SELECT total_segments, error FROM documents WHERE path LIKE '%/scan/scanned.pdf'")
+        .execute("SELECT total_segments, error FROM documents WHERE filename = 'scanned.pdf'")
         .fetchone()
     )
     assert row is not None and row["error"] is None
@@ -108,7 +108,7 @@ def test_pdf_03_scanned_pdf_gives_no_hits_and_no_error(env):
 def test_pdf_04_user_password_pdf_is_recorded_as_unreadable(env):
     row = (
         env.db.get_connection()
-        .execute("SELECT error FROM documents WHERE path LIKE '%/bad/user_password.pdf'")
+        .execute("SELECT error FROM documents WHERE filename = 'user_password.pdf'")
         .fetchone()
     )
     assert row is not None and "password" in row["error"].lower()
