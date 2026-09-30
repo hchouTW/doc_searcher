@@ -61,7 +61,15 @@ class SyntaxSearchInput(QPlainTextEdit):
         self.setTabChangesFocus(True)
         self.setFixedHeight(42)
         self.highlighter = QuerySyntaxHighlighter(self.document())
-        self.textChanged.connect(lambda: self.textChangedWithText.emit(self.text()))
+        self._last_emitted_text = self.text()
+        self.textChanged.connect(self._emit_text_change)
+
+    def _emit_text_change(self):
+        # Rehighlighting also emits QTextDocument changes; only text edits start a search.
+        text = self.text()
+        if text != self._last_emitted_text:
+            self._last_emitted_text = text
+            self.textChangedWithText.emit(text)
 
     def sizeHint(self):
         return QSize(280, 42)

@@ -86,3 +86,7 @@ engine with a timeout: stdlib `re` cannot be interrupted, and a pattern such as 
 the search thread indefinitely (> 10 s on 28 characters), blocking all later searches until the
 app restarted. **Decision needed:** this exceeds the proposed 1.25× regex budget; accepting it
 means the regex budget becomes ≤ 1.5× baseline.
+
+## Search completeness — 2026-10-01
+
+See [validation and before/after measurements](benchmarks/search-completeness-validation.md). Correct occurrence counting and Office source extraction add measurable work; the record distinguishes approved absolute budgets from proposed relative budgets.

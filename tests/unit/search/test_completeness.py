@@ -113,3 +113,17 @@ def test_cjk_migration_rollback_and_rebuild_without_files(corpus, monkeypatch):
     assert DocumentSearcher(rebuilt).search("計畫")
     assert DocumentSearcher(rebuilt).search("𠀀")
     rebuilt.close()
+
+
+@pytest.mark.parametrize("query", ['"AND"', '"OR"', '"NOT"'])
+def test_quoted_operator_is_a_literal(corpus, query):
+    _, searcher, save = corpus
+    save("operators.txt", ["AND OR NOT"])
+    assert [x.filename for x in searcher.search(query)] == ["operators.txt"]
+
+
+def test_empty_phrase_does_not_list_every_document(corpus):
+    _, searcher, save = corpus
+    save("text.txt", ["budget"])
+    assert searcher.search('""') == []
+    assert [x.filename for x in searcher.search('budget ""')] == ["text.txt"]

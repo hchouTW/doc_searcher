@@ -245,3 +245,7 @@ Platform figures measured on the CI runners (2026-09-30): Linux peaks at about 3
 - `README.md`, `docs/baseline.md`, `docs/benchmarks.md`.
 - `src/doc_searcher/parsers/__init__.py`, `src/doc_searcher/desktop/i18n.py`, `src/doc_searcher/search/text_helper.py`.
 - Authoring: task-authoring skill template and acceptance-criteria guide.
+
+## Search completeness validation
+
+The [2026-10-01 validation record](benchmarks/search-completeness-validation.md) maps A1–A5, B1–B4, C1–C3 and V1 to regressions, migration checks, UI checks, and 1k/10k measurements. Added-index size and full-count thresholds remain proposals pending maintainer agreement. Existing approved budgets remain unchanged.

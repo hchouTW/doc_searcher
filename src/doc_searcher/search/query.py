@@ -88,10 +88,14 @@ def parse_query(query: str) -> ParsedQuery:
                 raise QuerySyntaxError("repeated_operator")
             parts.append(operator)
         else:
+            if not token.strip('"'):
+                continue
             if parts and isinstance(parts[-1], Node):
                 parts.append("IMPLICIT")
             parts.append(Node(term=token.strip('"')))
-    if not parts or isinstance(parts[-1], str):
+    if not parts:
+        return ParsedQuery(Node(term=""))
+    if isinstance(parts[-1], str):
         raise QuerySyntaxError("operator_position")
     for operator in ("IMPLICIT", "NOT", "AND", "OR"):
         i = 1

@@ -471,7 +471,9 @@ def test_preview_zoom_changes_rendered_css_font_size():
     assert preview.browser.property("preview_font_px") == 13
 
 
-def test_preview_navigates_actual_occurrences_asynchronously(tmp_path):
+@pytest.mark.parametrize("language", ["zh-TW", "en-US"])
+@pytest.mark.parametrize("theme", [LIGHT_PALETTE, DARK_PALETTE])
+def test_preview_navigates_actual_occurrences_asynchronously(tmp_path, language, theme):
     from doc_searcher.storage.database import Database
     from doc_searcher.search.searcher import DocumentSearcher
     from doc_searcher.search.text_helper import tokenize_for_fts
@@ -484,6 +486,8 @@ def test_preview_navigates_actual_occurrences_asynchronously(tmp_path):
           "tokenized_content": tokenize_for_fts(text)}])
     page = DocumentSearcher(db).search_page("會議")
     preview = PreviewPanel()
+    preview.set_language(language)
+    preview.apply_theme(theme)
     preview.set_search_context(db, "會議", {}, page.revision)
     preview.display_result(page.items[0])
     for i in range(8):
@@ -961,7 +965,8 @@ def test_preview_ignores_context_after_deselection(tmp_path):
     db.close()
 
 
-@pytest.mark.parametrize("language,theme", [("zh-TW", DARK_PALETTE), ("en-US", LIGHT_PALETTE)])
+@pytest.mark.parametrize("language", ["zh-TW", "en-US"])
+@pytest.mark.parametrize("theme", [LIGHT_PALETTE, DARK_PALETTE])
 def test_quality_list_and_force_reprocess_ui(tmp_path, language, theme):
     from doc_searcher.storage.database import Database
     from doc_searcher.indexing.service import IndexingService, IndexRequest
@@ -998,5 +1003,46 @@ def test_quality_list_and_force_reprocess_ui(tmp_path, language, theme):
         app.processEvents()
         time.sleep(.01)
     assert window.db.revision() > old_revision
+    window.close()
+    app.processEvents()
+
+
+@pytest.mark.parametrize("language", ["zh-TW", "en-US"])
+@pytest.mark.parametrize("theme", [LIGHT_PALETTE, DARK_PALETTE])
+def test_document_continuation_ui(tmp_path, language, theme):
+    from doc_searcher.storage.database import Database
+    app = _app()
+    config = AppConfig(tmp_path / "config.json")
+    config.db_path = str(tmp_path / "index.db")
+    config.language = language
+    db = Database(config.db_path)
+    for index in range(202):
+        db.save_document_index(str(tmp_path / f"{index:03}.txt"), "txt", 6, 1,
+            [{"segment_id": "1", "segment_type": "section", "content": "會議",
+              "tokenized_content": "会 议"}])
+    db.close()
+    window = MainWindow(config)
+    window.apply_theme(theme)
+    window.search_input.setText("會議")
+    window.search_timer.stop()
+    window._trigger_search()
+    def wait_for(count):
+        deadline = time.monotonic() + 5
+        while (len(window._loaded_results) != count or window.search_worker) and time.monotonic() < deadline:
+            app.processEvents()
+            time.sleep(.01)
+        assert len(window._loaded_results) == count
+        assert window.search_worker is None
+    wait_for(200)
+    window.resize(1300, 850)
+    window.show()
+    app.processEvents()
+    assert window.sidebar_scroll.horizontalScrollBar().maximum() == 0
+    assert not window.load_more_button.isHidden()
+    assert window._result_page.has_more
+    window._load_more_results()
+    wait_for(202)
+    assert window.load_more_button.isHidden()
+    assert len({item.doc_id for item in window._loaded_results}) == 202
     window.close()
     app.processEvents()

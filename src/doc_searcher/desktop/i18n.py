@@ -384,7 +384,7 @@ for _language, _labels in {
         "quality_success": "擷取成功", "quality_empty": "無可搜尋文字", "quality_partial": "部分擷取",
         "quality_unknown": "擷取品質未知", "quality_corrupt": "解析失敗", "quality_unreadable": "無法讀取",
         "quality_encrypted": "需要密碼", "quality_unsupported": "不支援格式", "quality_dependency_missing": "缺少解析套件"},
-    "en-US": {"quality_problems": "Extraction quality and problem documents", "reprocess_selected": "Reprocess selected documents",
+    "en-US": {"quality_problems": "Extraction quality / problems", "reprocess_selected": "Reprocess selected documents",
         "quality_summary": "Discovered {discovered} documents; {searchable} contain searchable text",
         "quality_success": "Extracted", "quality_empty": "No searchable text", "quality_partial": "Partial extraction",
         "quality_unknown": "Unknown extraction quality", "quality_corrupt": "Parse failed", "quality_unreadable": "Unreadable",

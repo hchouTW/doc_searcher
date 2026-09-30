@@ -65,3 +65,19 @@ def test_stemmed_phrase_is_one_complete_original_interval(tmp_path):
     locations = searcher.match_locations('"quick brown fox"', page.items[0].doc_id, revision=page.revision)
     assert [(x.start, x.end) for x in locations.locations] == [(4, 21)]
     db.close()
+
+
+def test_phrase_crossing_source_spans_reports_both_cells(tmp_path):
+    db = Database(str(tmp_path / "index.db"))
+    text = "annual report"
+    db.save_document_index(str(tmp_path / "a.xlsx"), "xlsx", 10, 1,
+        [{"segment_id": "Sheet1", "segment_type": "sheet", "content": text,
+          "tokenized_content": tokenize_for_fts(text), "sources": [
+              {"start": 0, "end": 6, "source": {"kind": "cell", "location": "Sheet1!A1"}},
+              {"start": 7, "end": 13, "source": {"kind": "cell", "location": "Sheet1!B1"}}]}])
+    searcher = DocumentSearcher(db)
+    result = searcher.search('"annual report"')[0]
+    location = searcher.match_locations('"annual report"', result.doc_id).locations[0]
+    assert location.source["kind"] == "range"
+    assert [source["location"] for source in location.source["locations"]] == ["Sheet1!A1", "Sheet1!B1"]
+    db.close()

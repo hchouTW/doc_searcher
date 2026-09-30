@@ -42,7 +42,7 @@
    - 專注於文件內嵌文字流抽取，無需昂貴 GPU 或笨重 OCR 影像模型，幾秒內即可為數百至數千份文件建立完備索引。純影像的掃描版 PDF 沒有文字層，因此無法檢索。
 4. **SQLite FTS5 + jieba 中英文全文檢索**：
    - 內建 BM25 相關度評分，支援繁簡中文互搜（輸入簡體可找到繁體文件，反之亦然；以字為單位轉換，不做「軟體／软件」這類地區用語對應；正規表示式模式不轉換，高亮顯示文件原文字元）、英文混合詞組、英文詞形還原（`outstand`／`outstanding`／`outstandings` 互相命中；區分大小寫與完整單字仍要求完全相同）、精確片語（`"..."`）與布林運算（`AND` / `OR` / `NOT`）。
-   - 無法被斷詞為單一詞語的中文詞（例如 `升等`）必須以該詞出現，而不是字元分散出現；含標點符號的查詢（`A-`、`2023-01-03`、`snake_case`、`Section 1 (Paragraphs)`）可照輸入內容檢索。
+   - 每個中文查詢詞（例如 `計畫`、`升等`、單字 `計`）必須在同一區塊的原文連續出現，不受斷詞邊界影響；空白分隔的詞維持 AND 語意；含標點符號的查詢（`A-`、`2023-01-03`、`snake_case`、`Section 1 (Paragraphs)`）可照輸入內容檢索。
    - 支援 `filename:關鍵字`／`檔名:關鍵字`直接尋找檔名，並提供查詢格式錯誤提示。
    - 搜尋框即時以不同顏色標示布林運算子、精確片語與特殊符號，並提供 AND／OR／NOT／引號快速插入。
    - 支援修改日期或建立日期（過去 24 小時、7 天、30 天、1 年及自訂區間）、檔案大小級距與 KB／MB／GB 自訂門檻。
@@ -267,6 +267,27 @@ Windows 若出現 SmartScreen 提示，請點選「其他資訊」→「仍要�
 
 ---
 
+### 搜尋完整性、命中次數與擷取品質
+
+- 「命中數」是原文中的實際出現次數，與命中區塊數、摘要數分開。相同位置去重、重疊的正向命中合併，緊鄰的不同命中仍分開；NOT 不增加命中數。引號片語以整個片語計算一次。
+- 搜尋先選文件再載入其命中區塊。結果可按「載入更多文件」繼續；更新索引或變更查詢後，舊的游標／位置需重新搜尋。預覽的上一個／下一個可走訪每次命中；「載入更多原文」按 2,048 字元分頁，不把大型文件一次繪製成 HTML。
+- Word 包含依序的本文／表格、頁首／頁尾與文字方塊。頁碼無法由 python-docx 推算；位置標示實際 part／段落。Excel 顯示工作表與儲存格（例如 `Sheet1!B12`），公式來源與快取值分開標示；未有快取值的公式仍可搜尋，且會顯示警告，程式不計算公式。
+- 「擷取品質與問題文件」列出無文字、部分擷取、解析失敗及未知品質；選取後可重新擷取，即使大小／修改時間未變。舊索引的品質為未知，搜尋索引升級僅使用已儲存的原文；重新擷取才會取得新增的 Office 內容與位置資訊。
+- 不支援 OCR、影像內文字、所有嵌入式 Office 物件、密碼解密或公式／巨集執行。PDF 頁面擷取失敗會保留其他頁並列出失敗頁。Regex 超時／取消會報錯，不回傳假裝完整的部分次數；零寬命中以游標線顯示並逐次計算。
+
+CLI 範例（舊的 `--dir ... --search ...` 用法仍可用）：
+
+```bash
+doc-searcher --dir /path/to/docs --search '計畫' --limit 20 --json
+doc-searcher --dir /path/to/docs --search '計畫' --limit 20 --cursor '<next_cursor>' --json
+doc-searcher --dir /path/to/docs --search '會議' --locations 42 --offset 100 --revision 123
+doc-searcher --dir /path/to/docs --search '會議' --context '<location JSON>'
+doc-searcher --quality --offset 0 --limit 100
+doc-searcher --dir /path/to/docs --reprocess /path/to/docs/report.docx
+```
+
+MCP／Python 呼叫保留既有結果欄位，並增加 `doc_id`、`segment_count`、`snippet_count`、`count_complete`、`parse_status`、`warnings`。搜尋回傳 `next_cursor`、`has_more`、`total_documents`、`complete`、`revision`；`match_count` 從摘要數修正為實際命中次數，是刻意的相容性變更。位置 `start`／`end` 是原文 Python 字元索引，半開區間 `[start,end)`，不是 UTF-8 位元組或 UTF-16 索引。
+
 ## 🤖 MCP 伺服器（Claude Code／Claude Desktop 整合）
 
 `doc-searcher-mcp`（`src/doc_searcher/integrations/mcp_server.py`）以 [Model Context Protocol](https://modelcontextprotocol.io) 將本機索引提供給 AI 用戶端，與桌面程式共用 `~/.doc_searcher` 內的索引與設定（可用 `DOC_SEARCHER_DATA_DIR` 覆寫）。請先在桌面程式加入檢索資料夾並完成索引。
@@ -274,6 +295,8 @@ Windows 若出現 SmartScreen 提示，請點選「其他資訊」→「仍要�
 | 類型 | 名稱 | 說明 |
 | --- | --- | --- |
 | 工具 | `search_documents` | `query`（支援 `"片語"`、AND／OR／NOT、`filename:`）、`formats`（`pdf`／`word`／`excel`／`ppt`／`text`）、`limit`（1–100）。回傳路徑、類型、大小、修改時間、命中位置（頁／工作表／投影片／段落）與 **粗體** 標示的摘要 |
+| 工具 | `get_match_locations` / `get_match_context` | 分頁命中位置與原文上下文，附索引 revision；過期位置會報錯 |
+| 工具 | `get_problem_documents` / `reprocess_documents` | 分頁擷取品質／警告清單，以及背景重新擷取所選文件 |
 | 工具 | `get_index_status` | 文件數、索引大小、最後更新時間、版本、檢索資料夾與最近一次重新索引狀態 |
 | 工具 | `reindex_directory` | 於背景增量重新索引全部檢索資料夾，或其中某個子資料夾；立即返回，以 `get_index_status` 查詢進度。新資料夾需在桌面程式加入 |
 | 資源 | `docsearcher://document/{path}` | 已索引文件的完整擷取文字（`path` 為百分比編碼的絕對路徑；搜尋結果附有現成的 `resource_uri`）。只提供索引內的文件，不會讀取索引以外的檔案 |
@@ -372,7 +395,7 @@ A fast, cross-platform, pure-Python full-text search app for local documents on 
    - It extracts the text that is embedded in documents. No GPU and no heavy OCR model: hundreds to thousands of documents are fully indexed in seconds. Scanned image-only PDFs have no text layer and are therefore not searchable.
 4. **SQLite FTS5 + jieba full-text search for Chinese and English**:
    - Built-in BM25 relevance ranking. **Traditional and Simplified Chinese match each other** (a Simplified query finds Traditional documents and vice versa; converted character by character, with no regional vocabulary mapping such as 軟體/软件; regex mode is not converted; the preview highlights the characters as written in the document). **English word forms match each other** (`outstand`, `outstanding` and `outstandings` find one another; match case and whole word still require the exact word). Mixed-language phrases, exact phrases (`"..."`) and boolean operators (`AND` / `OR` / `NOT`) are supported.
-   - A Chinese word the tokenizer cannot segment (for example `升等`) must appear as that word, not as scattered characters. Queries containing punctuation (`A-`, `2023-01-03`, `snake_case`, `Section 1 (Paragraphs)`) work as typed.
+   - Each Chinese query term (`計畫`, `升等`, or a single character) must occur contiguously within one segment, independently of token boundaries. Space-separated terms retain AND semantics. Queries containing punctuation (`A-`, `2023-01-03`, `snake_case`, `Section 1 (Paragraphs)`) work as typed.
    - `filename:keyword` / `檔名:keyword` searches file names directly, and malformed queries get a clear error message.
    - The search box colors boolean operators, exact phrases and special characters as you type, with quick-insert buttons for AND/OR/NOT/quotes.
    - Filter by modified or created date (last 24 hours, 7 days, 30 days, 1 year, or a custom range) and by file-size band or a custom KB/MB/GB threshold.
@@ -597,6 +620,18 @@ If Windows shows a SmartScreen prompt, click "More info" → "Run anyway".
 
 ---
 
+### Search completeness, occurrences and extraction quality
+
+- Hit counts are original-text occurrences, separate from matching segments and rendered snippets. Repeated locations are deduplicated; overlapping positive intervals merge; adjacent hits stay separate. NOT adds no positive hits and quoted phrases count once.
+- Documents are selected before their matching segments. Use **Load more documents** to continue. Cursors and locations bind the query/options and index revision; search again after an update. Previous/next reaches each occurrence. **Load more original text** reads 2,048-character segment pages rather than rendering a large document at once.
+- DOCX includes ordered body/table text, shared headers/footers and text boxes, identified by part/paragraph rather than invented Word page numbers. XLSX preserves worksheet/cell locations (`Sheet1!B12`), formula source and cached values. Missing caches produce warnings; formulas and macros are never executed. Equivalent cached text of constant-string formulas is retained in source metadata instead of indexed twice.
+- **Extraction quality and problem documents** distinguishes no text, partial extraction, failures and unknown quality, and supports explicit reprocessing of selected documents with unchanged size/mtime. Legacy quality is unknown. Schema upgrades rebuild search candidates from stored text; reprocessing is needed to obtain newly supported Office content/source locations.
+- OCR/image text, password bypass and unsupported embedded Office objects are outside scope. Failed PDF pages are recorded while readable pages survive. Regex timeout/cancellation raises an error instead of returning incomplete counts as complete; zero-width hits count individually and show a caret.
+
+The existing CLI invocation remains valid. Add `--limit N --json` for a document page and `--cursor '<next_cursor>'` for continuation. Use `--locations DOC_ID --offset N --revision REVISION` with the same query/options to page locations, `--context '<location JSON>'` for bounded context, `--quality --offset N --limit N` for quality/problems, and `--dir ROOT --reprocess FILE` (repeatable) to reparse selected files. `--regex`, `--match-case`, and `--whole-word` are optional matching controls.
+
+Python/MCP results retain their previous fields and add `doc_id`, `segment_count`, `snippet_count`, `count_complete`, `parse_status`, and `warnings`. Search pages report `next_cursor`, `has_more`, `total_documents`, `complete`, and `revision`. **Compatibility change:** `match_count` now means occurrences rather than snippets. Locations use original Python character offsets `[start,end)`, not UTF-8 bytes or UTF-16 code units; preserve the returned revision.
+
 ## 🤖 MCP server (Claude Code / Claude Desktop integration)
 
 `doc-searcher-mcp` (`src/doc_searcher/integrations/mcp_server.py`) exposes the local index to AI clients through the [Model Context Protocol](https://modelcontextprotocol.io). It shares the index and settings in `~/.doc_searcher` with the desktop app (override with `DOC_SEARCHER_DATA_DIR`). First add search folders and finish indexing in the desktop app.
@@ -604,6 +639,8 @@ If Windows shows a SmartScreen prompt, click "More info" → "Run anyway".
 | Type | Name | Description |
 | --- | --- | --- |
 | Tool | `search_documents` | `query` (supports `"phrase"`, AND/OR/NOT, `filename:`), `formats` (`pdf`/`word`/`excel`/`ppt`/`text`), `limit` (1–100). Returns path, type, size, modified time, hit location (page/sheet/slide/section) and a snippet with **bold** matches |
+| Tool | `get_match_locations` / `get_match_context` | Bounded original occurrence pages and context, with revision invalidation |
+| Tool | `get_problem_documents` / `reprocess_documents` | Paginated extraction quality/warnings and background selected-document reprocessing |
 | Tool | `get_index_status` | Document count, index size, last update time, version, search folders and the state of the latest reindex |
 | Tool | `reindex_directory` | Incrementally reindexes all search folders, or one of their subfolders, in the background; returns immediately, check progress with `get_index_status`. New folders must be added in the desktop app |
 | Resource | `docsearcher://document/{path}` | Full extracted text of an indexed document (`path` is the percent-encoded absolute path; search results include a ready-made `resource_uri`). Only indexed documents are served; files outside the index are never read |

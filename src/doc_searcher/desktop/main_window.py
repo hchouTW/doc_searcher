@@ -209,6 +209,7 @@ class MainWindow(QMainWindow):
         top_layout.setContentsMargins(10, 6, 10, 6)
         top_layout.setSpacing(8)
         self.index_summary_label = QLabel()
+        self.index_summary_label.setWordWrap(True)
         top_layout.addWidget(self.index_summary_label)
         navigation_row = QHBoxLayout()
         navigation_row.addStretch()
@@ -559,6 +560,7 @@ class MainWindow(QMainWindow):
         search_layout.addLayout(self.active_filter_row)
 
         self.results_count_label = QLabel()
+        self.results_count_label.setWordWrap(True)
         self.results_count_label.setStyleSheet("font-size: 12px;")
         results_status_row = QHBoxLayout()
         results_status_row.addStretch()
@@ -1335,6 +1337,9 @@ class MainWindow(QMainWindow):
             self.status_label.setText(self._idle_status_text(stats))
 
     def _on_search_text_changed(self, text: str):
+        self.preview.display_result(None)
+        self.load_more_button.hide()
+        self._result_page = None
         self.btn_clear_search.setVisible(bool(text))
         self.search_timer.start()
 
@@ -1670,6 +1675,21 @@ class MainWindow(QMainWindow):
                   <code>\b\w+\.(pdf|docx|txt)\b</code> for file extension references.</li>
             </ul>
             """
+        if self.language == "zh-TW":
+            help_html += """<h3>完整性與擷取品質</h3><p>每個中文詞須在同一區塊連續出現；空白分詞仍為 AND。
+            命中數是原文實際出現次數，片語計一次，NOT 不增加次數。按「載入更多文件」取得後續結果；
+            上一個／下一個逐次命中，更多原文按區塊分頁載入。Regex 零寬命中以游標線顯示；超時或取消會報錯。</p>
+            <p>品質清單區分成功、無文字、部分擷取、失敗與未知；舊文件可強制重新擷取。
+            Excel 公式與快取值分開標示，沒有快取會顯示警告；不執行公式／巨集、不做 OCR。
+            Word 頁首／頁尾／文字方塊以實際 part／段落定位；PDF 失敗頁會列出且保留其他頁。</p>"""
+        else:
+            help_html += """<h3>Completeness and extraction quality</h3><p>Chinese terms must occur contiguously within one segment;
+            space-separated terms retain AND. Counts are original occurrences: a phrase counts once, NOT adds no hits.
+            Load more documents to continue. Previous/next navigates individual occurrences; original segments load in pages.
+            Zero-width regex hits show a caret; timeout/cancellation returns an error.</p>
+            <p>Quality lists distinguish success, no text, partial, failure and unknown. Reprocess selected legacy files explicitly.
+            Excel formulas/cached values have cell sources and missing-cache warnings; formulas/macros are never executed and OCR is unsupported.
+            Word headers/footers/text boxes use part/paragraph locations. PDF page failures retain readable pages and list omissions.</p>"""
         layout = QVBoxLayout(help_box)
         layout.setContentsMargins(20, 16, 20, 16)
         content = QTextBrowser(help_box)
@@ -1722,6 +1742,9 @@ class MainWindow(QMainWindow):
     def _trigger_search(self):
         self.preview.display_result(None)
         self.load_more_button.hide()
+        self.table.set_results([])
+        self._result_page = None
+        self._loaded_results = []
         query = self.search_input.text().strip()
         filters = self._current_search_filters()
         problem = search_filters.validate(self._filter_state(), query, filters)

@@ -22,9 +22,11 @@
 # Usage notes, dependencies, or assumptions:
 #   - Uses SQLite FTS5 functions and doc_searcher.search.text_helper.
 
+import bisect
 import base64
 import hashlib
 import json
+import itertools
 import html
 import logging
 import os
@@ -242,7 +244,7 @@ class DocumentSearcher:
                 hits.update(r[0] for r in conn.execute(
                     "SELECT rowid FROM doc_cjk_fts WHERE doc_cjk_fts MATCH ?", (grams,)))
             else:
-                expression = self._build_fts5_query('"' + term + '"' if " " in term else term)
+                expression = self._build_fts5_query('"' + term + '"')
                 if expression:
                     try:
                         for row in conn.execute("SELECT s.id, bm25(doc_fts) AS rank FROM doc_fts f "
@@ -367,6 +369,8 @@ class DocumentSearcher:
                 if negative:
                     continue
                 text = row["content"]
+                source_spans = None
+                source_starts = None
                 terms = [filename] if filename else [] if parsed is None else parsed.root.positives(
                     lambda term, content=text: self._literal_matches(content, term, match_case, whole_word))
                 for hit in iter_locations(text, terms, regex_pattern=regex_pattern, deadline=deadline,
@@ -375,10 +379,21 @@ class DocumentSearcher:
                     if offset <= total < offset + limit:
                         source = None
                         if "sources" in row.keys():
-                            for span in json.loads(row["sources"]):
-                                if span["start"] <= hit.start < span["end"]:
-                                    source = span["source"]
+                            if source_spans is None:
+                                source_spans = json.loads(row["sources"])
+                                source_starts = [span["start"] for span in source_spans]
+                            index = max(0, bisect.bisect_right(source_starts, hit.start) - 1)
+                            found_sources = []
+                            for span in itertools.islice(source_spans, index, None):
+                                if span["start"] > hit.end or (span["start"] >= hit.end and hit.start != hit.end):
                                     break
+                                if span["start"] <= hit.start < span["end"] or (span["start"] < hit.end and span["end"] > hit.start):
+                                    found_sources.append(span["source"])
+                            if found_sources:
+                                source = found_sources[0]
+                                if len(found_sources) > 1:
+                                    source = dict(kind="range", locations=found_sources,
+                                        location=" → ".join(x.get("location", str(x)) for x in found_sources))
                         locations.append(MatchLocation(hit.start, hit.end, hit.matched_terms,
                             doc_id, row["id"], row["segment_id"], row["segment_type"], source, current))
                     total += 1
@@ -449,7 +464,10 @@ class DocumentSearcher:
                     text, term, match_case, whole_word)):
                 continue
             doc_id = int(row["doc_id"])
-            groups.setdefault(doc_id, []).append(row)
+            stored = dict(row)
+            if stored.get("segment_row_id"):
+                stored.pop("content", None)  # retain identities, not every candidate's original text
+            groups.setdefault(doc_id, []).append(stored)
         ranking = sorted(groups, key=lambda doc_id: (min(float(r["rank"]) for r in groups[doc_id]), doc_id))
         if page_meta is not None:
             page_meta["total"] = len(ranking)
@@ -465,7 +483,10 @@ class DocumentSearcher:
                 first["file_size"], first["mtime"], min(float(r["rank"]) for r in groups[doc_id]),
                 0, ctime=first["ctime"])
             for row in groups[doc_id]:
-                content = row["content"]
+                content = row.get("content")
+                if content is None:
+                    content = self.db.get_connection().execute("SELECT content FROM doc_segments WHERE id=?",
+                        (row["segment_row_id"],)).fetchone()[0]
                 terms = keywords if parsed is None else parsed.root.positives(
                     lambda term, text=content: self._literal_matches(text, term, match_case, whole_word))
                 options = dict(regex_pattern=regex_pattern, deadline=deadline, cancel_check=cancel_check,
@@ -817,6 +838,8 @@ class DocumentSearcher:
         if stemming and not (match_case or whole_word) and re.fullmatch(r"[a-zA-Z]+(?:\s+[a-zA-Z]+)+", term):
             from doc_searcher.search.matches import english_phrase_matches
             return next(english_phrase_matches(content, term), None) is not None
+        if not term:
+            return False
         spec = stem_spec(term) if stemming and not (match_case or whole_word) else None
         if spec is not None:  # another form of the same English word counts, as in the index
             return any(
