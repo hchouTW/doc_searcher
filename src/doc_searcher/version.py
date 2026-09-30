@@ -17,6 +17,7 @@ CHANGELOG: List[Tuple[str, str, List[str]]] = [
         "2026-09-30",
         [
             "simplified_traditional_search",
+            "punctuation_search_fix",
         ],
     ),
     (

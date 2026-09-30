@@ -7,6 +7,10 @@
 #   - Supports case-sensitive, whole-word, and validated regular-expression modes; regex
 #     searches run under a time budget and can be cancelled (search.regex_engine).
 #   - Executes FTS queries against tokenized and raw content with BM25 ranking.
+#   - Punctuation-only terms (-, _, (, /) never reach the FTS expression, because the index holds
+#     no such tokens and an AND with them matches nothing. Queries containing punctuation are
+#     narrowed by FTS on their words, then confirmed by a literal check on the stored text; a
+#     query made only of punctuation is answered with the LIKE search.
 #   - Folds Simplified/Traditional Chinese (search.script_fold) in queries, literal re-checks,
 #     filename search and the LIKE fallback; regex mode matches stored text exactly as written.
 #   - Generates snippet contexts with highlighted HTML <mark> tags and location indicators.
@@ -36,6 +40,7 @@ from doc_searcher.search.text_helper import (
     extract_keywords_from_query,
     generate_highlighted_snippets,
     generate_regex_highlighted_snippets,
+    has_word_char,
 )
 
 
@@ -170,8 +175,13 @@ class DocumentSearcher:
             return []
 
         fts_query = self._build_fts5_query(clean_query)
+        verify_literal = match_case or whole_word or self._has_punctuation_term(clean_query)
         if not fts_query:
-            return []
+            # Only punctuation: the index has nothing to match, so scan the stored text.
+            rows = self._fallback_like_search(keywords, filter_clause, filter_params, limit)
+            return self._aggregate_rows(
+                rows, keywords, limit, clean_query, match_case, whole_word, verify_literal=True
+            )
 
         conn = self.db.get_connection()
 
@@ -214,7 +224,15 @@ class DocumentSearcher:
             logger.info("FTS query %r rejected (%s); using LIKE search", fts_query, e)
             rows = self._fallback_like_search(keywords, filter_clause, filter_params, limit)
 
-        return self._aggregate_rows(rows, keywords, limit, clean_query, match_case, whole_word)
+        return self._aggregate_rows(
+            rows,
+            keywords,
+            limit,
+            clean_query,
+            match_case,
+            whole_word,
+            verify_literal=verify_literal,
+        )
 
     def _aggregate_rows(
         self,
@@ -226,8 +244,13 @@ class DocumentSearcher:
         whole_word: bool = False,
         regex_pattern: Optional[Any] = None,
         deadline: Optional[Deadline] = None,
+        verify_literal: bool = False,
     ) -> List[SearchResultItem]:
-        """Aggregate matching segment rows into ranked document results."""
+        """Aggregate matching segment rows into ranked document results.
+
+        verify_literal re-checks every term against the stored text (as match_case and
+        whole_word already do); used when FTS could only search part of a term.
+        """
         doc_map: Dict[int, SearchResultItem] = {}
         for row in rows:
             doc_id = int(row["doc_id"])
@@ -236,7 +259,7 @@ class DocumentSearcher:
             content = row["content"]
             rank = float(row["rank"])
 
-            if regex_pattern is None and (match_case or whole_word):
+            if regex_pattern is None and (match_case or whole_word or verify_literal):
                 if not self._matches_query_options(content, query, match_case, whole_word):
                     continue
 
@@ -567,6 +590,22 @@ class DocumentSearcher:
             ) from exc
 
     @staticmethod
+    def _index_terms(text: str) -> List[str]:
+        """Words of text as the FTS index holds them: folded, cut by jieba, punctuation removed."""
+        return [w for w in (t.strip() for t in jieba.cut(fold(text))) if w and has_word_char(w)]
+
+    @staticmethod
+    def _has_punctuation_term(query: str) -> bool:
+        """True when a query term contains punctuation that FTS cannot match on its own."""
+        for phrase, operator, word in re.findall(
+            r'"([^\"]+)"|(\bAND\b|\bOR\b|\bNOT\b)|([^\s]+)', query, re.IGNORECASE
+        ):
+            term = phrase or word
+            if not operator and any(not (c.isalnum() or c.isspace()) for c in term):
+                return True
+        return False
+
+    @staticmethod
     def _literal_matches(content: str, term: str, match_case: bool, whole_word: bool) -> bool:
         expression = script_regex(term)
         if whole_word:
@@ -630,12 +669,12 @@ class DocumentSearcher:
                 built_parts.append(upper_p)
             elif p_strip.startswith('"') and p_strip.endswith('"') and len(p_strip) > 2:
                 inner = p_strip[1:-1]
-                cut_words = [w.strip() for w in jieba.cut(fold(inner)) if w.strip()]
+                cut_words = self._index_terms(inner)
                 if cut_words:
                     phrase_query = " ".join(word.replace('"', '""') for word in cut_words)
                     built_parts.append(f'tokenized_content : "{phrase_query}"')
             else:
-                cut_words = [w.strip() for w in jieba.cut(fold(p_strip)) if w.strip()]
+                cut_words = self._index_terms(p_strip)
                 if cut_words:
                     sub_expr = " AND ".join(
                         f'"{word.replace(chr(34), chr(34) * 2)}"' for word in cut_words

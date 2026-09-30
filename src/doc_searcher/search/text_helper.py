@@ -2,6 +2,8 @@
 # What the code does:
 #   - Tokenizes Chinese and English text using jieba.cut_for_search for FTS5 index, after folding
 #     Traditional characters to Simplified so both scripts share the same tokens.
+#   - has_word_char() tells indexable tokens from punctuation-only ones, which SQLite's unicode61
+#     tokenizer never indexes; query building and highlighting drop the latter.
 #   - Extracts safe literal or regex snippet contexts with HTML <mark> tags, pulling only the
 #     first few matches lazily.
 #   - Sanitizes and escapes HTML characters safely.
@@ -34,6 +36,11 @@ def tokenize_for_fts(text: str) -> str:
     return " ".join(clean_tokens)
 
 
+def has_word_char(token: str) -> bool:
+    """True when token contains a letter or digit, i.e. something the FTS index can hold."""
+    return any(char.isalnum() for char in token)
+
+
 def extract_keywords_from_query(query: str) -> List[str]:
     """Parse user query string into individual match keywords."""
     # Remove operators like AND, OR, NOT
@@ -55,8 +62,11 @@ def extract_keywords_from_query(query: str) -> List[str]:
         # Add sub-tokens from jieba
         for sub in jieba.cut(fold(term)):
             sub = sub.strip()
-            if len(sub) >= 1 and sub not in {"*", "?", "-", "+"}:
-                highlight_terms.add(sub)
+            if not has_word_char(sub):
+                continue  # "-", "(", "_": the whole term is highlighted, not every dash
+            if len(sub) == 1 and sub.isascii() and len(term) > 1:
+                continue  # the "A" of "A-" would light up every letter a
+            highlight_terms.add(sub)
 
     return sorted(list(highlight_terms), key=len, reverse=True)
 
