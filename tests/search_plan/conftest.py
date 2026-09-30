@@ -1,5 +1,6 @@
 """Shared fixtures for the docs/test-plan.md case modules: the dataset, built and indexed once."""
 
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -26,11 +27,10 @@ def env(dataset_root, tmp_path_factory):
     files = FileScanner().scan_directories([str(dataset_root)])
     DocumentIndexer(db).run_batch_indexing([f[0] for f in files], [])
     searcher = DocumentSearcher(db)
-    prefix = str(dataset_root) + "/"
 
     def results(query, **options):
         items = searcher.search(query, limit=500, **options)
-        return {item.path.removeprefix(prefix): item for item in items}
+        return {Path(item.path).relative_to(dataset_root).as_posix(): item for item in items}
 
     yield SimpleNamespace(
         root=dataset_root,
