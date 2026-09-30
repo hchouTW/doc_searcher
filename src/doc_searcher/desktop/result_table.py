@@ -63,7 +63,7 @@ FILENAME_COLUMN = COLUMN_IDS.index(REQUIRED_COLUMN)
 PATH_COLUMN = COLUMN_IDS.index("path")
 PATH_SHARE = 0.28  # fraction of the viewport offered to the Path column
 PATH_MIN_WIDTH = 100
-FILENAME_MIN_WIDTH = 200
+FILENAME_MIN_WIDTH = 160
 
 
 class ElidedLabel(QLabel):
