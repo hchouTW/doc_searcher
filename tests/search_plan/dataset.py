@@ -8,7 +8,7 @@
 #     plus the formats this machine could not produce (with the reason), so tests can skip on them.
 #   - OOXML zips get fixed timestamps, document properties are pinned and mtimes are set to a
 #     constant, so two runs produce byte-identical files (manifest field hash_stable marks the
-#     exceptions, e.g. encrypted PDFs, whose encryption is randomized).
+#     exceptions, e.g. encrypted PDFs (randomized) and the rasterised scanned PDF).
 # Usage notes, dependencies, or assumptions:
 #   - CLI: python tests/search_plan/dataset.py OUTDIR   (OUTDIR must be new, empty, or hold a
 #     manifest.json from an earlier run; nothing outside OUTDIR is touched).
@@ -419,7 +419,9 @@ def _scan(b: _Builder) -> None:
         "scan",
         NO_TEXT,
         ["QASCANkeyword"],
-        note="text exists only as pixels; no OCR, so the marker must NOT be found",
+        hash_stable=False,
+        note="text exists only as pixels (rasterised by MuPDF, whose output has differed between "
+        "CI runs); no OCR, so the marker must NOT be found",
     )
 
 

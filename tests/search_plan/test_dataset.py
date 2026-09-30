@@ -92,10 +92,15 @@ def test_build_is_deterministic(built, tmp_path):
             assert digest(path) == digest(other), entry["path"]
 
 
-def test_only_encrypted_pdfs_and_optional_xls_are_hash_unstable(built):
+def test_only_known_files_are_hash_unstable(built):
     _, manifest = built
     unstable = {e["path"] for e in entries(manifest, hash_stable=False)}
-    assert unstable <= {"bad/user_password.pdf", "bad/owner_password.pdf", "fmt/marker.xls"}
+    assert unstable <= {
+        "bad/user_password.pdf",
+        "bad/owner_password.pdf",
+        "fmt/marker.xls",
+        "scan/scanned.pdf",
+    }
 
 
 def test_refuses_to_write_into_a_foreign_directory(tmp_path):
