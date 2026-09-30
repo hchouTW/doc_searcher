@@ -157,7 +157,7 @@ def test_dataset_can_be_indexed_end_to_end(built, tmp_path):
     searcher = DocumentSearcher(db)
 
     def hits(query):
-        return {r.path[len(str(root)) + 1 :] for r in searcher.search(query)}
+        return {Path(r.path).relative_to(root).as_posix() for r in searcher.search(query)}
 
     for extension in ("pdf", "docx", "pptx", "xlsx", "txt", "md", "csv"):
         assert hits(f"QAMARK{extension}") == {f"fmt/marker.{extension}"}
