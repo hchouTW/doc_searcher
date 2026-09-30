@@ -14,7 +14,7 @@ DocSearcher is a local PySide6 desktop app that indexes documents into SQLite FT
 | "Case Sensitive mode" | Toggle exists: 區分大小寫 / Match case [C: `i18n.py:84`]. Default state [I: off] | LANG-03/04 |
 | Bottom quick-filter tag `格式: Word X` | Format filter now lives in the Advanced Filters panel; active filters show as removable badges `格式：{value} ✕` [C: `i18n.py:90`, changelog `i18n.py:138`] | FLT-01 targets panel and badge |
 | Page navigation `1 / 2` | README documents previous/next *hit* navigation plus a hit counter, not paging [C] | PRV-03 tests hit navigation |
-| Stemming/plurals | No stemmer found [C: jieba only] | LANG-07 characterisation (OQ-2) |
+| Stemming/plurals | No stemmer found [C: jieba only] | Decided 2026-09-30: **not required** (OQ-2). LANG-07 asserts exact-token matching as the intended behaviour |
 
 ## Objective
 
@@ -95,7 +95,7 @@ Priority: P0 blocks release, P1 should pass, P2 nice to have. Type: **A** automa
 | LANG-06d | Simplified | Regex mode with `会议` | Documented behaviour: regex runs on stored text and is not script-folded (or is, if the feature covers it). Record and decide | P2 | C |
 | LANG-06e | Simplified | One-to-many characters: `发` (發/髮), `后` (后/後), `干` (幹/乾/干) | No crash; document over-matching. Owner accepts precision loss (OQ-8) | P1 | C |
 | LANG-06f | Simplified | Index built before the feature shipped | Old index is migrated or re-scan prompt appears; no stale misses | P1 | A |
-| LANG-07 | Stemming | Search `outstand` and `outstandings` on TD-EN | **C**: record; no stemming is expected [I] | P2 | C |
+| LANG-07 | Stemming | Search `outstand` and `outstandings` on TD-EN | Only the exact token matches (`outstand` does not find `outstanding`, and the reverse): intended, no stemming | P2 | A |
 | LANG-08 | TC-03 | Search `1111223pi retreat` (unquoted and quoted) | Hits in file *name* and body; both highlighted; consistent with `filename:` syntax | P0 | A |
 | LANG-09 | TC-03 | Search `Section 1 (Paragraphs)` | No syntax error from parentheses; hit found; highlighted | P0 | A |
 | LANG-10 | Special chars | Search `2023-01-03`, `A-`, `A+`, `_`, `/`, `C++`, `100%` individually | No crash or spurious syntax error; each yields hits or a clear message. Record per-symbol behaviour, because FTS5 tokenisation drops punctuation | P0 | A+C |
@@ -230,7 +230,7 @@ Platform figures measured on the CI runners (2026-09-30): Linux peaks at about 3
 ## Open Questions
 
 - ~~OQ-1~~ **Resolved 2026-09-30:** Simplified queries must match Traditional text (and the reverse). Requires the prerequisite feature.
-- **OQ-2** Is the lack of stemming/plural matching acceptable? Still open (LANG-07 records behaviour).
+- ~~OQ-2~~ **Resolved 2026-09-30:** the lack of stemming/plural matching is acceptable; English terms match exactly (case-insensitive by default).
 - ~~OQ-3~~ **Resolved:** `.json`/`.log` not supported.
 - ~~OQ-4~~ **Resolved 2026-09-30:** budgets in Performance Budgets approved.
 - ~~OQ-5~~ **Resolved:** no OCR.

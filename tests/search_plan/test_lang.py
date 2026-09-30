@@ -105,8 +105,8 @@ def test_lang_05_whole_word_skips_words_that_merely_contain_the_term(scratch, tm
     assert scratch.names("outstandings", whole_word=True) == {"plural.txt"}
 
 
-def test_lang_07_no_stemming_or_plural_matching_today(env):
-    # Characterisation (test plan OQ-2 is still open): only the exact token matches.
+def test_lang_07_english_terms_match_exactly_without_stemming(env):
+    # Accepted behaviour (OQ-2, 2026-09-30): only the exact token matches, no stemming.
     assert env.search("outstand") == {"en/cases.txt"}  # the literal word "outstand" in cases.txt
     assert env.search("outstandings") == {"en/cases.txt"}
     assert SYMBOLS not in env.search("outstand")

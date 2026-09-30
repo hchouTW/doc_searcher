@@ -18,7 +18,7 @@ cannot run here, reason given. **Covered** already tested elsewhere in the suite
 | LANG-03 / 04 / 05 | Pass | case-insensitive equality; match case; whole word |
 | LANG-06a-c, e, f | Pass | `tests/unit/search/test_script_fold.py` |
 | LANG-06d | Characterised | regex mode matches stored text as written (`test_regex_mode_stays_literal`) |
-| LANG-07 | Characterised | no stemming or plurals (OQ-2 open) |
+| LANG-07 | Pass | exact-token matching, no stemming or plurals: accepted as intended (OQ-2 resolved 2026-09-30) |
 | LANG-08 / 09 / 10 | Pass | after the DEF-01 fix (#12) |
 | LANG-11 | Pass | operators, lower-case operators, three malformed-query errors |
 | LANG-12 | Pass | valid/invalid regex; catastrophic patterns are covered by `tests/performance/test_regex_limits.py` |
