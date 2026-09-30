@@ -71,6 +71,11 @@ Implemented in `tests/search_plan/dataset.py`. Build it with `python tests/searc
 
 - **DEF-01 (P0, existed on `main`): queries containing punctuation returned nothing.** `QATREE-deep`, `A-`, `2023-01-03`, `snake_case` and `Section 1 (Paragraphs)` returned zero results although the text was indexed. Cause: `_build_fts5_query` ANDed every jieba token, including standalone `-`, `_`, `(`, `)`, which SQLite's `unicode61` tokenizer never indexes. **Fixed** on branch `fix/punctuation-queries`: punctuation-only tokens are dropped from the FTS expression, queries with punctuation are confirmed by a literal check on the stored text, and punctuation-only queries (`_`, `/`) use the LIKE search. Tests: `tests/unit/search/test_punctuation_queries.py`, and LANG-08/09/10 in `tests/search_plan/test_lang.py`. Limitation: FTS returns at most `limit * 3` candidate segments before the literal check, so a punctuation query whose plain words match a very large number of other segments (for example `A-` in a corpus full of the letter A) can miss true hits; the same limit already applies to match-case and whole-word searches.
 
+- **DEF-02 (open):** an unquoted Chinese word that jieba splits into single characters (升等 becomes 升 + 等) also matches documents holding those characters as separate words. Quoted phrases are exact. See `docs/test-execution-log.md`.
+- **DEF-03 (open, minor):** opening a file that no longer exists fails silently in the preview panel.
+
+Results of the last run, the manual checklist and the findings are in `docs/test-execution-log.md`.
+
 ## Test Cases
 
 Priority: P0 blocks release, P1 should pass, P2 nice to have. Type: **A** automated pytest, **M** manual GUI, **C** characterisation (record actual behaviour, then confirm with owner).
