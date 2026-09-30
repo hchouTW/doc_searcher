@@ -58,11 +58,10 @@ def test_lang_01_quoted_chinese_finds_exactly_the_documents_with_the_word(env):
     assert env.search('"升等"') <= env.search("升等")
 
 
-def test_lang_01_unquoted_chinese_also_matches_documents_with_the_characters_apart(env):
-    # DEF-02 (open): jieba cuts the query 升等 into 升 and 等, which are ANDed, so a document
-    # that merely contains both characters as separate words matches. Recorded, not asserted
-    # as desired behaviour; tighten this test when the product decision is made.
-    assert env.search("升等") == TRAD_SIMP_KEYWORD_DOCS | {"zh/unrelated.txt"}
+def test_lang_01_unquoted_chinese_matches_the_word_not_its_scattered_characters(env):
+    # DEF-02: 升等 is cut into 升 and 等 by jieba; the hit must still contain the word itself.
+    assert env.search("升等") == env.search('"升等"') == TRAD_SIMP_KEYWORD_DOCS
+    assert "zh/unrelated.txt" not in env.search("升等")
 
 
 def test_lang_01_hits_are_highlighted_at_the_matched_text(env):
@@ -116,11 +115,11 @@ def test_lang_07_no_stemming_or_plural_matching_today(env):
 def test_lang_11_boolean_operators(env):
     assert env.search("升等 AND 會議記錄") == TRAD_SIMP_KEYWORD_DOCS
     assert env.search("outstanding NOT 升等") == {"en/cases.txt"}
-    assert env.search('"升等" OR QATREEdeep') == TRAD_SIMP_KEYWORD_DOCS | {"tree/sub/deep/c.txt"}
+    assert env.search("升等 OR QATREEdeep") == TRAD_SIMP_KEYWORD_DOCS | {"tree/sub/deep/c.txt"}
     assert (
         env.search("升等 and 會議記錄") == TRAD_SIMP_KEYWORD_DOCS
     )  # lower case is an operator too
-    assert env.search('"升等" NOT 會議記錄') == set()
+    assert env.search("升等 NOT 會議記錄") == set()
 
 
 @pytest.mark.parametrize(
@@ -162,7 +161,7 @@ def test_lang_13_empty_queries_return_nothing(env, query):
 
 def test_lang_13_very_long_query_does_not_crash_or_hang(env):
     started = time.monotonic()
-    assert env.search('"升等" ' * 3000) == TRAD_SIMP_KEYWORD_DOCS
+    assert env.search("升等 " * 3000) == TRAD_SIMP_KEYWORD_DOCS
     assert time.monotonic() - started < 10
 
 
