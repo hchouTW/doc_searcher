@@ -171,6 +171,8 @@ pip install -e '.[dev,mcp]'
 > **Python 支援政策**：3.10（mcp、PyMuPDF、PySide6 的最低需求）至 3.14（PySide6 目前上限）。CI 會驗證此範圍。安裝後可使用 `doc-searcher`（GUI／CLI，`--version`、`--help` 不會開啟視窗）與 `doc-searcher-mcp` 指令。
 
 > Windows 也可直接雙擊 `install.bat`：自動安裝 Python（若尚未安裝）、Visual C++ 運行庫、虛擬環境與套件，並建立桌面捷徑；之後以 `run_windows.bat` 啟動。
+>
+> macOS 可直接雙擊 `start_doc_searcher.command`：首次執行會自動建立虛擬環境並安裝套件，之後直接啟動視窗（首次若被 Gatekeeper 擋下，請右鍵選「打開」）。
 
 ### 2. 啟動桌面圖形介面 (GUI)
 
