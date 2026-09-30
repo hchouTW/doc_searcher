@@ -243,7 +243,7 @@ The Qt geometry calculation is covered by offscreen tests for negative display o
 | Hammerspoon Lua syntax | Passed `luajit -e 'assert(loadfile("examples/center_on_screen/hammerspoon/init.lua"))'`. |
 | Hammerspoon watcher smoke test | Passed with a Lua stand-in for placement, duplicate events, oversized windows, fullscreen windows, and disappearing windows. |
 | Hammerspoon live-window checks | Not run: Hammerspoon is not installed on the development Mac. |
-| Windows AutoHotkey v2 syntax | A checksum-verified AutoHotkey v2 `/Validate` step is configured for Windows CI; it has not run for these local changes. |
-| Windows AutoHotkey v2 live-window checks | Not run: no Windows/AutoHotkey v2 runtime was available locally. |
+| Windows AutoHotkey v2 syntax | Passed in Windows CI (AutoHotkey 2.0.28 `/Validate`, checksum-verified). |
+| Windows AutoHotkey v2 live-window checks | Passed in Windows CI on a GitHub-hosted runner desktop (single 1024x720 display, 100% scale, `tests/windows/center_on_screen_live.ps1`): a standard window is centered to the pixel with its size kept and is not re-centered after a user move; borderless, tool, and always-on-top windows are ignored; the script keeps running. Explorer, Notepad, browsers, mixed-scale or multiple monitors, widgets, and elevated apps were not exercised.
 
 Before describing the examples as platform-verified, manually check macOS with Finder, a browser, an editor, a second window from an already-running app, an app launched after the watcher, a second monitor with different scaling, a menu/widget, fullscreen and borderless windows, and a drag after placement. On Windows, check Explorer, Notepad, a browser, mixed-scale monitors, widgets, and an elevated app. Check DocSearcher's first launch and subsequent opens on one and two monitors, with different Dock/taskbar positions, then confirm search, dialogs, CLI, and MCP still work.

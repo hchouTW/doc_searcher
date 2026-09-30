@@ -2,7 +2,7 @@
 
 ## Current status (2026-09-30)
 
-The DocSearcher placement helper, both optional scripts, documentation, README links, and focused tests are implemented in the working tree. Local Qt and Lua tests pass, and native placement of DocSearcher's main window was checked on one macOS display. Windows CI is configured to validate AutoHotkey v2 syntax from a checksum-verified release, but has not run on these changes. The Hammerspoon watcher, Windows window hook/DPI behavior, and two-monitor manual scenarios still need target-OS checks before the acceptance criteria are fully verified. See [the validation record](../center-on-screen.md#validation-record).
+The DocSearcher placement helper, both optional scripts, documentation, README links, and focused tests are implemented in the working tree. Local Qt and Lua tests pass, and native placement of DocSearcher's main window was checked on one macOS display. Windows CI validates AutoHotkey v2 syntax and runs a live centering check on a real runner desktop (single monitor, 100% scale). The Hammerspoon watcher with live windows, Windows mixed-DPI/multi-monitor behavior, and two-monitor macOS scenarios still need target-OS checks before the acceptance criteria are fully verified. See [the validation record](../center-on-screen.md#validation-record).
 
 ## Goal
 
