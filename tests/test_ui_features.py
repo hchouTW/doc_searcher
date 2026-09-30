@@ -788,6 +788,20 @@ def test_column_menu_locks_file_name_and_resets():
     assert all(check.isChecked() for check in button._checks.values())
 
 
+def test_column_menu_checkbox_indicator_is_visible_in_both_themes():
+    from doc_searcher.desktop.column_menu import ColumnMenuButton
+    from doc_searcher.desktop.theme import DARK_PALETTE, LIGHT_PALETTE
+
+    _app()
+    button = ColumnMenuButton()
+    for theme in (LIGHT_PALETTE, DARK_PALETTE):
+        button.apply_theme(theme)
+        sheet = button._menu.styleSheet()
+        assert "QCheckBox::indicator:checked" in sheet
+        assert f"background: {theme.accent}" in sheet
+        assert "image: url(" in sheet
+
+
 def test_visible_columns_persist_across_windows(tmp_path):
     app = _app()
     path = tmp_path / "config.json"
