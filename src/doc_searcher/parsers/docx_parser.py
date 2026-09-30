@@ -35,7 +35,8 @@ class DocxParser(BaseParser):
             from docx.oxml.ns import qn
             from docx.opc.constants import RELATIONSHIP_TYPE as RT
             from .base import SourceTextBuilder
-            warnings, omitted = [], []
+            warnings: List[dict] = []
+            omitted: List[str] = []
             parts = [(str(doc.part.partname), "body", doc.element.body)]
             seen = set()
             for relation in doc.part.rels.values():
@@ -48,7 +49,7 @@ class DocxParser(BaseParser):
             for part_name, part_kind, root in parts:
                 builder, previous = SourceTextBuilder(), None
                 paragraphs = {node: i for i, node in enumerate(root.iter(qn("w:p")), 1)}
-                for node in root.iter():
+                for node in self._effective_nodes(root, part_name, warnings, omitted):
                     if node.tag in (qn("w:altChunk"), qn("w:object")):
                         location = f"{part_name}:{node.getroottree().getpath(node)}"
                         warnings.append(dict(code="unsupported_object", location=location,
@@ -77,3 +78,34 @@ class DocxParser(BaseParser):
                                 warnings=warnings, omitted_locations=omitted)
         except Exception as e:
             return ExtractedDoc.from_exception(abs_path, "docx", "Error reading docx content", e)
+
+    @staticmethod
+    def _effective_nodes(root, part_name, warnings, omitted):
+        """Read one supported markup-compatibility representation per physical object."""
+        mc = "{http://schemas.openxmlformats.org/markup-compatibility/2006}"
+        supported = {
+            "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
+            "http://schemas.microsoft.com/office/word/2010/wordprocessingShape",
+            "http://schemas.microsoft.com/office/word/2010/wordprocessingGroup",
+            "http://schemas.openxmlformats.org/drawingml/2006/main",
+            "urn:schemas-microsoft-com:vml",
+        }
+        stack = [root]
+        while stack:
+            node = stack.pop()
+            yield node
+            if node.tag == mc + "AlternateContent":
+                selected = next((child for child in node if child.tag == mc + "Choice"
+                    and all(child.nsmap.get(prefix) in supported
+                            for prefix in child.get("Requires", "").split())), None)
+                if selected is None:
+                    selected = next((child for child in node if child.tag == mc + "Fallback"), None)
+                if selected is not None:
+                    stack.append(selected)
+                else:
+                    location = f"{part_name}:{node.getroottree().getpath(node)}"
+                    warnings.append(dict(code="unsupported_compatibility_branch", location=location,
+                        message="No supported Office compatibility branch or fallback."))
+                    omitted.append(location)
+            else:
+                stack.extend(reversed(list(node)))

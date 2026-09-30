@@ -1046,3 +1046,26 @@ def test_document_continuation_ui(tmp_path, language, theme):
     assert len({item.doc_id for item in window._loaded_results}) == 202
     window.close()
     app.processEvents()
+
+
+def test_negative_only_preview_finishes_without_positive_locations(tmp_path):
+    from doc_searcher.storage.database import Database
+    from doc_searcher.search.searcher import DocumentSearcher
+    from doc_searcher.search.text_helper import tokenize_for_fts
+    app = _app()
+    db = Database(str(tmp_path / "index.db"))
+    db.save_document_index(str(tmp_path / "present.txt"), "txt", 7, 1,
+        [{"segment_id": "1", "segment_type": "section", "content": "present",
+          "tokenized_content": tokenize_for_fts("present")}])
+    page = DocumentSearcher(db).search_page("NOT absent")
+    preview = PreviewPanel()
+    preview.set_language("en-US")
+    preview.set_search_context(db, "NOT absent", {}, page.revision)
+    preview.display_result(page.items[0])
+    app.processEvents()
+    assert "Loading" not in preview.browser.toPlainText()
+    assert "present.txt" in preview.browser.toPlainText()
+    assert preview.match_count == 0 and not preview._context_workers
+    assert not preview.btn_context.isEnabled()
+    preview.shutdown()
+    db.close()

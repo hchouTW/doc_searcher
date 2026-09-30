@@ -16,9 +16,9 @@ Measurements: same macOS arm64 machine, Python 3.13.2, SQLite 3.51.1; determinis
 | B4 | Bounded location/context operations, preview HTML under 10 KB for a 100 KB segment, cancelled/stale callbacks, index revision invalidation, streaming dense and zero-width regex counting with deadlines. |
 | C1–C2 | Ordered DOCX XML, shared headers/footers and text boxes, hidden/merged XLSX cells, formula/cache labels and missing-cache warnings. Distinct sources retained, shared source references deduplicated. No formula or macro execution. |
 | C3 | Persisted success/no-text/partial/failure/unknown, partial PDF retains readable pages and failed page locations; selected-only reprocessing handles unchanged size/mtime and respects scope/exclusions. UI/CLI/MCP expose diagnostics and reprocessing. |
-| V1 | Targeted RED→GREEN evidence for each phase; phase search 142 passed, parser/integration 96 passed/1 xfailed, UI/locations 66 passed. Full suite: 567 passed, 5 skipped, 2 xfailed; coverage 88.31% (82% required). Ruff and mypy pass (54 source files). Benchmarks: 13 passed; explicit 10k budget: 1 passed/4 deselected. |
+| V1 | Targeted RED→GREEN evidence for each phase; phase search 142 passed, parser/integration 96 passed/1 xfailed, UI/locations 66 passed; combined parser/integration/UI 150 passed/1 xfailed (before final review regressions). Full suite: 572 passed, 5 skipped, 2 xfailed; coverage 88.48% (82% required). Ruff and mypy pass (54 source files). Benchmarks: 13 passed; explicit 10k budget: 1 passed/4 deselected. |
 
-Initial regressions failed before implementation: phase A 7 failures; B 7 failures; incremental API/UI 3 failures; Office fixtures 3 failures; quality persistence 3 plus missing service/CLI operations. Extra phrase regression corrected the original full phrase interval; quoted operators/empty phrases produced four failures before their fix. Theme-switch preservation failed after stale-preview changes: syntax rehighlighting emits document changes; input now emits query changes only when actual text differs.
+Initial regressions failed before implementation: phase A 7 failures; B 7 failures; incremental API/UI 3 failures; Office fixtures 3 failures; quality persistence 3 plus missing service/CLI operations. Extra phrase regression corrected the original full phrase interval; quoted operators/empty phrases produced four failures before their fix. Theme-switch preservation failed after stale-preview changes: syntax rehighlighting emits document changes; input now emits query changes only when actual text differs. English sidebar clipping reproduced a 37-pixel overflow; wrapped summaries and a shorter quality-button label restore a zero-overflow layout in all four combinations.
 
 ## Before/after benchmarks
 
@@ -26,19 +26,19 @@ Full [before](search-completeness-before-benchmark.json) and [after](search-comp
 
 | Operation | Before | After |
 | --- | ---: | ---: |
-| Cold index 1k | 1.648 s | 1.952 s |
-| Cold index 10k | 19.401 s | 21.056 s |
-| No-change rescan | 11.17 ms | 10.36 ms |
-| One-file update | 14.53 ms | 15.94 ms |
-| Cancellation | 2.36 ms | 1.88 ms |
-| 200-page PDF parse | 39.95 ms | 39.55 ms |
-| 5 MB text parse | 6.27 ms | 5.97 ms |
-| 20k-row XLSX parse | 401.98 ms | 1030.39 ms |
-| Chinese `預算`, 1k | 16.36 ms | 36.53 ms |
-| English `budget`, 1k | 22.83 ms | 44.97 ms |
-| Mixed boolean, 1k | 25.90 ms | 69.23 ms |
-| English phrase, 1k | 4.76 ms | 16.35 ms |
-| Regex, 1k | 18.43 ms | 16.67 ms |
+| Cold index 1k | 1.648 s | 2.028 s |
+| Cold index 10k | 19.401 s | 22.206 s |
+| No-change rescan | 11.17 ms | 10.91 ms |
+| One-file update | 14.53 ms | 14.99 ms |
+| Cancellation | 2.36 ms | 2.53 ms |
+| 200-page PDF parse | 39.95 ms | 39.50 ms |
+| 5 MB text parse | 6.27 ms | 6.51 ms |
+| 20k-row XLSX parse | 401.98 ms | 1057.17 ms |
+| Chinese `預算`, 1k | 16.36 ms | 40.00 ms |
+| English `budget`, 1k | 22.83 ms | 45.57 ms |
+| Mixed boolean, 1k | 25.90 ms | 72.85 ms |
+| English phrase, 1k | 4.76 ms | 16.29 ms |
+| Regex, 1k | 18.43 ms | 16.29 ms |
 
 XLSX now streams both formula and cached-value workbooks and records cell spans, explaining its additional cost. Search verifies candidates and counts true occurrences; earlier timings counted only rendered snippets. These are measurable slowdowns. Common-search relative 1.25× proposals are exceeded; those proposals were never approved. Approved absolute budgets remain unchanged and pass: 1k indexing ≤6 s/query ≤200 ms; 10k ≤90 s/query ≤500 ms; macOS RSS ≤300/400 MB. The dedicated 10k robustness test also passes.
 
@@ -49,19 +49,19 @@ The [measurement driver](search-completeness-measure.py) adds `教師升等級�
 | Measurement | Before 1k | After 1k | Before 10k | After 10k |
 | --- | ---: | ---: | ---: | ---: |
 | `升等` recall | 0/10 | 10/10 | 0/10 | 10/10 |
-| Indexed compound lookup | — | 1.09 ms | — | 1.08 ms |
-| Folded stored-text scan | 79.7 ms | 78.8 ms | 771 ms | 777.7 ms |
+| Indexed compound lookup | — | 1.19 ms | — | 1.11 ms |
+| Folded stored-text scan | 79.7 ms | 78.7 ms | 771 ms | 781.4 ms |
 | Database bytes after WAL checkpoint | 7,671,808 | 8,458,240 | 76,034,048 | 83,353,600 |
 | CJK FTS index bytes | 0 | 774,144 | 0 | 7,180,288 |
-| Full `計畫` enumeration under tracemalloc | 100 ms | 499 ms | 1088 ms | 4998 ms |
+| Full `計畫` enumeration under tracemalloc | 100 ms | 567 ms | 1088 ms | 5749 ms |
 | Reported matches | 2,180 snippets | 5,157 occurrences | 21,813 snippets | 51,413 occurrences |
-| Enumeration peak Python heap | 4.84 MB | 3.29 MB | 49.10 MB | 33.02 MB |
-| Process peak RSS | 131.8 MB | 109.8 MB | 198.7 MB | 174.2 MB |
-| First 100-document page | — | 26.5 ms | — | 168.3 ms |
-| 100-location request, selected short document | — | 0.058 ms | — | 0.063 ms |
-| One original-text context | — | 0.013 ms | — | 0.014 ms |
+| Enumeration peak Python heap | 4.84 MB | 3.36 MB | 49.10 MB | 33.91 MB |
+| Process peak RSS | 131.8 MB | 117.8 MB | 198.7 MB | 151.4 MB |
+| First 100-document page | — | 30.7 ms | — | 238.8 ms |
+| 100-location request, selected short document | — | 0.071 ms | — | 0.080 ms |
+| One original-text context | — | 0.014 ms | — | 0.013 ms |
 
-The added database size is 10.25% at 1k and 9.63% at 10k. Checkpointing truncates WAL, so recorded database bytes represent total persistent database+WAL for this measurement. RSS is a process-lifetime upper bound including native allocations; tracemalloc observes only Python allocations and slows enumeration. Count timings are one instrumented run, not normal-query medians; ordinary 10k queries with 200 results measure 173/232/331 ms (Chinese/English/mixed). Context measurements use a short corpus document and do not guarantee the same latency for a multi-megabyte segment. Location pages bound output but enumerate the segment again to compute exact totals.
+The added database size is 10.25% at 1k and 9.63% at 10k. Checkpointing truncates WAL, so recorded database bytes represent total persistent database+WAL for this measurement. RSS is a process-lifetime upper bound including native allocations; tracemalloc observes only Python allocations and slows enumeration. Count timings are one instrumented run, not normal-query medians; ordinary 10k queries with 200 results measure 235/241/401 ms (Chinese/English/mixed). Context measurements use a short corpus document and do not guarantee the same latency for a multi-megabyte segment. Location pages bound output but enumerate the segment again to compute exact totals.
 
 Suggested new thresholds, **pending agreement**: added database size ≤15% on this corpus; instrumented full counting of these 10k documents ≤7 s and ≤50 MB Python heap; one selected short-document context ≤10 ms. No existing budget was relaxed.
 
@@ -90,13 +90,13 @@ Opened the live index read-only and made a consistent SQLite backup. Compared ba
 | `會議` | 44 / 127 | 44 / 690 | 44 documents |
 | `計畫` | 88 / 606 | 94 / 2874 | 94 documents |
 
-After queries took 0.504/0.567 s for full enumeration on that copy. Counts describe this snapshot, not permanent acceptance constants.
+After the ranking fix, a fresh-process recheck took 1.903/0.728 s for full enumeration on that copy (including cold first-query initialization). Counts describe this snapshot, not permanent acceptance constants.
 
 ## Desktop and limitations
 
 Offscreen interaction and visual checks cover Traditional Chinese/English and light/dark: individual occurrence 8/8, loaded-results continuation, quality lists, forced reprocessing and stale deselection. Preview HTML remains bounded. Synthetic screenshots were inspected; no private document content was used.
 
-No OCR, decryption, macro/formula evaluation, synonym or regional vocabulary expansion. Character folding matches `計畫`↔`计画`; `计划` is a different vocabulary form. Unsupported embedded Office objects report warnings. DOCX location is part/paragraph, never a fabricated layout page. Existing text-only schema migration cannot recover omitted Office sources; explicit reprocessing is needed. Broad queries compute exact document totals and revisit candidate text; paging saves rendering/counting of unselected documents, not candidate evaluation. English stemming is retained.
+No OCR, decryption, macro/formula evaluation, synonym or regional vocabulary expansion. Character folding matches `計畫`↔`计画`; `计划` is a different vocabulary form. Unsupported embedded Office objects report warnings. DOCX footnotes/endnotes are outside this parser increment and remain unsupported. DOCX location is part/paragraph, never a fabricated layout page. Existing text-only schema migration cannot recover omitted Office sources; explicit reprocessing is needed. Broad queries compute exact document totals and revisit candidate text; paging saves rendering/counting of unselected documents, not candidate evaluation. English stemming is retained.
 
 Validated macOS arm64/Python 3.13. Windows/Linux and frozen application builds were not run in this session; no added dependency or asset triggered the spec's frozen-build requirement. Release version remains the maintainer's decision.
 
@@ -108,3 +108,24 @@ Validated macOS arm64/Python 3.13. Windows/Linux and frozen application builds w
 - Contiguous Chinese compounds replace the old scattered-word assertion: required by the specification; cost if wrong: users must insert spaces for AND.
 - Formula source and distinct caches are separate labeled text; equivalent constant caches remain metadata: prevents duplicate counts; cost if wrong: consumers must inspect metadata for that cache.
 - Selected-only reprocessing preserves unselected documents: scope and reconciliation remain protected; cost if wrong: other changed files wait for normal refresh.
+
+## Final independent review
+
+A fresh `gpt-6-astra` reviewer reviewed the complete branch at `811d1b7`, ran 39 focused tests, and found four Important issues; no Critical or Minor findings. The single fix pass added five failing regressions and made them pass:
+
+- DOCX `mc:AlternateContent`: choose one supported Choice or Fallback, avoiding duplicate text boxes.
+- XLSX array formulas: preserve formula `.text` and range metadata; nontext formula representations record an omission, preserve any available cache, and never index Python object addresses or claim missing sources were indexed.
+- Chinese relevance: use CJK grams for recall and retain existing FTS/BM25 scores; only gram-only matches have neutral scores.
+- Standalone NOT: show a completed zero-positive-occurrence preview and disable unavailable context navigation.
+
+Final suite: **572 passed, 5 skipped, 2 xfailed; coverage 88.48%**. Ruff/mypy pass; the post-ranking-fix 10k budget test passes. No second reviewer was dispatched.
+
+Review declines were ruled on explicitly:
+
+- OCR remains excluded by the specification; cost if wrong: image-only text stays unavailable.
+- Regional vocabulary conversion remains excluded by the established character-folding contract; cost if wrong: synonym expansion needs another increment.
+- Footnotes/endnotes and exhaustive embedded-object extraction remain beyond the named additions, with limits documented; cost if wrong: those sources need another parser increment.
+- Windows/Linux and frozen builds remain unverified this session; no added dependency/asset triggers the conditional build requirement; cost if wrong: platform problems await platform verification.
+- New count/index-size thresholds remain proposals; approved budgets stand; cost if wrong: revise thresholds after maintainer agreement.
+
+Deferred minors: none.

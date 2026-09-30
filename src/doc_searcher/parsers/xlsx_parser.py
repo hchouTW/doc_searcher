@@ -32,7 +32,7 @@ class XlsxParser(BaseParser):
             from .base import SourceTextBuilder
             source_wb = openpyxl.load_workbook(abs_path, read_only=True, data_only=False)
             cached_wb = openpyxl.load_workbook(abs_path, read_only=True, data_only=True)
-            warnings = []
+            warnings, omitted = [], []
             for sheet_name in source_wb.sheetnames:
                 builder = SourceTextBuilder()
                 source_sheet, cached_sheet = source_wb[sheet_name], cached_wb[sheet_name]
@@ -44,18 +44,28 @@ class XlsxParser(BaseParser):
                         source = dict(worksheet=sheet_name, cell=cell.coordinate,
                                       location=f"{sheet_name}!{cell.coordinate}", kind="value")
                         if cell.data_type == "f":
-                            builder.append(str(value), {**source, "kind": "formula", "cached_value": cached.value}, " | ")
+                            formula = value if isinstance(value, str) else getattr(value, "text", None)
+                            if not isinstance(value, str):
+                                source = {**source, "range": getattr(value, "ref", None),
+                                          "formula_type": getattr(value, "t", "unknown")}
+                            if formula:
+                                builder.append(formula, {**source, "kind": "formula", "cached_value": cached.value}, " | ")
+                            else:
+                                warnings.append(dict(code="unsupported_formula", location=source["location"],
+                                    message="Formula representation has no readable source text; not evaluated."))
+                                omitted.append(source["location"])
                             if cached.value is None:
                                 warnings.append(dict(code="missing_cached_result", location=source["location"],
-                                    message="Formula source indexed; cached result missing; formula not evaluated."))
-                            elif str(cached.value).strip() and str(value) != '="' + str(cached.value).replace('"', '""') + '"':
+                                    message=("Formula source indexed; cached result missing; formula not evaluated." if formula
+                                             else "Cached result missing; formula source unavailable; formula not evaluated.")))
+                            elif str(cached.value).strip() and formula != '="' + str(cached.value).replace('"', '""') + '"':
                                 builder.append(str(cached.value), source, " | ")
                         elif str(value).strip():
                             builder.append(str(value), source, " | ")
                 segment = builder.segment(sheet_name, "sheet")
                 if segment.text.strip():
                     segments.append(segment)
-            return ExtractedDoc(abs_path, "xlsx", len(source_wb.sheetnames), segments, warnings=warnings)
+            return ExtractedDoc(abs_path, "xlsx", len(source_wb.sheetnames), segments, warnings=warnings, omitted_locations=omitted)
         except Exception as e:
             return ExtractedDoc.from_exception(abs_path, "xlsx", "Error reading xlsx file", e)
         finally:

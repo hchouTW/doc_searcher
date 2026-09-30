@@ -111,11 +111,11 @@ Execute A → B → C. Deliver each phase as a separately reviewable increment. 
 
 ## Deliverables
 
-- [ ] A: Chinese recall and document-pagination fixes, migration if needed, and regression tests.
-- [ ] B: Accurate match-location model, incremental preview/navigation, and interface compatibility documentation.
-- [ ] C: Office extraction improvements, extraction-quality status, explicit reprocessing, and tests.
-- [ ] README, Traditional Chinese/English help, and changelog updates; the maintainer selects the release version.
-- [ ] Validation record covering reproductions, before/after results, test output, performance/index size, and known limitations.
+- [x] A: Chinese recall and document-pagination fixes, migration if needed, and regression tests.
+- [x] B: Accurate match-location model, incremental preview/navigation, and interface compatibility documentation.
+- [x] C: Office extraction improvements, extraction-quality status, explicit reprocessing, and tests.
+- [x] README, Traditional Chinese/English help, and changelog updates; the maintainer selects the release version.
+- [x] Validation record covering reproductions, before/after results, test output, performance/index size, and known limitations.
 
 ## Acceptance Criteria
 

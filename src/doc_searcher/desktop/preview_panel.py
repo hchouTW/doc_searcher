@@ -54,6 +54,7 @@ class PreviewPanel(QWidget):
         self._init_ui()
         from PySide6.QtWidgets import QPushButton
         self.btn_context = QPushButton(tr(self.language, "more_context"))
+        self.btn_context.setEnabled(False)
         self.layout().addWidget(self.btn_context)
         self.btn_context.clicked.connect(lambda: self._request_context(full_segment=True,
             text_offset=self._active_context.get("next_offset") or 0 if self._active_context else 0))
@@ -367,7 +368,7 @@ class PreviewPanel(QWidget):
         if not self.current_item:
             return
 
-        if self._search_context:
+        if self._search_context and self.match_count:
             context = self._active_context
             if context is not None:
                 import html
@@ -464,6 +465,8 @@ class PreviewPanel(QWidget):
 
     def _update_match_controls(self):
         has_matches = self.match_count > 0
+        if hasattr(self, "btn_context"):
+            self.btn_context.setEnabled(bool(self._search_context and has_matches))
         self.btn_prev_match.setEnabled(has_matches)
         self.btn_next_match.setEnabled(has_matches)
         self.btn_zoom_out.setEnabled(self.zoom_steps > -3)

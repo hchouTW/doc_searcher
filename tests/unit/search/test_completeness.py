@@ -127,3 +127,12 @@ def test_empty_phrase_does_not_list_every_document(corpus):
     save("text.txt", ["budget"])
     assert searcher.search('""') == []
     assert [x.filename for x in searcher.search('budget ""')] == ["text.txt"]
+
+
+def test_chinese_candidates_keep_existing_bm25_ranking(corpus):
+    _, searcher, save = corpus
+    save("weak.txt", ["會議 " + "extra " * 1000])
+    save("strong.txt", ["會議"])
+    results = searcher.search("會議")
+    assert [item.filename for item in results] == ["strong.txt", "weak.txt"]
+    assert results[0].rank_score < results[1].rank_score < 0

@@ -119,3 +119,60 @@ def test_formula_cached_text_is_not_counted_twice(tmp_path):
     result = XlsxParser().parse(str(path))
     assert result.full_text.count("會議") == 1
     assert result.segments[0].sources[0]["source"]["cached_value"] == "會議"
+
+
+def test_docx_alternate_textbox_has_one_effective_representation(tmp_path):
+    from docx import Document
+    from lxml import etree
+    doc = Document()
+    paragraph = doc.add_paragraph("body")
+    paragraph._p.append(etree.fromstring('''
+      <mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+       xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+       xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape">
+        <mc:Choice Requires="wps"><w:txbxContent><w:p><w:r><w:t>UniqueTextBox</w:t></w:r></w:p></w:txbxContent></mc:Choice>
+        <mc:Fallback><w:txbxContent><w:p><w:r><w:t>UniqueTextBox</w:t></w:r></w:p></w:txbxContent></mc:Fallback>
+      </mc:AlternateContent>'''))
+    # Unknown required namespace must select the fallback, not silently extract both.
+    paragraph._p.append(etree.fromstring('''
+      <mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+       xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:unknown="urn:unsupported">
+        <mc:Choice Requires="unknown"><w:p><w:r><w:t>unsupported-choice</w:t></w:r></w:p></mc:Choice>
+        <mc:Fallback><w:p><w:r><w:t>fallback-text</w:t></w:r></w:p></mc:Fallback>
+      </mc:AlternateContent>'''))
+    path = tmp_path / "alternate.docx"
+    doc.save(path)
+    result = DocxParser().parse(str(path))
+    assert result.full_text.count("UniqueTextBox") == 1
+    assert "fallback-text" in result.full_text
+    assert "unsupported-choice" not in result.full_text
+
+
+def test_xlsx_array_formula_source_and_range(tmp_path):
+    import openpyxl
+    from openpyxl.worksheet.formula import ArrayFormula
+    wb = openpyxl.Workbook()
+    wb.active["A1"] = ArrayFormula(ref="A1:A3", text='=IF(B1:B3="NeedleFormula",1,0)')
+    path = tmp_path / "array.xlsx"
+    wb.save(path)
+    result = XlsxParser().parse(str(path))
+    assert "NeedleFormula" in result.full_text
+    assert "object at" not in result.full_text
+    source = result.segments[0].sources[0]["source"]
+    assert source["range"] == "A1:A3"
+    assert source["kind"] == "formula"
+    assert any(w["code"] == "missing_cached_result" for w in result.warnings)
+
+
+def test_xlsx_nontext_formula_reports_omission(tmp_path):
+    import openpyxl
+    from openpyxl.worksheet.formula import DataTableFormula
+    wb = openpyxl.Workbook()
+    wb.active["A1"] = DataTableFormula(ref="A1:A3", r1="B1")
+    path = tmp_path / "data-table.xlsx"
+    wb.save(path)
+    result = XlsxParser().parse(str(path))
+    assert "object at" not in result.full_text
+    assert any(w["code"] == "unsupported_formula" for w in result.warnings)
+    assert result.omitted_locations == ["Sheet!A1"]
+    assert not any("source indexed" in w["message"] for w in result.warnings)

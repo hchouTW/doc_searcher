@@ -243,23 +243,22 @@ class DocumentSearcher:
             if grams:
                 hits.update(r[0] for r in conn.execute(
                     "SELECT rowid FROM doc_cjk_fts WHERE doc_cjk_fts MATCH ?", (grams,)))
-            else:
-                expression = self._build_fts5_query('"' + term + '"')
-                if expression:
-                    try:
-                        for row in conn.execute("SELECT s.id, bm25(doc_fts) AS rank FROM doc_fts f "
-                            "JOIN doc_segments s ON s.doc_id = CAST(f.doc_id AS INTEGER) "
-                            "AND s.segment_id = f.segment_id AND s.segment_type = f.segment_type "
-                            "WHERE doc_fts MATCH ?", (expression,)):
-                            hits.add(row[0])
-                            ranks[row[0]] = min(ranks.get(row[0], 0), row[1])
-                    except sqlite3.OperationalError as exc:
-                        if not _is_fts_query_error(exc):
-                            raise
-                        logger.info("FTS query %r rejected (%s); using stored-text scan", expression, exc)
-                        hits.update(r[0] for r in conn.execute("SELECT id FROM doc_segments"))
-                else:
+            expression = self._build_fts5_query('"' + term + '"')
+            if expression:
+                try:
+                    for row in conn.execute("SELECT s.id, bm25(doc_fts) AS rank FROM doc_fts f "
+                        "JOIN doc_segments s ON s.doc_id = CAST(f.doc_id AS INTEGER) "
+                        "AND s.segment_id = f.segment_id AND s.segment_type = f.segment_type "
+                        "WHERE doc_fts MATCH ?", (expression,)):
+                        hits.add(row[0])
+                        ranks[row[0]] = min(ranks.get(row[0], 0), row[1])
+                except sqlite3.OperationalError as exc:
+                    if not _is_fts_query_error(exc):
+                        raise
+                    logger.info("FTS query %r rejected (%s); using stored-text scan", expression, exc)
                     hits.update(r[0] for r in conn.execute("SELECT id FROM doc_segments"))
+            elif not grams:
+                hits.update(r[0] for r in conn.execute("SELECT id FROM doc_segments"))
             # Only verified exclusions may be subtracted: grams are a candidate superset.
             verified = set()
             for sid in hits:
