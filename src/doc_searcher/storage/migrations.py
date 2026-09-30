@@ -6,8 +6,9 @@
 #     with the user_version bump, so a failure rolls back to the previous, usable version.
 #   - Before upgrading an existing database it writes a one-generation backup
 #     (<index.db>.pre-migration.bak) with SQLite's online backup API.
-#   - Version 2 re-tokenizes every stored segment with Simplified/Traditional folding (no source
-#     files are re-read; it rebuilds doc_fts from doc_segments).
+#   - Version 3 recreates doc_fts with SQLite's porter tokenizer (English stemming) and refills it
+#     from doc_segments, again without reading any source file.
+#   - Version 2 marks Simplified/Traditional folding; version 3 does the actual rebuild.
 #   - Refuses databases whose version is newer than this build knows (no silent downgrade).
 # Usage notes, dependencies, or assumptions:
 #   - Called by doc_searcher.storage.database.Database.init_db on every open.
@@ -72,10 +73,29 @@ def _v1_baseline(conn: sqlite3.Connection) -> None:
 
 
 def _v2_fold_scripts(conn: sqlite3.Connection) -> None:
-    """Rebuild doc_fts from doc_segments so tokenized_content is script-folded."""
+    """Version 2 marks the Simplified/Traditional folding of tokenized_content.
+
+    The rebuild it needs is done by version 3 (which refills doc_fts from doc_segments with
+    tokenize_for_fts, and that folds), so a database moving from version 1 is rebuilt once, not
+    twice; a database that already ran the earlier version 2 rebuild is simply rebuilt again.
+    """
+
+
+def _v3_stemming(conn: sqlite3.Connection) -> None:
+    """Recreate doc_fts with the porter tokenizer so English word forms match each other."""
     from doc_searcher.search.text_helper import tokenize_for_fts  # jieba loads only when needed
 
-    conn.execute("DELETE FROM doc_fts")
+    conn.execute("DROP TABLE IF EXISTS doc_fts")
+    conn.execute("""
+        CREATE VIRTUAL TABLE doc_fts USING fts5(
+            doc_id UNINDEXED,
+            segment_id UNINDEXED,
+            segment_type UNINDEXED,
+            content,
+            tokenized_content,
+            tokenize='porter unicode61'
+        );
+    """)
     cursor = conn.execute(
         "SELECT doc_id, segment_id, segment_type, content FROM doc_segments ORDER BY id"
     )
@@ -98,6 +118,7 @@ Migration = Tuple[int, str, Callable[[sqlite3.Connection], None]]
 MIGRATIONS: List[Migration] = [
     (1, "v1.2.0 baseline schema with ctime", _v1_baseline),
     (2, "fold Simplified/Traditional Chinese in tokenized_content", _v2_fold_scripts),
+    (3, "English stemming (porter tokenizer)", _v3_stemming),
 ]
 
 

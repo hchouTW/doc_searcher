@@ -8,18 +8,21 @@
 #     first few matches lazily.
 #   - Sanitizes and escapes HTML characters safely.
 # Usage notes, dependencies, or assumptions:
-#   - Requires jieba; script folding lives in search.script_fold.
+#   - Requires jieba; script folding lives in search.script_fold, English stemming in
+#     search.stemming (highlights follow the index: outstand marks outstanding).
 #   - Used by indexer, searcher, and UI preview panel.
 
 import html
 import itertools
 import re
-from typing import Any, List, Optional, Tuple
+from functools import lru_cache
+from typing import Any, Dict, List, Optional, Tuple
 
 import jieba
 
 from doc_searcher.search.regex_engine import Deadline
 from doc_searcher.search.script_fold import fold, script_regex
+from doc_searcher.search.stemming import StemSpec, matches_stem, stem_regex_source, stem_spec
 
 # Longest part of a single match shown in a snippet (e.g. ".*" over a whole 5 MB segment).
 MAX_MATCH_CHARS = 300
@@ -78,22 +81,65 @@ def generate_highlighted_snippets(
     context_chars: int = 50,
     case_sensitive: bool = False,
     whole_word: bool = False,
+    stemming: bool = True,
 ) -> List[str]:
-    """Generate context snippets with HTML <mark> tags around matched keywords."""
+    """Generate context snippets with HTML <mark> tags around matched keywords.
+
+    Unless case_sensitive or whole_word is set (both ask for the exact word), plain English
+    keywords also mark their other forms, as the stemmed index matched them.
+    """
     if not content or not keywords:
         return []
-
-    escaped_kws = [script_regex(k) for k in keywords if k.strip()]
-    if not escaped_kws:
+    pattern = _highlight_pattern(
+        tuple(keywords), case_sensitive, whole_word, stemming and not (case_sensitive or whole_word)
+    )
+    if pattern is None:
         return []
-
-    expression = r"(" + "|".join(escaped_kws) + r")"
-    if whole_word:
-        expression = rf"(?<!\w){expression}(?!\w)"
-    pattern = re.compile(expression, 0 if case_sensitive else re.IGNORECASE)
     return generate_regex_highlighted_snippets(
         content, pattern, max_snippets=max_snippets, context_chars=context_chars
     )
+
+
+@lru_cache(maxsize=256)
+def _highlight_pattern(
+    keywords: Tuple[str, ...], case_sensitive: bool, whole_word: bool, stemmed: bool
+) -> Optional[Any]:
+    """Compile (once per query) the highlight pattern for keywords; None when nothing to mark."""
+    specs: Dict[str, StemSpec] = {}
+    alternatives = []
+    literals = []
+    for keyword in dict.fromkeys(k for k in keywords if k.strip()):
+        spec = stem_spec(keyword) if stemmed else None
+        if spec is None:
+            literals.append(script_regex(keyword))
+        elif spec not in specs.values():
+            name = f"s{len(specs)}"
+            specs[name] = spec
+            alternatives.append(f"(?P<{name}>{stem_regex_source(spec)})")
+    alternatives += literals
+    if not alternatives:
+        return None
+
+    expression = "(?:" + "|".join(alternatives) + ")"
+    if whole_word:
+        expression = rf"(?<!\w){expression}(?!\w)"
+    pattern: Any = re.compile(expression, 0 if case_sensitive else re.IGNORECASE)
+    return _StemFilter(pattern, specs) if specs else pattern
+
+
+class _StemFilter:
+    """Wraps a compiled pattern and drops stem-branch matches whose word has another stem."""
+
+    def __init__(self, pattern: Any, specs: Dict[str, StemSpec]):
+        self._pattern = pattern
+        self._specs = specs
+
+    def finditer(self, string: str, **kwargs: Any):
+        specs = self._specs
+        for match in self._pattern.finditer(string, **kwargs):
+            name = match.lastgroup
+            if name is None or matches_stem(specs[name], match.group()):
+                yield match
 
 
 def generate_regex_highlighted_snippets(

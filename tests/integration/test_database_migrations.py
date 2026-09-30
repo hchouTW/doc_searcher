@@ -48,7 +48,7 @@ def test_legacy_database_upgrades_once_without_losing_data(tmp_path, with_ctime)
     assert before["version"] == 0
 
     db = Database(str(path))
-    assert db.applied_migrations == [1, 2]
+    assert db.applied_migrations == [1, 2, 3]
     results = DocumentSearcher(db).search("legacy")
     db.close()
 
@@ -88,12 +88,12 @@ def test_failed_migration_rolls_back_and_leaves_database_usable(tmp_path, monkey
     def broken(conn):
         conn.execute("ALTER TABLE documents ADD COLUMN extra TEXT")
         conn.execute("UPDATE documents SET extra = 'x'")
-        raise RuntimeError("simulated bug in migration 3")
+        raise RuntimeError("simulated bug in migration 4")
 
-    monkeypatch.setattr(migrations, "MIGRATIONS", [*migrations.MIGRATIONS, (3, "broken", broken)])
+    monkeypatch.setattr(migrations, "MIGRATIONS", [*migrations.MIGRATIONS, (4, "broken", broken)])
     with pytest.raises(MigrationError, match="rolled back") as exc:
         Database(str(path))
-    assert "schema 2" in str(exc.value)
+    assert "schema 3" in str(exc.value)
 
     assert snapshot(path) == before
     conn = sqlite3.connect(str(path))

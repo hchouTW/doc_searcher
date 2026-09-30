@@ -80,7 +80,8 @@ def test_punctuation_only_queries_scan_the_stored_text(searcher, query, expected
 def test_punctuation_combines_with_other_terms(searcher):
     assert found(searcher, "Grades A-") == {"grades.txt"}
     assert found(searcher, "A- OR A+") == {"grades.txt", "plus.txt"}
-    assert found(searcher, "Grade NOT A+") == set()
+    # "Grade" also finds "Grades" (stemming), so grades.txt qualifies; plus.txt has A+.
+    assert found(searcher, "Grade NOT A+") == {"grades.txt"}
     assert found(searcher, "QATREE-deep AND 2023-01-03") == {"ids.txt"}
     assert found(searcher, "Language 100%") == set()  # no single segment holds both
 

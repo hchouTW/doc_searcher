@@ -20,6 +20,7 @@ CHANGELOG: List[Tuple[str, str, List[str]]] = [
             "punctuation_search_fix",
             "exact_chinese_word_search",
             "file_action_feedback",
+            "english_stemming",
         ],
     ),
     (
