@@ -1,6 +1,7 @@
 # Purpose: Quality gate (format, lint, types, coverage) and the pytest suite across supported OS/Python.
-# What the code does: Installs the hashed lock (constraints/ci.txt) and the project, then runs pytest
-#                     headless. The pip cache is keyed by OS, architecture, Python, and lock hash;
+# What the code does: Installs the hashed lock (constraints/ci.txt) and the project, validates
+#                     the optional AutoHotkey v2 example on Windows, then runs pytest headless.
+#                     The pip cache is keyed by OS, architecture, Python, and lock hash;
 #                     --require-hashes re-verifies every file, including cache hits.
 # Usage notes: Python policy (pyproject.toml/README) is 3.10–3.14; 3.10 and 3.12 run on every OS,
 #              3.14 on Linux as the representative upper bound. Actions are pinned to commit SHAs.
@@ -152,6 +153,22 @@ jobs:
       run: |
         doc-searcher --version
         doc-searcher --help
+
+    - name: Validate AutoHotkey v2 example (Windows)
+      if: runner.os == 'Windows' && matrix.python == '3.12'
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = 'Stop'
+        $archive = Join-Path $env:RUNNER_TEMP 'AutoHotkey_2.0.28.zip'
+        $install = Join-Path $env:RUNNER_TEMP 'autohotkey-v2'
+        Invoke-WebRequest 'https://github.com/AutoHotkey/AutoHotkey/releases/download/v2.0.28/AutoHotkey_2.0.28.zip' -OutFile $archive
+        $expected = 'B63BE7548792B4AD0DFE424D91CC69376694ED2F758245B7A75A0C77D693B478'
+        $actual = (Get-FileHash -Algorithm SHA256 $archive).Hash
+        if ($actual -ne $expected) { throw "AutoHotkey download checksum mismatch: $actual" }
+        Expand-Archive -Path $archive -DestinationPath $install
+        $script = (Resolve-Path 'examples/center_on_screen/center_on_screen.ahk').Path
+        & (Join-Path $install 'AutoHotkey64.exe') '/ErrorStdOut=UTF-8' '/Validate' $script
+        if ($LASTEXITCODE -ne 0) { throw "AutoHotkey validation failed with exit code $LASTEXITCODE" }
 
     - name: Run pytest
       run: python -m pytest tests/ -v
