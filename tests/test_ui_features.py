@@ -27,7 +27,7 @@ from PySide6.QtWidgets import (
 
 import pytest
 
-from doc_searcher.config import AppConfig
+from doc_searcher.config import COLUMN_IDS, AppConfig
 from doc_searcher.desktop.i18n import tr
 from doc_searcher.search.searcher import SearchResultItem, SegmentMatch
 from doc_searcher.desktop.main_window import MainWindow, ContentWidthComboBox
@@ -92,7 +92,7 @@ def test_sidebar_layout_and_compact_index_progress(tmp_path):
     assert window.splitter.count() == 3
     assert isinstance(window.splitter.widget(0), QScrollArea)
     assert window.sidebar_scroll.horizontalScrollBar().maximum() == 0
-    assert window.splitter.widget(1).layout().itemAt(0).widget() is window.table
+    assert window.splitter.widget(1).layout().itemAt(1).widget() is window.table
     assert window.splitter.widget(2) is window.preview
     assert window.progress_bar.parent() is window.index_frame
     assert window.search_input.width() <= window.search_card.width()
@@ -742,4 +742,145 @@ def test_selected_result_labels_and_highlights_follow_theme(theme):
         assert "<mark" not in snippet.text()
     assert _contrast_ratio(theme.text_selected, theme.bg_selected) >= 4.5
     assert _contrast_ratio(theme.mark_text, theme.mark_bg) >= 4.5
+    table.close()
+
+
+# ---------------------------------------------------------------- column visibility
+OPTIONAL_COLUMNS = ["type", "hits", "size", "modified", "path"]
+
+
+def _shown_table(width=900, count=3):
+    from PySide6.QtWidgets import QLabel  # noqa: F401
+
+    app = _app()
+    table = ResultTable()
+    table.resize(width, 400)
+    table.set_results([_result(f"file{n}.txt", n + 1) for n in range(count)])
+    table.show()
+    app.processEvents()
+    return app, table
+
+
+def test_table_hides_columns_but_never_file_name():
+    _app_, table = _shown_table()
+    table.set_visible_columns(["hits"])
+    assert table.visible_columns() == ["filename", "hits"]
+    table.set_visible_columns([])
+    assert table.visible_columns() == ["filename"]
+    table.set_visible_columns(["type", "filename", "hits", "size", "modified", "path"])
+    assert len(table.visible_columns()) == 6
+    table.close()
+
+
+def test_column_menu_locks_file_name_and_resets():
+    from doc_searcher.desktop.column_menu import ColumnMenuButton
+
+    _app()
+    button = ColumnMenuButton()
+    seen = []
+    button.columns_changed.connect(seen.append)
+    assert not button._checks["filename"].isEnabled()
+    assert button._checks["filename"].isChecked()
+    button._checks["path"].setChecked(False)
+    assert seen[-1] == ["type", "filename", "hits", "size", "modified"]
+    button._reset()
+    assert seen[-1] == ["type", "filename", "hits", "size", "modified", "path"]
+    assert all(check.isChecked() for check in button._checks.values())
+
+
+def test_visible_columns_persist_across_windows(tmp_path):
+    app = _app()
+    path = tmp_path / "config.json"
+    config = AppConfig(path)
+    config.db_path = str(tmp_path / "index.db")
+    window = MainWindow(config)
+    assert window.table.visible_columns() == list(COLUMN_IDS)
+
+    window.column_button._checks["path"].setChecked(False)
+    window.column_button._checks["size"].setChecked(False)
+    app.processEvents()
+    assert window.table.isColumnHidden(COLUMN_IDS.index("path"))
+    window.close()
+
+    config2 = AppConfig(path)
+    config2.db_path = str(tmp_path / "index.db")
+    window2 = MainWindow(config2)
+    assert window2.table.visible_columns() == ["type", "filename", "hits", "modified"]
+    assert not window2.column_button._checks["path"].isChecked()
+    window2.close()
+
+
+@pytest.mark.parametrize("hidden", [[c] for c in OPTIONAL_COLUMNS] + [OPTIONAL_COLUMNS])
+def test_visible_columns_fill_the_viewport(hidden):
+    app, table = _shown_table()
+    table.set_visible_columns([c for c in OPTIONAL_COLUMNS if c not in hidden])
+    app.processEvents()
+    header = table.horizontalHeader()
+    total = sum(
+        header.sectionSize(i) for i in range(len(COLUMN_IDS)) if not table.isColumnHidden(i)
+    )
+    assert abs(total - table.viewport().width()) <= 1
+    table.close()
+
+
+def test_file_name_gets_priority_elides_and_has_tooltips():
+    from PySide6.QtWidgets import QLabel
+
+    long_name = "a" * 60 + ".txt"
+    app = _app()
+    table = ResultTable()
+    table.resize(500, 300)
+    item = _result(long_name, 2)
+    table.set_results([item])
+    table.show()
+    app.processEvents()
+
+    widths = {i: table.columnWidth(i) for i in range(len(COLUMN_IDS))}
+    name_col = COLUMN_IDS.index("filename")
+    assert widths[name_col] == max(widths.values())
+
+    label = table.cellWidget(0, name_col).findChild(QLabel, "resultNameLabel")
+    assert label.toolTip() == long_name
+    assert label.text().endswith("…") and len(label.text()) < len(long_name)
+    assert table.item(0, COLUMN_IDS.index("path")).toolTip() == item.path
+    table.close()
+
+
+def test_hiding_selected_sort_column_keeps_sort_and_selection():
+    app, table = _shown_table()
+    table.sortItems(COLUMN_IDS.index("hits"), Qt.DescendingOrder)
+    table.selectRow(0)
+    selected = table.get_selected_item()
+    table.set_visible_columns(["size"])
+    assert table.horizontalHeader().sortIndicatorSection() == COLUMN_IDS.index("hits")
+    assert table.get_selected_item() is selected
+    assert table.item(0, 2).data(Qt.ItemDataRole.UserRole).total_matches == 3
+    table.close()
+
+
+@pytest.mark.parametrize("theme", [LIGHT_PALETTE, DARK_PALETTE])
+def test_selected_row_bar_and_contrast(theme):
+    from PySide6.QtGui import QColor
+
+    app = _app()
+    table = ResultTable()
+    table.apply_theme(theme)
+    table.resize(700, 300)
+    table.set_results([_result("first.txt", 2), _result("second.txt", 3)])
+    table.show()
+    table.selectRow(1)
+    app.processEvents()
+
+    image = table.viewport().grab().toImage()
+    rect = table.visualRect(table.model().index(1, table.first_visible_column()))
+    y = rect.center().y()
+    assert QColor(image.pixel(1, y)).name() == theme.selected_bar
+    assert (
+        QColor(image.pixel(1, table.visualRect(table.model().index(0, 0)).center().y())).name()
+        != theme.selected_bar
+    )
+    assert QColor(image.pixel(rect.left() + 40, y)).name() != theme.selected_bar
+    assert _contrast_ratio(theme.selected_bar, theme.bg_selected) >= 4.0
+    assert _contrast_ratio(theme.selected_bar, theme.bg_table) >= 3.0
+    assert theme.bg_selected not in (theme.bg_table, theme.bg_table_alt)
     table.close()

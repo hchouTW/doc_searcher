@@ -3,8 +3,13 @@
 #   - Displays sortable metadata and highlighted matching excerpts in Dark and Light modes.
 #   - Synchronizes selection with preview panel.
 #   - Supports Enter / double-click to open file and right-click context menu.
+#   - Columns can be hidden (File Name is always visible); widths adapt so the visible columns
+#     always fill the viewport, File Name has priority, and long names/paths elide with tooltips.
+#   - The selected row gets a 4 px left bar (theme.selected_bar) painted by a delegate.
 # Usage notes, dependencies, or assumptions:
 #   - PySide6.QtWidgets (QTableWidget, QHeaderView, QMenu), doc_searcher.desktop.theme.ThemeColors.
+#   - Column ids come from doc_searcher.config.COLUMN_IDS; the table never touches AppConfig,
+#     MainWindow feeds it through set_visible_columns() and listens to visible_columns_changed.
 
 from typing import List, Optional
 import re
@@ -19,9 +24,14 @@ from PySide6.QtWidgets import (
     QLabel,
     QWidget,
     QVBoxLayout,
+    QStyledItemDelegate,
+    QStyleOptionViewItem,
+    QSizePolicy,
 )
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QColor, QFont
+from PySide6.QtCore import Qt, Signal, QModelIndex, QEvent, QPersistentModelIndex
+from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter
+
+from doc_searcher.config import COLUMN_IDS, REQUIRED_COLUMN
 
 from doc_searcher.search.searcher import SearchResultItem
 from doc_searcher.platform.platform_helper import (
@@ -48,10 +58,70 @@ class SortableTableItem(QTableWidgetItem):
         return super().__lt__(other)
 
 
+SELECTION_BAR_WIDTH = 4
+FILENAME_COLUMN = COLUMN_IDS.index(REQUIRED_COLUMN)
+PATH_COLUMN = COLUMN_IDS.index("path")
+PATH_SHARE = 0.28  # fraction of the viewport offered to the Path column
+PATH_MIN_WIDTH = 100
+FILENAME_MIN_WIDTH = 200
+
+
+class ElidedLabel(QLabel):
+    """Single-line label that shows the full text, elided with an ellipsis when too narrow."""
+
+    def __init__(self, text: str = "", parent=None):
+        super().__init__(parent)
+        self._full_text = text
+        self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
+        self.setToolTip(text)
+        self._elide()
+
+    def _elide(self):
+        width = max(0, self.width() - 2)
+        super().setText(
+            QFontMetrics(self.font()).elidedText(
+                self._full_text, Qt.TextElideMode.ElideRight, width
+            )
+            if width
+            else self._full_text
+        )
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._elide()
+
+
+class SelectionBarDelegate(QStyledItemDelegate):
+    """Paints the theme's selection bar at the left edge of the selected row."""
+
+    def __init__(self, table: "ResultTable"):
+        super().__init__(table)
+        self._table = table
+
+    def paint(
+        self,
+        painter: QPainter,
+        option: QStyleOptionViewItem,
+        index: QModelIndex | QPersistentModelIndex,
+    ):
+        super().paint(painter, option, index)
+        table = self._table
+        if index.column() == table.first_visible_column() and table.isRowSelected(index.row()):
+            rect = option.rect
+            painter.fillRect(
+                rect.left(),
+                rect.top(),
+                SELECTION_BAR_WIDTH,
+                rect.height(),
+                QColor(table.theme.selected_bar),
+            )
+
+
 class ResultTable(QTableWidget):
     """Table widget presenting search matches with adaptive high-contrast styling."""
 
     item_selected = Signal(object)  # Emits SearchResultItem or None
+    visible_columns_changed = Signal(list)  # Emits the visible column ids after a change
 
     HEADER_KEYS = [
         "table_type",
@@ -94,13 +164,18 @@ class ResultTable(QTableWidget):
         self.setShowGrid(False)
         self.setSortingEnabled(True)
 
+        self.setWordWrap(False)
+        self.setTextElideMode(Qt.TextElideMode.ElideRight)
+        self.setItemDelegate(SelectionBarDelegate(self))
+
         header = self.horizontalHeader()
-        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(1, QHeaderView.Stretch)
-        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(5, QHeaderView.Stretch)
+        for column in range(len(COLUMN_IDS)):
+            header.setSectionResizeMode(column, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(FILENAME_COLUMN, QHeaderView.Fixed)
+        header.setSectionResizeMode(PATH_COLUMN, QHeaderView.Fixed)
+        header.setMinimumSectionSize(40)
+        header.setStretchLastSection(False)
+        self.viewport().installEventFilter(self)
         header.setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         header.setSortIndicatorShown(True)
 
@@ -108,6 +183,61 @@ class ResultTable(QTableWidget):
         self.itemDoubleClicked.connect(self._on_double_clicked)
         self.setContextMenuPolicy(Qt.CustomContextMenu)
         self.customContextMenuRequested.connect(self._show_context_menu)
+
+    # ------------------------------------------------------------ column visibility
+    def visible_columns(self) -> List[str]:
+        return [
+            column_id
+            for index, column_id in enumerate(COLUMN_IDS)
+            if not self.isColumnHidden(index)
+        ]
+
+    def first_visible_column(self) -> int:
+        for index in range(len(COLUMN_IDS)):
+            if not self.isColumnHidden(index):
+                return index
+        return FILENAME_COLUMN
+
+    def isRowSelected(self, row: int) -> bool:
+        return self.selectionModel().isRowSelected(row, QModelIndex())
+
+    def set_visible_columns(self, column_ids) -> None:
+        """Show exactly the given columns; File Name is always kept visible."""
+        wanted = set(column_ids) | {REQUIRED_COLUMN}
+        before = self.visible_columns()
+        for index, column_id in enumerate(COLUMN_IDS):
+            self.setColumnHidden(index, column_id not in wanted)
+        self._apply_column_widths()
+        self.viewport().update()
+        if self.visible_columns() != before:
+            self.visible_columns_changed.emit(self.visible_columns())
+
+    def _apply_column_widths(self) -> None:
+        """Size File Name and Path adaptively so the visible columns fill the viewport.
+
+        File Name has priority: it takes the room left after the content-sized columns and
+        Path, never drops below FILENAME_MIN_WIDTH (the table scrolls sideways instead), and
+        Path only receives a share of the space that File Name can spare.
+        """
+        header = self.horizontalHeader()
+        show_path = not self.isColumnHidden(PATH_COLUMN)
+        other = sum(
+            header.sectionSize(i)
+            for i in range(len(COLUMN_IDS))
+            if i not in (FILENAME_COLUMN, PATH_COLUMN) and not self.isColumnHidden(i)
+        )
+        room = self.viewport().width() - other
+        path_width = 0
+        if show_path:
+            path_width = max(PATH_MIN_WIDTH, int(room * PATH_SHARE))
+            path_width = max(PATH_MIN_WIDTH // 2, min(path_width, room - FILENAME_MIN_WIDTH))
+            header.resizeSection(PATH_COLUMN, path_width)
+        header.resizeSection(FILENAME_COLUMN, max(FILENAME_MIN_WIDTH, room - path_width))
+
+    def eventFilter(self, obj, event):
+        if obj is self.viewport() and event.type() == QEvent.Type.Resize:
+            self._apply_column_widths()
+        return super().eventFilter(obj, event)
 
     def set_language(self, language: str):
         """Update table strings without rebuilding the application."""
@@ -196,6 +326,7 @@ class ResultTable(QTableWidget):
 
             # 6. Path
             it_path = SortableTableItem(item.path)
+            it_path.setToolTip(item.path)
             it_path.setForeground(QColor(c.text_muted))
 
             for table_item, sort_value in (
@@ -228,7 +359,7 @@ class ResultTable(QTableWidget):
             name_layout = QVBoxLayout(name_container)
             name_layout.setContentsMargins(8, 3, 6, 3)
             name_layout.setSpacing(1)
-            name_label = QLabel(item.filename)
+            name_label = ElidedLabel(item.filename)
             name_label.setObjectName("resultNameLabel")
             name_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
             name_label.setFixedHeight(18)
@@ -252,7 +383,8 @@ class ResultTable(QTableWidget):
             self.setRowHeight(row, 65)
 
         self.setSortingEnabled(True)
-        if 0 <= previous_sort_column < 6:
+        self._apply_column_widths()
+        if 0 <= previous_sort_column < len(COLUMN_IDS):
             self.sortItems(previous_sort_column, previous_sort_order)
 
         if items:

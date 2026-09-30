@@ -24,6 +24,7 @@ class ThemeColors:
     bg_table: str
     bg_table_alt: str
     bg_selected: str
+    selected_bar: str  # 4 px accent bar at the left edge of the selected result row
     text_primary: str
     text_secondary: str
     text_muted: str
@@ -55,7 +56,8 @@ DARK_PALETTE = ThemeColors(
     bg_input="#1e1e22",
     bg_table="#27272a",
     bg_table_alt="#222225",
-    bg_selected="#1d4ed8",  # Blue
+    bg_selected="#1e3a8a",  # Deep blue; white text 10.4:1
+    selected_bar="#60a5fa",  # 4.1:1 against bg_selected
     text_primary="#f4f4f5",  # Crisp light gray / near white
     text_secondary="#d4d4d8",  # Readable secondary
     text_muted="#a1a1aa",  # Muted metadata
@@ -87,6 +89,7 @@ LIGHT_PALETTE = ThemeColors(
     bg_table="#ffffff",
     bg_table_alt="#f8f9fa",
     bg_selected="#dbeafe",
+    selected_bar="#2563eb",  # 4.2:1 against bg_selected, 5.2:1 against bg_table
     text_primary="#18181b",  # Deep dark
     text_secondary="#3f3f46",
     text_muted="#6b6b73",  # Darkened from #71717a to clear WCAG AA (4.5:1) on bg_window

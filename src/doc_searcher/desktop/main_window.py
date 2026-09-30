@@ -6,6 +6,7 @@
 #   - Uses content-aware combo boxes whose popups escape card clipping and remain readable.
 #   - Listens to macOS/Windows system colorScheme changes and updates theme dynamically.
 #   - Provides a manual theme toggle button (Auto / Dark / Light).
+#   - Hosts the "Display Columns" button above the results table and persists its choice.
 #   - Ensures high-contrast readability with no system-color mismatches.
 #   - Owns widgets and workers only: filter translation/validation lives in search_filters,
 #     index/search scheduling and indexing status decisions in coordination, and indexing
@@ -58,6 +59,7 @@ from doc_searcher.desktop.i18n import tr
 from doc_searcher.version import APP_VERSION, CHANGELOG
 from doc_searcher.desktop.theme import ThemeColors, get_active_theme, apply_application_theme
 from doc_searcher.platform.resource_path import resource_path
+from .column_menu import ColumnMenuButton
 from .result_table import ResultTable
 from .preview_panel import PreviewPanel
 from .worker import IndexWorker, SearchWorker
@@ -561,8 +563,19 @@ class MainWindow(QMainWindow):
         left_layout.setContentsMargins(0, 0, 0, 0)
         left_layout.setSpacing(4)
 
+        table_bar = QHBoxLayout()
+        table_bar.setContentsMargins(0, 0, 0, 0)
+        table_bar.addStretch()
+        self.column_button = ColumnMenuButton()
+        table_bar.addWidget(self.column_button)
+        left_layout.addLayout(table_bar)
+
         self.table = ResultTable()
         self.table.item_selected.connect(self._on_table_item_selected)
+        self.table.set_visible_columns(self.config.visible_columns)
+        self.column_button.set_columns(self.table.visible_columns())
+        self.column_button.columns_changed.connect(self.table.set_visible_columns)
+        self.table.visible_columns_changed.connect(self._on_visible_columns_changed)
         left_layout.addWidget(self.table)
         self.splitter.addWidget(left_widget)
 
@@ -586,6 +599,9 @@ class MainWindow(QMainWindow):
             Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
         )
         self.status_bar.addPermanentWidget(self.last_updated_label)
+
+    def _on_visible_columns_changed(self, column_ids: List[str]):
+        self.config.visible_columns = column_ids
 
     def apply_theme(self, theme: ThemeColors):
         """Apply colors across the entire window and child widgets."""
@@ -802,6 +818,7 @@ class MainWindow(QMainWindow):
         self.index_summary_label.setStyleSheet(f"color: {theme.text_secondary}; font-weight: 600;")
         # Update child components
         self.table.apply_theme(theme)
+        self.column_button.apply_theme(theme)
         self.preview.apply_theme(theme)
 
     def _get_theme_btn_text(self) -> str:
@@ -908,6 +925,7 @@ class MainWindow(QMainWindow):
         if not self.search_input.text().strip() and not self.search_worker:
             self.results_count_label.setText(tr(self.language, "ready_to_search"))
         self.table.set_language(self.language)
+        self.column_button.set_language(self.language)
         self.preview.set_language(self.language)
         self._refresh_dir_label()
         self._update_db_status(update_main_status=False)
