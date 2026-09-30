@@ -19,6 +19,7 @@ CHANGELOG: List[Tuple[str, str, List[str]]] = [
             "simplified_traditional_search",
             "punctuation_search_fix",
             "exact_chinese_word_search",
+            "file_action_feedback",
         ],
     ),
     (

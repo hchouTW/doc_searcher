@@ -37,12 +37,12 @@ cannot run here, reason given. **Covered** already tested elsewhere in the suite
 | FLT-01 / 02 / 03 | Pass | engine filters; GUI badge and chips are **Covered** by `tests/test_ui_features.py` |
 | FLT-04 | Manual + Covered | column sorting and visibility persistence (PR #5 tests) |
 | PRV-01, 02, 03, 04, 06 | Pass | metadata, zoom clamping, wrap-around, highlights equal stored text, clipboard path |
-| PRV-05 | Pass + Manual | missing file returns False without crashing (DEF-03); real launch needs a person |
+| PRV-05 | Pass + Manual | missing file: no crash and the panel explains it (DEF-03 fixed); real launch needs a person |
 | PRV-07 / 08 | Manual + Covered | Finder/Explorer reveal; theme tests exist in `test_ui_features.py` |
 | ROB-01 | Pass | 1k: index 1.8 s (budget 6), slowest query 14.6 ms (200), peak RSS 115 MB (300), growth 6.1 MB (20) |
 | ROB-01b | Pass | 10k (`DOC_SEARCHER_BENCH_10K=1`): index 17.0 s (90), slowest query 119 ms (500), peak RSS 122 MB (400) |
 | ROB-01c | Pass | 200 preview cycles: RSS growth 0 MB in all 5 samples (limit 50) |
-| ROB-02 | Pass, gap | no crash, but no "file missing" state exists (DEF-03) |
+| ROB-02 | Pass | no crash, and the preview says the file is gone (DEF-03 fixed) |
 | ROB-03 | Pass | CLI and `SearchService` return the same paths for 5 queries |
 
 ## Findings
@@ -54,8 +54,10 @@ cannot run here, reason given. **Covered** already tested elsewhere in the suite
   such documents. Now such terms are confirmed against the stored text like punctuation terms,
   and `NOT` on them is decided by that check instead of FTS. Words jieba does segment keep
   their AND, word-order-free behaviour (`記錄會議` still finds `會議記錄`).
-- **DEF-03 (open, minor)** "開啟檔案" on a result whose file was deleted does nothing and shows no
-  message. `open_file_with_default_app` returns False and the panel ignores it.
+- **DEF-03 (fixed on `fix/open-file-feedback`)** 開啟檔案 (button, double-click, Enter) and
+  顯示檔案位置 on a result whose file was deleted did nothing and showed no message. The preview
+  panel now shows a red notice naming the file and the reason (missing, no app for the type, or
+  cannot reveal); it clears when another result is selected or after 8 s.
 - **Observation** `PRAGMA integrity_check` on a long-lived connection that saw the table before
   another thread wrote to it can report `fts5: checksum mismatch` while a fresh connection says
   `ok`. The file is fine; the tests check integrity on a fresh connection.

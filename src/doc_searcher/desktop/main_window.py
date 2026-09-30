@@ -572,6 +572,7 @@ class MainWindow(QMainWindow):
 
         self.table = ResultTable()
         self.table.item_selected.connect(self._on_table_item_selected)
+        self.table.file_action_failed.connect(self._on_file_action_failed)
         self.table.set_visible_columns(self.config.visible_columns)
         self.column_button.set_columns(self.table.visible_columns())
         self.column_button.columns_changed.connect(self.table.set_visible_columns)
@@ -1796,6 +1797,9 @@ class MainWindow(QMainWindow):
 
     def _on_table_item_selected(self, item: Optional[SearchResultItem]):
         self.preview.display_result(item)
+
+    def _on_file_action_failed(self, action: str, item: SearchResultItem):
+        self.preview.show_file_action_failure(action, item)
 
     def closeEvent(self, event):
         self.advanced_dialog.close()
