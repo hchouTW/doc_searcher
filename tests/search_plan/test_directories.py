@@ -5,6 +5,7 @@ import sqlite3
 import sys
 import threading
 import time
+from pathlib import Path
 
 import pytest
 
@@ -63,12 +64,8 @@ def test_dir_06_awkward_paths_are_indexed_once_and_searchable(env):
         assert len(hits) == 1, key
         (path,) = hits
         assert path.startswith("path/")
-    rows = (
-        env.db.get_connection()
-        .execute("SELECT COUNT(*) FROM documents WHERE path LIKE '%/path/%'")
-        .fetchone()[0]
-    )
-    assert rows == len(keys)
+    stored = [row[0] for row in env.db.get_connection().execute("SELECT path FROM documents")]
+    assert sum(1 for path in stored if Path(path).parent.name == "path") == len(keys)
 
 
 # ---- IDX: pause / resume / stop ---------------------------------------------------------------
