@@ -210,6 +210,7 @@ jobs:
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           tag_name: ${{ env.RELEASE_TAG }}
+          name: DocSearcher ${{ env.RELEASE_TAG }}
           files: release-assets/*
           fail_on_unmatched_files: true
           generate_release_notes: ${{ steps.existing.outputs.exists != 'true' }}
