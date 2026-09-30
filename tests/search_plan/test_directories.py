@@ -205,3 +205,84 @@ def test_idx_05_broken_files_are_recorded_and_good_ones_still_indexed(scratch, d
     assert "~$temp.docx" not in errors  # Office lock files are ignored outright
     if not RUNNING_AS_ROOT and sys.platform != "win32":
         assert errors.get("locked.txt")
+
+
+def test_idx_06_killing_the_process_mid_scan_leaves_a_recoverable_index(tmp_path):
+    """The whole process dies (SIGKILL / TerminateProcess) while indexing, as on a crash or power cut."""
+    import subprocess
+
+    folder = tmp_path / "corpus"
+    folder.mkdir()
+    total = 1500
+    for number in range(total):
+        (folder / f"doc{number:04d}.txt").write_text(
+            f"QAKILL{number:04d} body text", encoding="utf-8"
+        )
+    data_dir = tmp_path / "data"
+    db_path = data_dir / "index.db"
+    script = (
+        "import sys; from doc_searcher.storage.database import Database; "
+        "from doc_searcher.indexing.service import IndexingService, IndexRequest; "
+        "Database(sys.argv[1]).close(); "
+        "IndexingService(Database(sys.argv[1])).run(IndexRequest([sys.argv[2]]))"
+    )
+    src = Path(__file__).resolve().parents[2] / "src"
+    env = {**os.environ, "PYTHONPATH": str(src), "DOC_SEARCHER_DATA_DIR": str(data_dir)}
+    data_dir.mkdir()
+    process = subprocess.Popen(
+        [sys.executable, "-c", script, str(db_path), str(folder)],
+        env=env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    try:
+        deadline = time.monotonic() + 60
+        indexed = 0
+        while time.monotonic() < deadline and process.poll() is None:
+            try:
+                probe = sqlite3.connect(str(db_path), timeout=1)
+                try:
+                    indexed = probe.execute("SELECT COUNT(*) FROM documents").fetchone()[0]
+                finally:
+                    probe.close()
+            except sqlite3.Error:
+                indexed = 0  # the database is being created or is busy; look again
+            if indexed >= 100:
+                break
+            time.sleep(0.02)
+        assert indexed >= 100, "the child never reached the mid-scan point"
+        killed_mid_scan = process.poll() is None
+        process.kill()
+    finally:
+        process.wait(30)
+    if not killed_mid_scan:
+        pytest.skip("indexing finished before the process could be killed on this machine")
+
+    conn = sqlite3.connect(str(db_path))
+    try:
+        assert conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+        partial = conn.execute("SELECT COUNT(*) FROM documents").fetchone()[0]
+    finally:
+        conn.close()
+    assert 100 <= partial < total
+
+    from doc_searcher.indexing.service import IndexingService, IndexRequest
+    from doc_searcher.search.searcher import DocumentSearcher
+    from doc_searcher.storage.database import Database
+
+    db = Database(str(db_path))  # opens without an error dialog-worthy failure
+    try:
+        stats = IndexingService(db).run(IndexRequest([str(folder)]))
+        assert not stats["cancelled"] and stats["failed"] == 0
+        conn = db.get_connection()
+        assert conn.execute("SELECT COUNT(*) FROM documents").fetchone()[0] == total
+        assert conn.execute("SELECT COUNT(DISTINCT path) FROM documents").fetchone()[0] == total
+        assert conn.execute("SELECT COUNT(*) FROM doc_fts").fetchone()[0] == total
+        assert {r.filename for r in DocumentSearcher(db).search("QAKILL0007")} == {"doc0007.txt"}
+    finally:
+        db.close()
+    check = sqlite3.connect(str(db_path))
+    try:
+        assert check.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+    finally:
+        check.close()
