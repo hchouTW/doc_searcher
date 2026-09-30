@@ -175,6 +175,10 @@ jobs:
           -Wait -PassThru -NoNewWindow -RedirectStandardOutput $out
         if (Test-Path $out) { Get-Content $out }
         if ($proc.ExitCode -ne 0) { throw "AutoHotkey validation failed with exit code $($proc.ExitCode)" }
+        # Live check on the runner's real desktop: run the script and open real windows.
+        & (Join-Path $PWD 'tests/windows/center_on_screen_live.ps1') `
+          -AutoHotkey (Join-Path $install 'AutoHotkey64.exe') -Script $script
+        if ($LASTEXITCODE -ne 0) { throw "AutoHotkey live check failed" }
 
     - name: Run pytest
       run: python -m pytest tests/ -v
