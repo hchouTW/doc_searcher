@@ -1,4 +1,25 @@
-# 本機多格式文件關鍵字檢索系統 (DocSearcher)
+# DocSearcher v1.3.1
+
+**本機多格式文件關鍵字檢索系統 · Local multi-format document keyword search**
+
+[繁體中文](#繁體中文) · [English](#english)
+
+---
+
+## ✨ v1.3.1 更新重點 · What's new in v1.3.1
+
+| 繁體中文 | English |
+| --- | --- |
+| **繁簡中文互搜**：輸入簡體可找到繁體文件，反之亦然，預覽仍顯示文件原文字元 | **Traditional ↔ Simplified Chinese**: a Simplified query finds Traditional documents and vice versa; the preview shows the characters as written |
+| **英文詞形還原**：`outstand`／`outstanding`／`outstandings` 互相命中；區分大小寫與完整單字仍要求完全相同 | **English stemming**: `outstand`, `outstanding` and `outstandings` find each other; match case and whole word still mean the exact word |
+| **含標點符號的查詢**：`A-`、`2023-01-03`、`snake_case`、`Section 1 (Paragraphs)` 現在可正確檢索 | **Queries with punctuation**: `A-`, `2023-01-03`, `snake_case` and `Section 1 (Paragraphs)` now work |
+| **中文詞更精確**：搜尋 `升等` 不再命中僅是字元分散出現的文件 | **More exact Chinese words**: searching `升等` no longer matches text where the characters merely appear apart |
+| **開檔失敗會說明原因**：檔案已被刪除或無對應程式時，預覽面板顯示提示 | **Clear feedback when opening fails**: the preview panel explains a missing file or a missing app |
+| **索引自動升級**：首次啟動會自動更新既有索引（約每 1 萬份文件 15 秒），並先備份 | **Automatic index upgrade**: the first launch upgrades your existing index (about 15 s per 10,000 documents), after backing it up |
+
+---
+
+# 繁體中文
 
 一套支援 **Windows、macOS 與 Linux** 的高效能、跨平台純 Python 本機文件內文全文檢索軟體。程式會在啟動時自動識別作業系統與硬體架構，套用相應字型、介面圓角、深淺色外觀，以及原檔／檔案管理器開啟方式。
 
@@ -18,9 +39,10 @@
    - 路徑可含中日韓文字、emoji、空白、`%`、`_`、`[ ]` 等字元；在 macOS 上，以不同 Unicode 正規化形式（NFC／NFD）拼寫的同一路徑視為同一個檔案。從 1.2.0 升級後，第一次重新掃描會把以 NFD 儲存的舊索引項目重新建立一次。
    - 加密、損毀、空白或無法讀取的文件會記錄原因並略過，不會中斷整批索引；僅設定擁有者密碼（限制列印／複製）的 PDF 仍可擷取文字。
 3. **輕量極速，無 OCR 負擔**：
-   - 專注於文件內嵌文字流抽取，無需昂貴 GPU 或笨重 OCR 影像模型，幾秒內即可為數百至數千份文件建立完備索引。
+   - 專注於文件內嵌文字流抽取，無需昂貴 GPU 或笨重 OCR 影像模型，幾秒內即可為數百至數千份文件建立完備索引。純影像的掃描版 PDF 沒有文字層，因此無法檢索。
 4. **SQLite FTS5 + jieba 中英文全文檢索**：
    - 內建 BM25 相關度評分，支援繁簡中文互搜（輸入簡體可找到繁體文件，反之亦然；以字為單位轉換，不做「軟體／软件」這類地區用語對應；正規表示式模式不轉換，高亮顯示文件原文字元）、英文混合詞組、英文詞形還原（`outstand`／`outstanding`／`outstandings` 互相命中；區分大小寫與完整單字仍要求完全相同）、精確片語（`"..."`）與布林運算（`AND` / `OR` / `NOT`）。
+   - 無法被斷詞為單一詞語的中文詞（例如 `升等`）必須以該詞出現，而不是字元分散出現；含標點符號的查詢（`A-`、`2023-01-03`、`snake_case`、`Section 1 (Paragraphs)`）可照輸入內容檢索。
    - 支援 `filename:關鍵字`／`檔名:關鍵字`直接尋找檔名，並提供查詢格式錯誤提示。
    - 搜尋框即時以不同顏色標示布林運算子、精確片語與特殊符號，並提供 AND／OR／NOT／引號快速插入。
    - 支援修改日期或建立日期（過去 24 小時、7 天、30 天、1 年及自訂區間）、檔案大小級距與 KB／MB／GB 自訂門檻。
@@ -32,7 +54,7 @@
    - 命中關鍵字以黃底粗體高亮，清晰標示所在位置（如：第 3 頁、工作表: 損益表、投影片 2）。
    - 搜尋結果可依類型、名稱、命中數、大小、修改日期與路徑排序，並直接顯示命中摘要。
    - 預覽提供上一個／下一個命中位置、命中計數與 A−／A+ 文字縮放。
-   - 按下 **Enter** 或雙擊直接以系統預設程式開啟原檔。
+   - 按下 **Enter** 或雙擊直接以系統預設程式開啟原檔；若無法開啟（例如檔案已被刪除），預覽面板會說明原因。
    - 支援右鍵快速開啟檔案所在資料夾（Windows Explorer / macOS Finder / Linux 桌面檔案管理器）。
 6. **可恢復且適應外部儲存的索引流程**：
    - 支援重新掃描、暫停、恢復與安全停止；索引完成後會自動刷新目前搜尋。
@@ -74,16 +96,19 @@ doc_searcher/
 │   ├── cli.py                # GUI 與 CLI 進入點（doc-searcher 指令）
 │   ├── version.py            # 應用程式版本號與更新紀錄（唯一版本來源）
 │   ├── config.py             # 設定檔持久化 (記錄已選目錄、UI 偏好)
-│   ├── assets/               # 應用程式圖示（套件資料）
+│   ├── assets/               # 應用程式圖示與 OpenCC 字元對照表（套件資料）
 │   ├── indexing/
 │   │   ├── scanner.py        # 資料夾遞迴掃描、過濾暫存檔 (~$*)、增量比對
 │   │   └── indexer.py        # 文件解析調度、jieba 分詞與批次索引寫入
 │   ├── search/
 │   │   ├── searcher.py       # 查詢語法剖析、FTS5 檢索與 Snippet 摘要高亮
 │   │   ├── search_service.py # 不依賴介面的搜尋／索引服務（供 MCP 伺服器使用）
-│   │   └── text_helper.py    # jieba 分詞預處理、HTML 標籤過濾與 Snippet 生成
+│   │   ├── text_helper.py    # jieba 分詞預處理、HTML 標籤過濾與 Snippet 生成
+│   │   ├── script_fold.py    # 繁簡中文轉換（以字為單位）
+│   │   └── stemming.py       # 以 SQLite porter 分詞器取得英文詞幹（供高亮使用）
 │   ├── storage/
-│   │   └── database.py       # SQLite3 連線與 FTS5 虛擬全文資料表
+│   │   ├── database.py       # SQLite3 連線與 FTS5 虛擬全文資料表
+│   │   └── migrations.py     # 具版本的資料庫遷移（先備份、失敗即回復）
 │   ├── parsers/
 │   │   ├── base.py           # DocumentParser 抽象介面與 PageSegment 資料結構
 │   │   ├── pdf_parser.py     # PyMuPDF PDF 提取器
@@ -112,6 +137,7 @@ doc_searcher/
 ├── tests/
 │   ├── sample_generator.py   # 自動產生各格式測試檔案之腳本
 │   ├── fixtures/             # 合成的舊版資料庫／設定檔（遷移測試用）
+│   ├── search_plan/          # 測試計畫的資料集產生器與其案例模組
 │   ├── test_cli.py           # CLI 結束代碼與跨目錄索引保護
 │   ├── test_imports.py       # 匯入邊界（輕量模組不載入 Qt／jieba）
 │   ├── test_parsers.py       # 各格式解析器單元測試
@@ -121,7 +147,7 @@ doc_searcher/
 │   ├── test_ui_features.py   # 語系、排序與預覽導覽等介面回歸測試
 │   ├── test_search_service.py # 搜尋服務（搜尋、狀態、重新索引、文件文字）測試
 │   ├── test_mcp_server.py    # MCP 協定層與 stdio 往返測試
-│   └── sample_files/         # 各格式測試樣本文件
+│   └── sample_files/         # 各格式測試樣本文件（含舊版 .doc／.ppt／.xls）
 ├── scripts/
 │   ├── capture_screenshots.py # 以合成資料重建深淺色 README 截圖
 │   ├── generate_icon.py      # 產生應用程式圖示 (.ico / .png)
@@ -134,7 +160,7 @@ doc_searcher/
 │   ├── doc_searcher_mac.spec # macOS .app 的 PyInstaller 設定
 │   ├── doc_searcher_win.spec # Windows 單一檔案 .exe 的 PyInstaller 設定
 │   └── installer_inno.iss    # Windows 安裝程式 (Inno Setup 6) 腳本
-├── docs/                     # 基準紀錄 (baseline.md) 與 README 介面截圖
+├── docs/                     # 基準紀錄、ADR、測試計畫、執行紀錄與 README 介面截圖
 ├── constraints/              # CI／發行版建置使用的鎖定依賴（含雜湊），見 constraints/README.md
 └── pyproject.toml            # 專案中繼資料、依賴範圍（dev／mcp／package 選項）與指令進入點
 ```
@@ -165,6 +191,8 @@ pip install -e '.[dev,mcp]'
 ```
 
 > **自 1.2.0 原始碼升級**：程式碼已移至 `src/doc_searcher/`，`main.py` 與 `mcp_server.py` 已移除。請在既有虛擬環境執行一次 `pip install -e .`（Windows 可重新執行 `install.bat`，會一併更新桌面捷徑），並將 MCP 用戶端設定改為 `venv/bin/doc-searcher-mcp`。設定檔與索引位置不變。
+
+> **自 1.3.0 升級**：第一次啟動時會自動升級既有索引（繁簡轉換與英文詞形還原）；不會重新讀取檔案，且會先備份。啟動時約需每 1 萬份文件 15 秒。
 
 > **可重現安裝**：CI 與打包腳本安裝 `constraints/ci.txt` 內固定版本且驗證雜湊的依賴；更新流程見 [constraints/README.md](constraints/README.md)。
 
@@ -216,14 +244,14 @@ CLI 的標準輸出只包含搜尋結果；進度與診斷訊息寫入標準錯�
 
 - 請在專案根目錄執行建置腳本；輸出位於根目錄的 `dist/`。
 - macOS 使用 `packaging/doc_searcher_mac.spec`（onedir `.app`，PyInstaller 6 已不建議在 `.app` 內使用 onefile）；Windows 使用 `packaging/doc_searcher_win.spec`（onefile、無主控台視窗）。
-- 建置腳本會在打包後執行 `scripts/verify_build.py`：於成品內執行 `--self-check`（解析器、jieba 詞典、SQLite FTS5、Qt、圖示資源），並確認版本與 CPU 架構，失敗即中止、不產生壓縮檔。亦可手動執行：`DocSearcher.app/Contents/MacOS/DocSearcher --self-check`，或在 Windows 上 `DocSearcher.exe --self-check --report check.txt`（無主控台視窗，結果寫入檔案）。
+- 建置腳本會在打包後執行 `scripts/verify_build.py`：於成品內執行 `--self-check`（解析器、jieba 詞典、繁簡轉換表、SQLite FTS5、英文詞形還原、Qt、圖示資源），並確認版本與 CPU 架構，失敗即中止、不產生壓縮檔。亦可手動執行：`DocSearcher.app/Contents/MacOS/DocSearcher --self-check`，或在 Windows 上 `DocSearcher.exe --self-check --report check.txt`（無主控台視窗，結果寫入檔案）。
 - 若需 Windows 安裝程式，先建置 `DocSearcher.exe`，再以 Inno Setup 6 編譯 `packaging/installer_inno.iss`，輸出至 `setup_output/`。
 - GitHub Actions：`tests.yml` 執行品質檢查與 Linux／Windows／macOS 測試；`build.yml` 在 macOS Apple Silicon 與 Windows x64 建置並以自我檢查驗證，成品名稱與發行檔名相同（`DocSearcher-macOS-arm64.zip`、`DocSearcher-Windows-x64.exe`）。
 - 發布版本：先修改 `src/doc_searcher/version.py` 的 `APP_VERSION`，再推送相同版本的 `vX.Y.Z` 標籤（或在 GitHub「Draft a new release」頁面建立該標籤）。`release.yml` 先以數秒檢查標籤與版本是否一致（不一致即停止，不進行安裝或打包），接著重用 `tests.yml` 與 `build.yml`；只有 macOS arm64 與 Windows x64 建置和全部測試都成功，才會上傳兩個成品與 `SHA256SUMS.txt`。每個標籤只會觸發一次，同一標籤的執行會排隊而不會互相中斷。
 - 程式碼簽署與公證（macOS Developer ID／notarization、Windows Authenticode）預設關閉；設定憑證後以儲存庫變數 `SIGNING_ENABLED=true` 啟用，詳見 [docs/signing.md](docs/signing.md)。啟用後任何簽署或驗證失敗都會阻止發布。
 - 試跑發布：在 Actions 手動執行 `Release`，輸入既有標籤並保持 `publish` 未勾選，成品與校驗碼會以 `release-dry-run` 上傳而不建立 Release。
 - 版本號只需修改 `src/doc_searcher/version.py` 的 `APP_VERSION`：macOS `.app`、Windows `.exe` 檔案資訊與 Inno Setup 安裝程式皆自動沿用。
-- 程式內讀取打包資源請使用 `utils.resource_path.resource_path("assets/...")`，它會在打包後自動改用 `sys._MEIPASS`。
+- 程式內讀取打包資源請使用 `doc_searcher.platform.resource_path.resource_path("assets/...")`，它會在打包後自動改用 `sys._MEIPASS`。
 
 #### macOS Gatekeeper（未簽署版本）
 
@@ -314,3 +342,333 @@ pytest --cov=doc_searcher --cov-report=term-missing
 ```
 
 > 標記 `posix`／`windows`／`macos` 的測試只在對應平台執行，其他平台會顯示略過原因。
+
+檢索測試計畫（[docs/test-plan.md](docs/test-plan.md)）針對可重現的產生資料集執行；可用 `python tests/search_plan/dataset.py OUTDIR` 產生（案例模組會自動產生）。結果、發現與人工檢查清單見 [docs/test-execution-log.md](docs/test-execution-log.md)。
+
+---
+
+# English
+
+A fast, cross-platform, pure-Python full-text search app for local documents on **Windows, macOS and Linux**. At start-up it detects the operating system and hardware architecture and applies the matching fonts, corner radius, light/dark appearance, and the right way to open a file or reveal it in the file manager.
+
+---
+
+## 🌟 Key features
+
+1. **Pure Python, native feel on every platform**:
+   - Built on **PySide6 (Qt for Python)**: no Chromium/Electron memory or download-size overhead, quick start-up, smooth scrolling.
+   - Detects Windows 10/11, macOS, Linux and x86_64/ARM64 automatically; nothing to choose.
+2. **Many formats, including legacy Office**:
+   - **PDF**: `.pdf` (PyMuPDF fast text-stream extraction with page numbers)
+   - **Word**: `.docx` (python-docx) and legacy `.doc` (pure-Python OLE stream parsing, best effort: style and font names may leak into the text)
+   - **Excel**: `.xlsx` (openpyxl streaming read-only) and legacy `.xls` (xlrd)
+   - **PowerPoint**: `.pptx` (python-pptx) and legacy `.ppt` (pure-Python OLE stream parsing, best effort: all slides are merged into a single block)
+   - **Plain text**: `.txt`, `.md`, `.csv` (UTF-8/UTF-16/UTF-32 detected from the BOM, BOM-less UTF-16 detected; otherwise UTF-8, Big5, GBK are tried in that order. BOM-less GBK may be misread as Big5)
+   - Paths may contain CJK characters, emoji, spaces, `%`, `_`, `[ ]`; on macOS, the same path spelled in different Unicode normalization forms (NFC/NFD) counts as one file. After upgrading from 1.2.0, the first rescan re-creates old index entries that were stored in NFD once.
+   - Encrypted, corrupt, empty or unreadable documents are logged with a reason and skipped without stopping the whole batch; PDFs with only an owner password (print/copy restrictions) still yield their text.
+3. **Lightweight and fast, no OCR overhead**:
+   - It extracts the text that is embedded in documents. No GPU and no heavy OCR model: hundreds to thousands of documents are fully indexed in seconds. Scanned image-only PDFs have no text layer and are therefore not searchable.
+4. **SQLite FTS5 + jieba full-text search for Chinese and English**:
+   - Built-in BM25 relevance ranking. **Traditional and Simplified Chinese match each other** (a Simplified query finds Traditional documents and vice versa; converted character by character, with no regional vocabulary mapping such as 軟體/软件; regex mode is not converted; the preview highlights the characters as written in the document). **English word forms match each other** (`outstand`, `outstanding` and `outstandings` find one another; match case and whole word still require the exact word). Mixed-language phrases, exact phrases (`"..."`) and boolean operators (`AND` / `OR` / `NOT`) are supported.
+   - A Chinese word the tokenizer cannot segment (for example `升等`) must appear as that word, not as scattered characters. Queries containing punctuation (`A-`, `2023-01-03`, `snake_case`, `Section 1 (Paragraphs)`) work as typed.
+   - `filename:keyword` / `檔名:keyword` searches file names directly, and malformed queries get a clear error message.
+   - The search box colors boolean operators, exact phrases and special characters as you type, with quick-insert buttons for AND/OR/NOT/quotes.
+   - Filter by modified or created date (last 24 hours, 7 days, 30 days, 1 year, or a custom range) and by file-size band or a custom KB/MB/GB threshold.
+   - Restrict to specific subfolders, set exclusion rules, and toggle match case, whole word and Python regular expressions.
+   - Active filters appear as removable badges, can be reset with one click, and persist across restarts.
+   - Advanced filters live in a separate panel that can stay open without squeezing the results and preview; dropdown menus can extend beyond the panel edge.
+   - The interface includes built-in Chinese/English search help and the shortcuts Enter, Cmd/Ctrl+F and Esc.
+5. **Live context preview and deep system integration**:
+   - Matches are highlighted in bold on a yellow background, with their location (for example page 3, sheet "P&L", slide 2).
+   - Results can be sorted by type, name, hit count, size, modified date and path, and show a snippet of the match.
+   - The preview offers previous/next match, a match counter and A−/A+ text zoom.
+   - Press **Enter** or double-click to open the original file in the system's default app. If that fails (for example the file was deleted) the preview panel says why.
+   - Right-click to open the containing folder (Windows Explorer / macOS Finder / Linux desktop file manager).
+6. **Recoverable indexing that copes with external storage**:
+   - Rescan, pause, resume and safe stop; the current search refreshes automatically when indexing finishes.
+   - When a network drive, external device or permission is temporarily unavailable, the existing index is kept instead of assuming the documents were deleted.
+   - Duplicate or nested search folders are merged and symbolic-link loops are prevented, reducing repeated scanning and stalls.
+7. **A compact, bilingual interface with clear status**:
+   - Traditional Chinese and English can be switched instantly, and the choice is remembered.
+   - Appearance follows the system, dark or light; switching updates the sidebar, result selection, preview, advanced filters, tooltips and scroll bars together while keeping the current results and preview position.
+   - Folder and appearance settings sit in a collapsible section; scan, pause, resume and stop stay one click away.
+   - The index status shows idle, scanning, indexing, paused and done, with file counts and percentage.
+   - Search and indexing are coordinated one at a time to avoid stalls from heavy simultaneous reads and writes; a waiting search continues automatically.
+
+---
+
+## 🖼️ Screenshots
+
+| Light mode | Dark mode |
+| --- | --- |
+| ![Light mode](docs/screenshots/doc_searcher_light.png) | ![Dark mode](docs/screenshots/doc_searcher_dark.png) |
+
+Both appearances use the same demo data and selection so the text, selection color and keyword highlight can be compared; all documents and paths in the images are synthetic examples.
+
+| Advanced filters (light) | Advanced filters (dark) |
+| --- | --- |
+| ![Advanced filters panel, light](docs/screenshots/doc_searcher_advanced_light.png) | ![Advanced filters panel, dark](docs/screenshots/doc_searcher_advanced_dark.png) |
+
+After expanding **Settings**, click the appearance button to cycle through "Auto → Dark → Light". Auto follows the system appearance; a manual choice stays as selected.
+
+Developers can rebuild the screenshots after installing the project with `python scripts/capture_screenshots.py`. The script uses Qt offscreen and a temporary config/database, so it never reads or writes a personal index; fonts and control details may vary by platform.
+
+---
+
+## 📂 Project layout
+
+```
+doc_searcher/
+├── src/doc_searcher/
+│   ├── __main__.py           # python -m doc_searcher entry point
+│   ├── cli.py                # GUI and CLI entry point (the doc-searcher command)
+│   ├── version.py            # App version and release notes (the single source of the version)
+│   ├── config.py             # Config persistence (chosen folders, UI preferences)
+│   ├── assets/               # App icons and the OpenCC character table (package data)
+│   ├── indexing/
+│   │   ├── scanner.py        # Recursive folder scan, temp-file filter (~$*), incremental diff
+│   │   └── indexer.py        # Parser dispatch, jieba tokenization and batched index writes
+│   ├── search/
+│   │   ├── searcher.py       # Query parsing, FTS5 search and highlighted snippets
+│   │   ├── search_service.py # UI-independent search/index service (used by the MCP server)
+│   │   ├── text_helper.py    # jieba tokenization, HTML escaping and snippet generation
+│   │   ├── script_fold.py    # Traditional/Simplified Chinese folding (character level)
+│   │   └── stemming.py       # English stems from SQLite's porter tokenizer, for highlighting
+│   ├── storage/
+│   │   ├── database.py       # SQLite3 connection and the FTS5 virtual full-text table
+│   │   └── migrations.py     # Versioned schema migrations (backup first, rollback on failure)
+│   ├── parsers/
+│   │   ├── base.py           # DocumentParser interface and PageSegment data structure
+│   │   ├── pdf_parser.py     # PyMuPDF PDF extractor
+│   │   ├── docx_parser.py    # python-docx extractor
+│   │   ├── doc_parser.py     # Legacy Word 97-2003 (.doc) pure-Python OLE extractor
+│   │   ├── pptx_parser.py    # python-pptx slide and notes extractor
+│   │   ├── ppt_parser.py     # Legacy PPT 97-2003 (.ppt) OLE extractor
+│   │   ├── xlsx_parser.py    # openpyxl read-only worksheet extractor
+│   │   ├── xls_parser.py     # Legacy Excel 97-2003 (.xls) xlrd extractor
+│   │   └── text_parser.py    # Encoding-adaptive plain-text and Markdown extractor
+│   ├── desktop/
+│   │   ├── app.py            # PySide6 Application setup and high-DPI scaling
+│   │   ├── main_window.py    # Main window (folder picker, search bar, filter chips, split view)
+│   │   ├── i18n.py           # Traditional Chinese / English runtime strings
+│   │   ├── search_input.py   # Search box with live syntax coloring
+│   │   ├── result_table.py   # Results table (custom format icons, keyboard shortcuts)
+│   │   ├── preview_panel.py  # Right-hand snippet preview panel (HTML highlighting)
+│   │   ├── theme.py          # Dark/light themes; fonts and corner radius per OS
+│   │   └── worker.py         # QThread background tasks (indexing and search never freeze the window)
+│   ├── integrations/
+│   │   └── mcp_server.py     # MCP server (stdio) for Claude Code / Claude Desktop
+│   └── platform/
+│       ├── os_detector.py    # OS version and hardware architecture detection
+│       ├── platform_helper.py # Cross-platform open-file and Finder/Explorer calls
+│       └── resource_path.py  # Resource paths that work when frozen (sys._MEIPASS) and from source
+├── tests/
+│   ├── sample_generator.py   # Script that generates test files in each format
+│   ├── fixtures/             # Synthetic legacy databases/configs (migration tests)
+│   ├── search_plan/          # Test-plan dataset generator and the case modules built on it
+│   ├── test_cli.py           # CLI exit codes and cross-folder index protection
+│   ├── test_imports.py       # Import boundaries (light modules do not load Qt/jieba)
+│   ├── test_parsers.py       # Parser unit tests for each format
+│   ├── test_indexer.py       # Incremental indexing and SQLite FTS5 tests
+│   ├── test_searcher.py      # Query syntax, format filter and highlight tests
+│   ├── test_os_adaptation.py # OS detection and native-action adaptation tests
+│   ├── test_ui_features.py   # Language, sorting and preview-navigation UI regressions
+│   ├── test_search_service.py # Search service (search, status, reindex, document text) tests
+│   ├── test_mcp_server.py    # MCP protocol layer and stdio round-trip tests
+│   └── sample_files/         # Sample documents in each format (including legacy .doc/.ppt/.xls)
+├── scripts/
+│   ├── capture_screenshots.py # Rebuilds the light/dark README screenshots from synthetic data
+│   ├── generate_icon.py      # Generates the app icons (.ico / .png)
+│   └── update_constraints.sh # Regenerates and verifies constraints/ci.txt
+├── install.bat               # One-click Windows setup (Python, VC++ runtime, venv, desktop shortcut)
+├── run_windows.bat           # Windows launcher (calls install.bat when not installed)
+├── packaging/
+│   ├── build_mac.sh          # macOS build script
+│   ├── build_win.ps1         # Windows PowerShell build script
+│   ├── doc_searcher_mac.spec # PyInstaller config for the macOS .app
+│   ├── doc_searcher_win.spec # PyInstaller config for the single-file Windows .exe
+│   └── installer_inno.iss    # Windows installer (Inno Setup 6) script
+├── docs/                     # Baseline record, ADRs, test plan, execution log, README screenshots
+├── constraints/              # Locked, hash-pinned dependencies for CI/release builds, see constraints/README.md
+└── pyproject.toml            # Project metadata, dependency ranges (dev/mcp/package extras) and entry points
+```
+
+---
+
+## 🚀 Quick start
+
+### 1. Create a Python virtual environment and install the dependencies
+
+```bash
+# Clone or enter the project folder
+cd doc_searcher
+
+# Create a virtual environment (Python 3.10 ~ 3.14 supported)
+python3 -m venv venv
+
+# Activate it
+# macOS / Linux:
+source venv/bin/activate
+# Windows (PowerShell):
+# .\venv\Scripts\Activate.ps1
+
+# Install the required packages (pyproject.toml is the single source of dependencies)
+pip install .
+# Developers: editable install, plus test and MCP dependencies
+pip install -e '.[dev,mcp]'
+```
+
+> **Upgrading from 1.2.0 source**: the code moved to `src/doc_searcher/`, and `main.py` and `mcp_server.py` were removed. Run `pip install -e .` once in your existing virtual environment (on Windows, re-run `install.bat`, which also refreshes the desktop shortcut), and change your MCP client configuration to `venv/bin/doc-searcher-mcp`. The config and index locations are unchanged.
+
+> **Upgrading from 1.3.0**: the first launch upgrades your existing index automatically (Traditional/Simplified folding and English stemming); no files are re-read and a backup is written first. Expect roughly 15 seconds per 10,000 documents while the app starts.
+
+> **Reproducible installs**: CI and the packaging scripts install the pinned, hash-verified dependencies in `constraints/ci.txt`; see [constraints/README.md](constraints/README.md) for how to update them.
+
+> **Python support policy**: 3.10 (the minimum for mcp, PyMuPDF and PySide6) to 3.14 (PySide6's current upper bound). CI verifies this range. After installation the `doc-searcher` command (GUI/CLI; `--version` and `--help` do not open a window) and the `doc-searcher-mcp` command are available.
+
+> On Windows you can also double-click `install.bat`: it installs Python (if missing), the Visual C++ runtime, the virtual environment and the packages, and creates a desktop shortcut; start the app afterwards with `run_windows.bat`.
+>
+> On macOS you can double-click `start_doc_searcher.command`: the first run creates the virtual environment and installs the packages, after which it simply opens the window (if Gatekeeper blocks it the first time, right-click and choose "Open").
+
+### 2. Start the desktop GUI
+
+After installation, run `doc-searcher` (or `python -m doc_searcher`) to open the desktop window:
+
+```bash
+doc-searcher
+```
+
+- Expand **Settings** at the top and click **➕ Choose folder...** to pick the document folders to search (multi-select is supported).
+- The index is built in the background; progress appears in the status bar and the interface stays responsive.
+- Type a keyword in the search box (for example `budget`, `"confidentiality agreement"`, `project AND 2026`); browse the results on the left and read the highlighted text on the right.
+- Open "Advanced filters" to set date, size, subfolders, exclusion rules and match modes. Changing exclusion rules triggers a rescan automatically.
+
+> The config file `config.json` and the index `index.db` are stored in `~/.doc_searcher` by default (override with `DOC_SEARCHER_DATA_DIR`); if the home folder is not writable, the operating system's per-user data folder is used instead. The config is written atomically, malformed fields are reset to their defaults individually, and an unparseable file is first backed up as `config.json.corrupt-<time>`. See [ADR 0001](docs/adr/0001-data-directory.md). The index database is versioned (`PRAGMA user_version`): before an upgrade it is backed up as `index.db.pre-migration.bak`, and a failed upgrade is rolled back completely; for a locked, read-only, corrupt or newer-version index the app shows the cause and what to do, and never deletes or rebuilds it automatically.
+
+> The created date uses the file birth time provided by the operating system, falling back to the status-change time when the platform does not provide one. Older indexes get this field back-filled during the database upgrade.
+
+### 3. Command-line search (CLI mode, for batch or terminal users)
+
+You can also search quickly with arguments, without opening the GUI:
+
+```bash
+# Basic search
+doc-searcher --dir /path/to/documents --search "project budget"
+
+# Filter by format (supported: pdf, word, excel, ppt, text)
+doc-searcher --dir /path/to/documents --search "project budget" --type excel
+```
+
+The CLI's standard output contains only the search results; progress and diagnostics go to standard error (set `DOC_SEARCHER_LOG_LEVEL=INFO` or `DEBUG` for more logging). The CLI only updates the index for the `--dir` folder; indexes of other folders are untouched. `--dir` and `--search` must be given together. Exit codes: `0` success, `1` folder not accessible (the existing index is kept unchanged), `2` argument error, `3` no writable data folder.
+
+### 4. Package as a standalone program
+
+End users need neither Python nor any packages; only the build machine needs Python 3.
+
+| Platform | Build command | Output |
+| --- | --- | --- |
+| macOS (Apple Silicon / arm64) | `packaging/build_mac.sh` | `dist/DocSearcher.app`, `dist/DocSearcher-macOS-arm64.zip` |
+| Windows 10 / 11 | `powershell -ExecutionPolicy Bypass -File .\packaging\build_win.ps1` | `dist\DocSearcher.exe` (single portable executable) |
+
+- Run the build script from the project root; the output goes to `dist/` in the root.
+- macOS uses `packaging/doc_searcher_mac.spec` (an onedir `.app`; PyInstaller 6 no longer recommends onefile inside an `.app`); Windows uses `packaging/doc_searcher_win.spec` (onefile, no console window).
+- After packaging, the build scripts run `scripts/verify_build.py`: it runs `--self-check` inside the built product (parsers, jieba dictionary, Traditional-to-Simplified table, SQLite FTS5, English stemming, Qt, icon assets) and confirms the version and CPU architecture; on failure it stops without producing an archive. You can also run it manually: `DocSearcher.app/Contents/MacOS/DocSearcher --self-check`, or on Windows `DocSearcher.exe --self-check --report check.txt` (no console window, so the result is written to a file).
+- For a Windows installer, build `DocSearcher.exe` first, then compile `packaging/installer_inno.iss` with Inno Setup 6; the output goes to `setup_output/`.
+- GitHub Actions: `tests.yml` runs the quality checks and the Linux/Windows/macOS tests; `build.yml` builds on macOS Apple Silicon and Windows x64 and verifies with the self-check. The artifacts are named like the release files (`DocSearcher-macOS-arm64.zip`, `DocSearcher-Windows-x64.exe`).
+- Releasing: first change `APP_VERSION` in `src/doc_searcher/version.py`, then push a `vX.Y.Z` tag with the same version (or create the tag on GitHub's "Draft a new release" page). `release.yml` first checks in a few seconds that the tag and the version agree (if not, it stops before installing or packaging), then reuses `tests.yml` and `build.yml`; only when the macOS arm64 and Windows x64 builds and all tests succeed does it upload both artifacts and `SHA256SUMS.txt`. Each tag triggers only one run, and runs for the same tag queue instead of interrupting each other.
+- Code signing and notarization (macOS Developer ID / notarization, Windows Authenticode) are off by default; enable them with the repository variable `SIGNING_ENABLED=true` after configuring the certificates; see [docs/signing.md](docs/signing.md). Once enabled, any signing or verification failure blocks the release.
+- Dry-run a release: run `Release` manually in Actions, enter an existing tag and leave `publish` unchecked; the artifacts and checksums are uploaded as `release-dry-run` without creating a Release.
+- The version only has to be changed in `APP_VERSION` in `src/doc_searcher/version.py`: the macOS `.app`, the Windows `.exe` file properties and the Inno Setup installer all pick it up automatically.
+- To read packaged resources from code, use `doc_searcher.platform.resource_path.resource_path("assets/...")`, which switches to `sys._MEIPASS` automatically when frozen.
+
+#### macOS Gatekeeper (unsigned builds)
+
+The build is only ad-hoc signed and not notarized by Apple. If, after getting it from the network or another computer, the first launch says the app is "damaged" or "cannot verify the developer", clear the quarantine attribute first:
+
+```bash
+xattr -cr /Applications/DocSearcher.app
+```
+
+If Windows shows a SmartScreen prompt, click "More info" → "Run anyway".
+
+---
+
+## 🤖 MCP server (Claude Code / Claude Desktop integration)
+
+`doc-searcher-mcp` (`src/doc_searcher/integrations/mcp_server.py`) exposes the local index to AI clients through the [Model Context Protocol](https://modelcontextprotocol.io). It shares the index and settings in `~/.doc_searcher` with the desktop app (override with `DOC_SEARCHER_DATA_DIR`). First add search folders and finish indexing in the desktop app.
+
+| Type | Name | Description |
+| --- | --- | --- |
+| Tool | `search_documents` | `query` (supports `"phrase"`, AND/OR/NOT, `filename:`), `formats` (`pdf`/`word`/`excel`/`ppt`/`text`), `limit` (1–100). Returns path, type, size, modified time, hit location (page/sheet/slide/section) and a snippet with **bold** matches |
+| Tool | `get_index_status` | Document count, index size, last update time, version, search folders and the state of the latest reindex |
+| Tool | `reindex_directory` | Incrementally reindexes all search folders, or one of their subfolders, in the background; returns immediately, check progress with `get_index_status`. New folders must be added in the desktop app |
+| Resource | `docsearcher://document/{path}` | Full extracted text of an indexed document (`path` is the percent-encoded absolute path; search results include a ready-made `resource_uri`). Only indexed documents are served; files outside the index are never read |
+
+### 1. Install (Python 3.10+ required)
+
+```bash
+pip install '.[mcp]'
+```
+
+### 2. Add to Claude Code
+
+```bash
+claude mcp add docsearcher -- /absolute/path/doc_searcher/venv/bin/doc-searcher-mcp
+```
+
+On Windows use `venv\Scripts\doc-searcher-mcp.exe` instead. After adding it, type `/mcp` in Claude Code to check the connection.
+
+### 3. Add to Claude Desktop
+
+Edit `claude_desktop_config.json` (macOS: `~/Library/Application Support/Claude/`; Windows: `%APPDATA%\Claude\`) and restart Claude Desktop:
+
+```json
+{
+  "mcpServers": {
+    "docsearcher": {
+      "command": "/absolute/path/doc_searcher/venv/bin/doc-searcher-mcp"
+    }
+  }
+}
+```
+
+Windows example: `"command": "C:\\path\\to\\doc_searcher\\venv\\Scripts\\doc-searcher-mcp.exe"`.
+
+### 4. Test with the MCP Inspector
+
+```bash
+# Web UI: list tools, call tools, read resources
+npx @modelcontextprotocol/inspector venv/bin/doc-searcher-mcp
+
+# Command line: the server command must come before the options
+npx @modelcontextprotocol/inspector --cli venv/bin/doc-searcher-mcp --method tools/list
+npx @modelcontextprotocol/inspector --cli venv/bin/doc-searcher-mcp \
+  --method tools/call --tool-name search_documents --tool-arg 'query=budget' 'limit=5'
+```
+
+> Every `--cli` call starts a new server process and exits right away, so a background `reindex_directory` is interrupted; test reindexing in the web UI, Claude Code or Claude Desktop.
+
+---
+
+## 🧪 Running the automated tests
+
+The project ships complete unit and integration tests, including a sample-file generator:
+
+```bash
+# 0. Install the test dependencies (add the mcp extra to run the MCP tests; otherwise they are skipped)
+pip install -e '.[dev,mcp]'
+
+# 1. Generate multi-format test documents
+python -m tests.sample_generator
+
+# 2. Run the whole pytest suite
+pytest tests/ -v
+
+# 3. The same quality checks as CI (format, lint, types; the coverage floor is in pyproject.toml)
+ruff format --check . && ruff check . && python -m mypy
+pytest --cov=doc_searcher --cov-report=term-missing
+```
+
+> Tests marked `posix`/`windows`/`macos` only run on the matching platform; other platforms show the reason they were skipped.
+
+The search test plan ([docs/test-plan.md](docs/test-plan.md)) runs against a generated, deterministic dataset. Build it with `python tests/search_plan/dataset.py OUTDIR` (the case modules build it automatically). Results, findings and the manual checklist are in [docs/test-execution-log.md](docs/test-execution-log.md).
