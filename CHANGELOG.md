@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Faster “Clear all folders”: clear stored text and both search indexes in one transaction, with bounded progress updates and atomic rollback on failure.
 - Chinese literal terms match contiguous original text independently of jieba token boundaries, including single characters and Traditional/Simplified equivalents.
 - Search limits apply to documents, with stable continuation and stale-index detection. All matching segments of selected documents remain accessible.
 - Hit counts now represent original-text occurrences, rather than snippets. Overlapping positive matches merge; adjacent matches remain separate; NOT terms do not add hits.

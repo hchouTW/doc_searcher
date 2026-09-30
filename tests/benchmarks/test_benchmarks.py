@@ -83,6 +83,30 @@ def test_no_change_rescan_1k(benchmark, corpus_1k, indexed_1k):
     assert stats["indexed"] == 0 and stats["deleted"] == 0
 
 
+def test_clear_index_1k(benchmark, indexed_1k, tmp_path):
+    """Time clearing a populated index; restore its snapshot outside every timed round."""
+    db_path = tmp_path / "clear.db"
+
+    def setup():
+        shutil.copy(indexed_1k, db_path)
+        db = Database(str(db_path))
+        return (db,), {}
+
+    def clear(db):
+        return IndexingService(db).clear()
+
+    def teardown(db):
+        db.close()
+
+    stats = benchmark.pedantic(clear, setup=setup, teardown=teardown, rounds=3, iterations=1)
+    assert stats["deleted"] == 1000 and stats["cancelled"] is False
+    db = Database(str(db_path))
+    try:
+        assert db.get_all_indexed_paths() == {}
+    finally:
+        db.close()
+
+
 def test_single_file_update_1k(benchmark, corpus_1k, indexed_1k):
     target = next(corpus_1k.rglob("doc_00007.*"))
     original = target.read_text(encoding="utf-8")

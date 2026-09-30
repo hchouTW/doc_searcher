@@ -1,14 +1,26 @@
 # Improve Document Search Completeness, Match Counts, and Text Extraction
 
 Created: 2026-10-01  
+Updated: 2026-10-01\
 Repository: `/Users/hchou/AgenticAI/doc_searcher`  
-Purpose: An implementation-ready task for a developer or AI agent. Creating this specification does not mean the changes have been implemented.
+Status: Phases A–C implemented; acceptance evidence recorded through commit `00cba7b`. [C]\
+Purpose: Retain the implementation requirements and link their verification evidence for review and future regression checks.
 
-Evidence labels: **[C] Confirmed**, **[I] Inferred**, **[TBD] Unresolved**. Implementation approaches and new data fields below are requirements or recommendations, not descriptions of existing features.
+Evidence labels: **[C] Confirmed**, **[I] Inferred**, **[TBD] Unresolved**. The Technical Approach and Acceptance Criteria preserve the task's requirements; the implementation summary and linked validation record describe the delivered behavior and recorded checks.
+
+## Implementation Status
+
+- **A — Recall and pagination:** Chinese character n-gram candidates are verified against original text. Documents are ranked before pagination, with stable ordering and revision-aware continuation. Migration 4 builds the candidate index from stored text. [C]
+- **B — Occurrences and preview:** Match counts represent occurrences, independently of rendered snippets. Paginated locations and bounded context requests support individual occurrence navigation through desktop, CLI, and MCP. [C]
+- **C — Extraction and quality:** DOCX headers/footers/text boxes and XLSX formula/cache sources retain location metadata. Migration 5 persists quality, warnings, parser versions, and source spans; selected documents can be explicitly reparsed. [C]
+
+The [validation record](../benchmarks/search-completeness-validation.md) maps A1–V1 to regression and interaction evidence. Its final recorded suite reports **572 passed, 5 skipped, 2 xfailed**, coverage **88.48%**, passing Ruff/mypy checks, and passing approved absolute benchmark budgets. These are recorded implementation results, not a new test run for this document update. [C]
+
+Validation covered macOS arm64/Python 3.13 and offscreen desktop checks in both languages and themes. Windows/Linux and frozen builds remain unverified. New counting/index-size thresholds remain proposals; release version selection remains with the maintainer. [C]
 
 ## Background
 
-The user reports that search results lack detail and omit content. The current pipeline is document parsing → original-text segments → Traditional/Simplified folding and jieba tokenization → SQLite FTS5 → document aggregation → snippets and preview. [C]
+The original user report described search results lacking detail and omitting content. Before this task, the pipeline was document parsing → original-text segments → Traditional/Simplified folding and jieba tokenization → SQLite FTS5 → document aggregation → snippets and preview. The findings below describe that baseline, not the implemented behavior. [C]
 
 A read-only investigation on 2026-09-30 confirmed:
 
@@ -21,7 +33,7 @@ A read-only investigation on 2026-09-30 confirmed:
 | Incomplete Office extraction | DOCX extraction omits headers and footers. XLSX extraction reads only cached values with `data_only=True`. | Reproductions confirmed a missing DOCX header keyword and an uncached formula being parsed as empty text. |
 | Unclear extraction quality | Of 6,459 documents without recorded parse errors, 44 contained no searchable text. Four additional documents had parse errors. | A document without text may be blank or contain only images; this alone does not prove a parser failure. |
 
-The existing relevant tests passed (39 tests), while these defects remained reproducible. [C] Add targeted regression cases; passing existing tests is insufficient evidence of completeness.
+The baseline's relevant tests passed (39 tests), while these defects remained reproducible. [C] Targeted regressions and their recorded failing/passing results are linked in the validation record.
 
 ## Objective
 
@@ -54,14 +66,14 @@ The following paths are relative to the repository root and have been verified t
 
 | Area | Files and responsibilities |
 | --- | --- |
-| Search | `src/doc_searcher/search/searcher.py`: candidate queries, boolean conditions, aggregation, and `total_matches` |
+| Search | `src/doc_searcher/search/searcher.py`: candidate verification, document ranking/pagination, occurrence counts, and location/context requests; `src/doc_searcher/search/query.py`: boolean query parsing; `src/doc_searcher/search/cjk_index.py`: character n-gram candidates |
 | Tokenization and snippets | `src/doc_searcher/search/text_helper.py`: `tokenize_for_fts`, highlighting, and snippet truncation |
 | Script folding | `src/doc_searcher/search/script_fold.py`: preserve existing folding semantics |
 | Search interfaces | `src/doc_searcher/search/search_service.py`, `src/doc_searcher/cli.py`, `src/doc_searcher/integrations/mcp_server.py` |
-| UI | `src/doc_searcher/desktop/preview_panel.py`, `src/doc_searcher/desktop/result_table.py`, `src/doc_searcher/desktop/worker.py`, `src/doc_searcher/desktop/i18n.py` |
-| Storage and migrations | `src/doc_searcher/storage/database.py`, `src/doc_searcher/storage/migrations.py`: the inspected migration list ends at version 3; recheck the latest version before implementing |
+| UI | `src/doc_searcher/desktop/main_window.py`, `src/doc_searcher/desktop/preview_panel.py`, `src/doc_searcher/desktop/result_table.py`, `src/doc_searcher/desktop/worker.py`, `src/doc_searcher/desktop/i18n.py` |
+| Storage and migrations | `src/doc_searcher/storage/database.py`, `src/doc_searcher/storage/migrations.py`: schema 5; migration 4 adds CJK candidates/revision tracking, migration 5 adds extraction quality/source metadata |
 | Parsers | `src/doc_searcher/parsers/base.py`, `src/doc_searcher/parsers/pdf_parser.py`, `src/doc_searcher/parsers/docx_parser.py`, `src/doc_searcher/parsers/xlsx_parser.py` |
-| Indexing | `src/doc_searcher/indexing/indexer.py`, `src/doc_searcher/indexing/scanner.py`, `src/doc_searcher/indexing/service.py`: currently uses modification time and file size to decide whether to reparse |
+| Indexing | `src/doc_searcher/indexing/indexer.py`, `src/doc_searcher/indexing/scanner.py`, `src/doc_searcher/indexing/service.py`: normal modification-time/file-size checks plus explicit selected-path reprocessing |
 | Tests | `tests/unit/search/`, `tests/unit/parsers/`, `tests/test_ui_features.py`, `tests/test_search_service.py`, `tests/test_mcp_server.py`, `tests/integration/`, `tests/search_plan/` |
 | Performance | `tests/benchmarks/`, `docs/benchmarks.md`, `docs/test-plan.md` |
 | Runtime and packaging | `pyproject.toml`, `packaging/`, `.github/workflows/tests.yml`, `.github/workflows/build.yml` |
@@ -70,7 +82,7 @@ The older task `docs/tasks/simplified-traditional-search.md` describes an earlie
 
 ## Technical Approach
 
-Execute A → B → C. Deliver each phase as a separately reviewable increment. First add failing reproductions, then implement the fix and run the applicable regression tests.
+The implementation followed A → B → C in separately reviewable increments, with failing reproductions before fixes. The requirements below remain the contract for future changes; execution details are in the [implementation plan](../superpowers/plans/2026-10-01-search-completeness.md) and validation record. [C]
 
 ### A. Fix Chinese Recall and Candidate Truncation
 
@@ -135,9 +147,11 @@ Execute A → B → C. Deliver each phase as a separately reviewable increment. 
 | C3 | Blank/no-text, partial, and failed extraction statuses can be inspected. Explicit reprocessing works when modification time/file size are unchanged. |
 | V1 | Phase-specific and full regression tests pass, with before/after measurements for added indexes and actual occurrence counting. |
 
-All three phases must meet their acceptance criteria before this task is reported as complete.
+All three phases must meet their acceptance criteria before this task is reported as complete. The [acceptance evidence table](../benchmarks/search-completeness-validation.md#acceptance-evidence) records coverage for every criterion above; its [final independent review](../benchmarks/search-completeness-validation.md#final-independent-review) describes four resolved review findings and the final recorded checks. [C]
 
 ## Validation
+
+Recorded results, before/after artifacts, reproduction commands, and measurement caveats are in the [validation record](../benchmarks/search-completeness-validation.md). Retain the commands below for subsequent regression checks.
 
 Run from the repository root using the existing `venv/bin/python`. If the environment is unavailable, follow the README installation instructions. Never clear or overwrite `~/.doc_searcher/index.db` for validation. Automated tests must use temporary directories and synthetic documents. Investigate a real index read-only or through a consistent copy created with the SQLite backup API.
 
@@ -163,8 +177,18 @@ DOC_SEARCHER_BENCH_10K=1 venv/bin/python -m pytest tests/benchmarks --benchmark-
 
 ## Open Questions
 
-1. **[TBD] Performance targets for new work:** Propose thresholds for full occurrence counting and added index size after measuring. Do not relax existing approved budgets without agreement.
-2. **[TBD] Release version and API change strategy:** Preserve existing entry points and introduce optional fields/operations where possible. The maintainer selects the release version.
+1. **[TBD] Approval of new performance thresholds:** Recorded proposals are added database size ≤15% on the measured corpus, instrumented full counting of 10k documents ≤7 s and ≤50 MB Python heap, and selected short-document context ≤10 ms. These are pending agreement, not approved budgets. Existing approved absolute budgets pass in the recorded measurements; proposed relative 1.25× search budgets are exceeded. See the validation record for measurement conditions.
+2. **[TBD] Release version:** The maintainer selects the release version. Existing entry points are retained; the corrected occurrence-based `match_count` requires updates in clients that relied on snippet counts, as documented in `README.md` and `CHANGELOG.md`. [C]
+
+## Known Limitations
+
+- Character folding supports `計畫` ↔ `计画`; regional vocabulary conversion such as `計畫` ↔ `计划` remains outside scope.
+- Stored-text migration restores search recall but cannot recover omitted Office text. Existing documents need explicit reprocessing to populate new sources and extraction-quality metadata; legacy quality remains unknown until then.
+- DOCX footnotes/endnotes and some embedded Office objects remain unsupported. OCR, decryption, and formula/macro execution remain excluded.
+- Broad queries still evaluate candidates to compute exact document totals. Location pages bound output but rescan segment text for exact counts; paging does not guarantee constant-time retrieval for large segments.
+- Platform and packaging verification is limited to the recorded environment above.
+
+These limits are documented in the validation record and do not imply extraction of every visible source or approval of the proposed performance thresholds. [C]
 
 ## References
 
@@ -172,5 +196,7 @@ DOC_SEARCHER_BENCH_10K=1 venv/bin/python -m pytest tests/benchmarks --benchmark-
 - `docs/benchmarks.md`, `docs/benchmarks/baseline-macos-arm64-py313.json`: existing performance measurements.
 - `docs/adr/0002-simplified-traditional-folding.md`, `docs/adr/0003-english-stemming.md`: existing matching contracts.
 - Source and tests listed in Repository Context.
-- The 2026-09-30 source/read-only-index investigation and temporary synthetic reproductions documented in this conversation.
+- [Search completeness validation](../benchmarks/search-completeness-validation.md): acceptance evidence, baseline findings, before/after benchmarks, existing-index comparison, resolved review findings, and limitations.
+- [Implementation plan](../superpowers/plans/2026-10-01-search-completeness.md): phase contracts and execution checklist.
+- `README.md`, `CHANGELOG.md`: user-facing behavior and compatibility notes.
 - Authoring references: task-authoring task-template, acceptance-criteria, and task-quality-checklist.

@@ -2,6 +2,7 @@
 # What the code does:
 #   - Opens index.db, checks FTS5, and applies versioned migrations (storage.migrations).
 #   - Manages per-thread connections, transactions, index updates, deletions, and querying.
+#   - Clears all documents and both search indexes atomically with bulk deletions.
 #   - Stores and looks up documents by canonical path (platform.paths).
 # Usage notes, dependencies, or assumptions:
 #   - Requires sqlite3 with FTS5; environmental failures raise storage.errors.StorageError.
@@ -164,6 +165,24 @@ class Database:
                 conn.execute("DELETE FROM doc_segments WHERE doc_id = ?", (doc_id,))
                 conn.execute("DELETE FROM documents WHERE id = ?", (doc_id,))
                 conn.execute("UPDATE index_state SET revision = revision + 1 WHERE id = 1")
+
+    def clear_index(self) -> int:
+        """Atomically reset stored text and search indexes; return removed document count.
+
+        Keep schema and ID sequences intact, and invalidate cursors/locations once.
+        Unfiltered deletes avoid scanning FTS content separately for every document.
+        """
+        conn = self.get_connection()
+        with conn:
+            conn.execute("BEGIN IMMEDIATE")
+            count = conn.execute("SELECT COUNT(*) FROM documents").fetchone()[0]
+            if count:
+                conn.execute("DELETE FROM doc_fts")
+                conn.execute("DELETE FROM doc_cjk_fts")
+                conn.execute("DELETE FROM doc_segments")
+                conn.execute("DELETE FROM documents")
+                conn.execute("UPDATE index_state SET revision = revision + 1 WHERE id = 1")
+        return count
 
     def save_document_index(
         self,

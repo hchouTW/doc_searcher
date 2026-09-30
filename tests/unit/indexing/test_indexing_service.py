@@ -1,6 +1,7 @@
 """IndexingService decisions, controls, and write serialization (Task 4.1)."""
 
 import os
+import sqlite3
 import threading
 import time
 
@@ -10,6 +11,7 @@ from doc_searcher.indexing import service as service_module
 from doc_searcher.indexing.indexer import DocumentIndexer
 from doc_searcher.indexing.service import IndexingService, IndexRequest
 from doc_searcher.storage.database import Database
+from doc_searcher.search.searcher import DocumentSearcher, SearchQueryError
 from fixtures.platform import RUNNING_AS_ROOT
 
 
@@ -165,6 +167,87 @@ def test_clear_removes_everything(db, roots):
     IndexingService(db).run(IndexRequest(roots=[str(r) for r in roots]))
     stats = IndexingService(db).clear()
     assert stats["deleted"] == 4 and indexed(db) == set()
+
+
+def test_clear_commits_once_and_invalidates_search_locations(db, roots):
+    for root in roots:
+        for path in root.rglob("*.txt"):
+            path.write_text(path.read_text() + " 都市計畫", encoding="utf-8")
+    IndexingService(db).run(IndexRequest(roots=[str(r) for r in roots]))
+    searcher = DocumentSearcher(db)
+    page = searcher.search_page("one", limit=1)
+    location = searcher.match_locations("one", page.items[0].doc_id).locations[0]
+    statements = []
+    conn = db.get_connection()
+    conn.set_trace_callback(statements.append)
+    try:
+        stats = IndexingService(db).clear()
+    finally:
+        conn.set_trace_callback(None)
+
+    assert stats["deleted"] == 4 and stats["cancelled"] is False
+    assert sum(sql == "COMMIT" for sql in statements) == 1
+    for table in ("documents", "doc_segments", "doc_fts", "doc_cjk_fts"):
+        assert conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0] == 0
+    assert not searcher.search("one")
+    assert not searcher.search("計畫")
+    with pytest.raises(SearchQueryError) as error:
+        searcher.search_page("one", cursor=page.next_cursor)
+    assert error.value.code == "stale_cursor"
+    with pytest.raises(SearchQueryError):
+        searcher.match_context(location)
+    IndexingService(db).run(IndexRequest(roots=[str(roots[0])]))
+    assert len(searcher.search("one")) == 1
+    assert len(searcher.search("計畫")) == 2
+
+
+def test_clear_failure_rolls_back_documents_and_both_search_indexes(db, roots):
+    for root in roots:
+        for path in root.rglob("*.txt"):
+            path.write_text(path.read_text() + " 都市計畫", encoding="utf-8")
+    IndexingService(db).run(IndexRequest(roots=[str(r) for r in roots]))
+    conn = db.get_connection()
+    revision = db.revision()
+    counts = {table: conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+              for table in ("documents", "doc_segments", "doc_fts", "doc_cjk_fts")}
+    conn.execute("""CREATE TRIGGER fail_clear BEFORE DELETE ON documents
+                    WHEN OLD.id = (SELECT MAX(id) FROM documents)
+                    BEGIN SELECT RAISE(ABORT, 'injected clear failure'); END""")
+    with pytest.raises(sqlite3.IntegrityError, match="injected clear failure"):
+        IndexingService(db).clear()
+    assert db.revision() == revision
+    for table, count in counts.items():
+        assert conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0] == count
+    assert len(DocumentSearcher(db).search("one")) == 2
+    assert len(DocumentSearcher(db).search("計畫")) == 4
+
+
+@pytest.mark.parametrize("cancel_on_progress", [False, True])
+def test_cancelled_clear_preserves_every_document(db, roots, cancel_on_progress):
+    IndexingService(db).run(IndexRequest(roots=[str(r) for r in roots]))
+    service = IndexingService(db)
+    revision = db.revision()
+    if not cancel_on_progress:
+        service.cancel()
+    stats = service.clear(on_progress=lambda *args: service.cancel())
+    assert stats["cancelled"] is True and stats["deleted"] == 0
+    assert len(indexed(db)) == 4 and db.revision() == revision
+
+
+def test_clear_progress_is_bounded_and_reports_committed_total(db, roots):
+    IndexingService(db).run(IndexRequest(roots=[str(r) for r in roots]))
+    progress = []
+    stats = IndexingService(db).clear(on_progress=lambda current, total, name:
+                                    progress.append((current, total)))
+    assert stats["deleted"] == 4
+    assert progress == [(0, 4), (4, 4)]
+
+
+def test_clear_empty_index_does_not_invalidate_revision(db):
+    revision = db.revision()
+    stats = IndexingService(db).clear()
+    assert stats["deleted"] == 0 and stats["cancelled"] is False
+    assert db.revision() == revision
 
 
 def test_runs_against_one_database_never_write_concurrently(tmp_path, roots, monkeypatch):

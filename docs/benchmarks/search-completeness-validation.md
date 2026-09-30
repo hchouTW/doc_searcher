@@ -129,3 +129,34 @@ Review declines were ruled on explicitly:
 - New count/index-size thresholds remain proposals; approved budgets stand; cost if wrong: revise thresholds after maintainer agreement.
 
 Deferred minors: none.
+
+## Clear all folders performance follow-up
+
+The desktop clear operation previously enumerated every indexed path and deleted each
+document in a separate transaction. On a consistent backup of the synthetic 10k corpus
+used above, a profiled run took **68.082 s**: 10,000 document deletions, 60,001 SQL
+executions, and 10,000 commits. SQL execution accounted for 65.599 s.
+
+The bulk clear deletes both FTS tables, stored segments, and documents in one transaction,
+then increments the index revision once. Three fresh backups of the same corpus took
+**0.546 / 0.563 / 0.523 s**, with a median of **0.546 s** (about 125× faster than the
+profiled baseline). These measure the service operation, excluding backup creation and
+desktop scheduling; the baseline includes profiler overhead. The live index was not used.
+
+Progress now reports start and committed completion instead of one signal per document.
+Pause/cancel checkpoints occur before the transaction; cancellation before it begins
+preserves the entire index. Once started, the short transaction finishes atomically.
+Injected failures roll back both search indexes, stored text, and revision together.
+Old cursors and match locations become stale, and fresh indexing remains supported.
+
+The initial regressions produced four failures for repeated commits, partial state after
+failure, cancellation during initial progress, and per-document progress. The focused
+storage/search/indexing suite subsequently passed 71 tests. The full follow-up suite passed
+**578 tests, 5 skipped, 2 xfailed**; Ruff and mypy also passed. The new
+`tests/benchmarks/test_benchmarks.py::test_clear_index_1k` benchmark passed with a median
+of **53.252 ms** over three rounds. No new timing threshold is approved by this measurement.
+
+```bash
+venv/bin/python -m pytest tests/benchmarks -k clear_index --benchmark-only
+QT_QPA_PLATFORM=offscreen venv/bin/python -m pytest tests/unit/indexing/test_indexing_service.py -k clear -q
+```

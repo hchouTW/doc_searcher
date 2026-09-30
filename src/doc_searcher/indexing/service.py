@@ -8,7 +8,8 @@
 #     inside those directories are reconciled. Unavailable roots and unreadable subfolders are
 #     always preserved, never treated as deleted.
 #   - pause()/resume()/cancel() are cooperative and safe to call from another thread.
-#   - clear() removes every indexed document.
+#   - clear() atomically resets documents and search indexes in one transaction; pause/cancel
+#     apply before the reset, and progress reports its start and committed completion.
 #   - Holds a per-database, in-process lock while writing, so two runs never write concurrently.
 # Usage notes, dependencies, or assumptions:
 #   - No Qt, MCP, or printing here; adapters translate phases/results into signals or messages.
@@ -128,15 +129,26 @@ class IndexingService:
             return self._finish(phase, stats)
 
     def clear(self, on_progress: Optional[ProgressCallback] = None) -> Dict[str, Any]:
-        """Remove every document from the index."""
+        """Clear the index in bulk; cancellation before the transaction preserves all text."""
         start = time.time()
         with self._locked():
-            paths = list(self.db.get_all_indexed_paths())
-            stats: Dict[str, Any] = self.indexer.run_batch_indexing(
-                [], paths, progress_callback=on_progress, reset_cancellation=False
-            )
-        stats["elapsed"] = time.time() - start
-        return stats
+            if not self.indexer.wait_until_ready():
+                return self._cancelled_result(start)
+            total = self.db.get_connection().execute("SELECT COUNT(*) FROM documents").fetchone()[0]
+            if on_progress:
+                on_progress(0, total, "")
+            if not self.indexer.wait_until_ready():
+                return self._cancelled_result(start)
+            deleted = self.db.clear_index()
+            if on_progress:
+                on_progress(deleted, deleted, "")
+        return {
+            "indexed": 0,
+            "deleted": deleted,
+            "failed": 0,
+            "cancelled": False,
+            "elapsed": time.time() - start,
+        }
 
     # ------------------------------------------------------------- helpers
     def _locked(self):
