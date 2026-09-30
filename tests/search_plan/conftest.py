@@ -1,5 +1,7 @@
 """Shared fixtures for the docs/test-plan.md case modules: the dataset, built and indexed once."""
 
+from pathlib import Path
+
 import pytest
 
 from doc_searcher.indexing.indexer import DocumentIndexer
@@ -23,10 +25,12 @@ def dataset_search(dataset_root, tmp_path_factory):
     files = FileScanner().scan_directories([str(dataset_root)])
     DocumentIndexer(db).run_batch_indexing([f[0] for f in files], [])
     searcher = DocumentSearcher(db)
-    prefix = str(dataset_root) + "/"
 
     def search(query, **options):
-        return {r.path.removeprefix(prefix) for r in searcher.search(query, limit=500, **options)}
+        return {
+            Path(r.path).relative_to(dataset_root).as_posix()
+            for r in searcher.search(query, limit=500, **options)
+        }
 
     yield search
     db.close()
