@@ -88,16 +88,17 @@ class _Builder:
 
 # -- format writers ------------------------------------------------------------------------
 _MODIFIED_RE = re.compile(rb"(<dcterms:modified[^>]*>)[^<]*(</dcterms:modified>)")
-_PDF_ID_RE = re.compile(rb"/ID\s*\[\s*<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>\s*\]")
+_PDF_STRING = rb"(?:<[0-9a-fA-F]*>|\((?:\\.|[^\\)])*\))"  # MuPDF writes /ID parts as hex or literal
+_PDF_ID_RE = re.compile(
+    rb"/ID\s*\[\s*" + _PDF_STRING + rb"\s*" + _PDF_STRING + rb"\s*\]", re.DOTALL
+)
+_FIXED_PDF_ID = b"/ID[<" + b"0" * 32 + b"><" + b"0" * 32 + b">]"
 
 
 def _pin_pdf_id(path: Path) -> None:
-    """Replace the random trailer /ID with a fixed value of the same length."""
+    """Replace the random trailer /ID; it sits after the xref table, so no offset moves."""
     data = path.read_bytes()
-    fixed = _PDF_ID_RE.sub(
-        lambda m: b"/ID[<" + b"0" * len(m.group(1)) + b"><" + b"0" * len(m.group(2)) + b">]", data
-    )
-    path.write_bytes(fixed)
+    path.write_bytes(_PDF_ID_RE.sub(lambda match: _FIXED_PDF_ID, data, count=1))
 
 
 def _normalise_zip(path: Path) -> None:

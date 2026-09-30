@@ -115,3 +115,16 @@ def test_release_tag_check_runs_without_site_packages():
     assert ok.returncode == 0, ok.stderr
     assert bad.returncode == 1
     assert f"expected tag 'v{APP_VERSION}'" in bad.stderr
+
+
+def test_report_with_non_ascii_text_survives_a_legacy_code_page_stdout(monkeypatch):
+    # Windows pipes use the ANSI code page. A probe detail such as "繁簡" must never raise there:
+    # an exception in the windowed build shows an error dialog and hangs the CI build check.
+    import io
+
+    monkeypatch.setattr(selfcheck, "run_checks", lambda: [("probe", True, "繁簡 table")])
+    stdout = io.TextIOWrapper(io.BytesIO(), encoding="cp1252", write_through=True)
+    monkeypatch.setattr(sys, "stdout", stdout)
+    assert selfcheck.run_self_check() == 0
+    written = stdout.buffer.getvalue().decode("cp1252")
+    assert "ok probe:" in written and "result: ok" in written
