@@ -49,6 +49,14 @@ def _jieba() -> str:
     return f"{len(tokens)} tokens"
 
 
+def _script_fold() -> str:
+    from doc_searcher.search.script_fold import fold
+
+    if fold("會議記錄") != "会议记录":
+        raise RuntimeError("Traditional-to-Simplified table missing or empty")
+    return "Traditional-to-Simplified table loaded"
+
+
 def _fts5() -> str:
     conn = sqlite3.connect(":memory:")
     try:
@@ -83,6 +91,7 @@ def run_checks() -> List[CheckResult]:
         _check(f"import {module}", functools.partial(_import, module)) for module in PARSER_BACKENDS
     ]
     results.append(_check("jieba dictionary", _jieba))
+    results.append(_check("script folding table", _script_fold))
     results.append(_check("sqlite fts5", _fts5))
     results.append(_check("qt widgets", _qt))
     results += [_check(f"asset {relative}", _asset(relative)) for relative in ASSETS]
@@ -111,6 +120,9 @@ def run_self_check(report_path: Optional[str] = None) -> int:
         with open(report_path, "w", encoding="utf-8") as handle:
             handle.write(text)
     if sys.stdout is not None:  # None in the windowed Windows build
-        sys.stdout.write(text)
+        # A pipe on Windows uses the ANSI code page; an unencodable character must not raise
+        # (a windowed build would then hang on an error dialog instead of exiting).
+        encoding = getattr(sys.stdout, "encoding", None) or "ascii"
+        sys.stdout.write(text.encode(encoding, "backslashreplace").decode(encoding))
         sys.stdout.flush()
     return 1 if failed else 0

@@ -1,0 +1,5 @@
+opencc_TSCharacters.txt is the Traditional-to-Simplified character table from the OpenCC
+project (https://github.com/BYVoid/OpenCC), copied unmodified from the
+opencc-python-reimplemented 0.1.7 package. OpenCC data is licensed under the Apache License 2.0
+(https://www.apache.org/licenses/LICENSE-2.0). Each line is "<traditional>\t<simplified> [alt ...]";
+DocSearcher uses only the first simplified form.
