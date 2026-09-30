@@ -242,7 +242,7 @@ The Qt geometry calculation is covered by offscreen tests for negative display o
 | Native macOS frame placement | Actual DocSearcher main window centered within 1 logical pixel on the available display; tested with a temporary config and database. |
 | Hammerspoon Lua syntax | Passed `luajit -e 'assert(loadfile("examples/center_on_screen/hammerspoon/init.lua"))'`. |
 | Hammerspoon watcher smoke test | Passed with a Lua stand-in for placement, duplicate events, oversized windows, fullscreen windows, and disappearing windows. |
-| Hammerspoon live-window checks | Not run: Hammerspoon is not installed on the development Mac. |
+| Hammerspoon live-window checks | Passed on the development Mac (macOS, Hammerspoon 1.1.1, one 2560x1440 display): TextEdit launched after the watcher and a second TextEdit window were centered within 1 px with size kept; a window moved by hand stayed where it was put; a new Finder window was centered and the desktop window was untouched; the watcher kept running. Second monitors and mixed scaling, menus/widgets, fullscreen and borderless windows, and protected apps were not exercised. |
 | Windows AutoHotkey v2 syntax | Passed in Windows CI (AutoHotkey 2.0.28 `/Validate`, checksum-verified). |
 | Windows AutoHotkey v2 live-window checks | Passed in Windows CI on a GitHub-hosted runner desktop (single 1024x720 display, 100% scale, `tests/windows/center_on_screen_live.ps1`): a standard window is centered to the pixel with its size kept and is not re-centered after a user move; borderless, tool, and always-on-top windows are ignored; the script keeps running. Explorer, Notepad, browsers, mixed-scale or multiple monitors, widgets, and elevated apps were not exercised.
 
