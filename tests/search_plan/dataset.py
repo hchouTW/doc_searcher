@@ -8,7 +8,7 @@
 #     plus the formats this machine could not produce (with the reason), so tests can skip on them.
 #   - OOXML zips get fixed timestamps, document properties are pinned and mtimes are set to a
 #     constant, so two runs produce byte-identical files (manifest field hash_stable marks the
-#     exceptions, e.g. encrypted PDFs (randomized) and the rasterised scanned PDF).
+#     exceptions, e.g. encrypted PDFs, whose encryption is randomized).
 # Usage notes, dependencies, or assumptions:
 #   - CLI: python tests/search_plan/dataset.py OUTDIR   (OUTDIR must be new, empty, or hold a
 #     manifest.json from an earlier run; nothing outside OUTDIR is touched).
@@ -88,16 +88,17 @@ class _Builder:
 
 # -- format writers ------------------------------------------------------------------------
 _MODIFIED_RE = re.compile(rb"(<dcterms:modified[^>]*>)[^<]*(</dcterms:modified>)")
-_PDF_ID_RE = re.compile(rb"/ID\s*\[\s*<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>\s*\]")
+_PDF_STRING = rb"(?:<[0-9a-fA-F]*>|\((?:\\.|[^\\)])*\))"  # MuPDF writes /ID parts as hex or literal
+_PDF_ID_RE = re.compile(
+    rb"/ID\s*\[\s*" + _PDF_STRING + rb"\s*" + _PDF_STRING + rb"\s*\]", re.DOTALL
+)
+_FIXED_PDF_ID = b"/ID[<" + b"0" * 32 + b"><" + b"0" * 32 + b">]"
 
 
 def _pin_pdf_id(path: Path) -> None:
-    """Replace the random trailer /ID with a fixed value of the same length."""
+    """Replace the random trailer /ID; it sits after the xref table, so no offset moves."""
     data = path.read_bytes()
-    fixed = _PDF_ID_RE.sub(
-        lambda m: b"/ID[<" + b"0" * len(m.group(1)) + b"><" + b"0" * len(m.group(2)) + b">]", data
-    )
-    path.write_bytes(fixed)
+    path.write_bytes(_PDF_ID_RE.sub(lambda match: _FIXED_PDF_ID, data, count=1))
 
 
 def _normalise_zip(path: Path) -> None:
@@ -419,9 +420,7 @@ def _scan(b: _Builder) -> None:
         "scan",
         NO_TEXT,
         ["QASCANkeyword"],
-        hash_stable=False,
-        note="text exists only as pixels (rasterised by MuPDF, whose output has differed between "
-        "CI runs); no OCR, so the marker must NOT be found",
+        note="text exists only as pixels; no OCR, so the marker must NOT be found",
     )
 
 
