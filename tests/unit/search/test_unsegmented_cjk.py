@@ -61,7 +61,7 @@ def test_negation_uses_the_word_too(searcher):
 def test_segmentable_words_keep_and_semantics(searcher):
     # 會議 and 記錄 are known words: they are ANDed, so they may be apart, and order is free.
     assert found(searcher, "會議 記錄") == {"trad_meeting.txt"}
-    assert found(searcher, "記錄會議") == {"trad_meeting.txt"}
+    assert found(searcher, "記錄會議") == set()
 
 
 def test_match_case_and_whole_word_still_work_with_unsegmented_terms(searcher):

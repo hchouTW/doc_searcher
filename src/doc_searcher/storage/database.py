@@ -13,6 +13,7 @@ import threading
 import time
 from typing import Optional, Dict, Any, List, Tuple
 
+from doc_searcher.search.cjk_index import cjk_tokens
 from doc_searcher.storage.errors import classify
 from doc_searcher.platform.paths import canonical_path
 from doc_searcher.storage.migrations import migrate
@@ -152,8 +153,10 @@ class Database:
             for row in cursor.fetchall():
                 doc_id = row["id"]
                 conn.execute("DELETE FROM doc_fts WHERE doc_id = ?", (str(doc_id),))
+                conn.execute("DELETE FROM doc_cjk_fts WHERE rowid IN (SELECT id FROM doc_segments WHERE doc_id = ?)", (doc_id,))
                 conn.execute("DELETE FROM doc_segments WHERE doc_id = ?", (doc_id,))
                 conn.execute("DELETE FROM documents WHERE id = ?", (doc_id,))
+                conn.execute("UPDATE index_state SET revision = revision + 1 WHERE id = 1")
 
     def save_document_index(
         self,
@@ -180,6 +183,7 @@ class Database:
                 doc_id = existing["id"]
                 # Clean up previous segments and FTS entries
                 conn.execute("DELETE FROM doc_fts WHERE doc_id = ?", (str(doc_id),))
+                conn.execute("DELETE FROM doc_cjk_fts WHERE rowid IN (SELECT id FROM doc_segments WHERE doc_id = ?)", (doc_id,))
                 conn.execute("DELETE FROM doc_segments WHERE doc_id = ?", (doc_id,))
                 conn.execute(
                     """
@@ -248,4 +252,12 @@ class Database:
                     fts_rows,
                 )
 
+            conn.executemany("INSERT INTO doc_cjk_fts(rowid, tokens) VALUES (?, ?)",
+                [(r["id"], cjk_tokens(r["content"])) for r in conn.execute(
+                    "SELECT id, content FROM doc_segments WHERE doc_id = ?", (doc_id,))])
+            conn.execute("UPDATE index_state SET revision = revision + 1 WHERE id = 1")
         return doc_id
+
+    def revision(self) -> int:
+        """Revision used to invalidate continuation and original-text locations."""
+        return self.get_connection().execute("SELECT revision FROM index_state WHERE id = 1").fetchone()[0]

@@ -113,12 +113,26 @@ def _v3_stemming(conn: sqlite3.Connection) -> None:
         )
 
 
+def _v4_cjk(conn: sqlite3.Connection) -> None:
+    """Build independent Chinese candidates and a monotonic continuation revision."""
+    from doc_searcher.search.cjk_index import cjk_tokens
+    conn.execute("CREATE TABLE IF NOT EXISTS index_state (id INTEGER PRIMARY KEY, revision INTEGER NOT NULL)")
+    conn.execute("INSERT OR IGNORE INTO index_state VALUES (1, 0)")
+    conn.execute("CREATE VIRTUAL TABLE IF NOT EXISTS doc_cjk_fts USING fts5(tokens, tokenize='unicode61')")
+    conn.execute("DELETE FROM doc_cjk_fts")
+    rows = conn.execute("SELECT id, content FROM doc_segments ORDER BY id")
+    while batch := rows.fetchmany(1000):
+        conn.executemany("INSERT INTO doc_cjk_fts(rowid, tokens) VALUES (?, ?)",
+                         [(r[0], cjk_tokens(r[1])) for r in batch])
+
+
 Migration = Tuple[int, str, Callable[[sqlite3.Connection], None]]
 
 MIGRATIONS: List[Migration] = [
     (1, "v1.2.0 baseline schema with ctime", _v1_baseline),
     (2, "fold Simplified/Traditional Chinese in tokenized_content", _v2_fold_scripts),
     (3, "English stemming (porter tokenizer)", _v3_stemming),
+    (4, "Chinese literal candidate index and continuation revision", _v4_cjk),
 ]
 
 

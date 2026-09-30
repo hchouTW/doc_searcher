@@ -16,10 +16,15 @@
 #     and whole word ask for the exact word and switch that off, as does filename search.
 #   - Folds Simplified/Traditional Chinese (search.script_fold) in queries, literal re-checks,
 #     filename search and the LIKE fallback; regex mode matches stored text exactly as written.
+#   - Uses a folded CJK gram index with segment-scoped boolean verification and stable
+#     document pagination; page cursors invalidate when the index changes.
 #   - Generates snippet contexts with highlighted HTML <mark> tags and location indicators.
 # Usage notes, dependencies, or assumptions:
 #   - Uses SQLite FTS5 functions and doc_searcher.search.text_helper.
 
+import base64
+import hashlib
+import json
 import html
 import logging
 import os
@@ -29,6 +34,8 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, Iterable, List, Optional
 import jieba
 
+from doc_searcher.search.cjk_index import candidate_expression
+from doc_searcher.search.query import parse_query, QuerySyntaxError
 from doc_searcher.storage.database import Database
 from doc_searcher.storage.errors import classify
 from doc_searcher.platform.paths import canonical_path, canonical_text
@@ -41,7 +48,6 @@ from doc_searcher.search.regex_engine import (
 )
 from doc_searcher.indexing.scanner import is_absolute_pattern
 from doc_searcher.search.text_helper import (
-    extract_keywords_from_query,
     generate_highlighted_snippets,
     generate_regex_highlighted_snippets,
     has_word_char,
@@ -70,6 +76,16 @@ class SearchResultItem:
     total_matches: int
     segments: List[SegmentMatch] = field(default_factory=list)
     ctime: float = 0.0
+
+
+@dataclass
+class SearchPage:
+    items: List[SearchResultItem]
+    next_cursor: Optional[str]
+    has_more: bool
+    total_documents: Optional[int]
+    complete: bool
+    revision: int
 
 
 class SearchQueryError(ValueError):
@@ -109,7 +125,22 @@ class DocumentSearcher:
     def __init__(self, db: Database):
         self.db = db
 
-    def search(
+    def search(self, *args, **options):
+        """Search in one consistent snapshot, including during background index updates."""
+        conn = self.db.get_connection()
+        if conn.in_transaction:
+            return self._search(*args, **options)
+        with conn:
+            conn.execute("BEGIN")
+            try:
+                return self._search(*args, **options)
+            except sqlite3.OperationalError as exc:
+                error = classify(exc, self.db.db_path)
+                if error is not None:
+                    raise error from exc
+                raise
+
+    def _search(
         self,
         query_str: str,
         type_filter: str = "all",
@@ -178,69 +209,97 @@ class DocumentSearcher:
                 whole_word,
             )
 
-        keywords = extract_keywords_from_query(clean_query)
-        if not keywords:
-            return []
-
-        fts_query = self._build_fts5_query(clean_query)
-        verify_literal = match_case or whole_word or self._needs_literal_check(clean_query)
-        if not fts_query:
-            # Only punctuation: the index has nothing to match, so scan the stored text.
-            rows = self._fallback_like_search(keywords, filter_clause, filter_params, limit)
-            return self._aggregate_rows(
-                rows, keywords, limit, clean_query, match_case, whole_word, verify_literal=True
-            )
-
+        parsed = self._parse(clean_query)
         conn = self.db.get_connection()
+        candidates = {}
+        ranks = {}
+        for term in parsed.root.terms():
+            hits = set()
+            grams = candidate_expression(term)
+            if grams:
+                hits.update(r[0] for r in conn.execute(
+                    "SELECT rowid FROM doc_cjk_fts WHERE doc_cjk_fts MATCH ?", (grams,)))
+            else:
+                expression = self._build_fts5_query('"' + term + '"' if " " in term else term)
+                if expression:
+                    try:
+                        for row in conn.execute("SELECT s.id, bm25(doc_fts) AS rank FROM doc_fts f "
+                            "JOIN doc_segments s ON s.doc_id = CAST(f.doc_id AS INTEGER) "
+                            "AND s.segment_id = f.segment_id AND s.segment_type = f.segment_type "
+                            "WHERE doc_fts MATCH ?", (expression,)):
+                            hits.add(row[0])
+                            ranks[row[0]] = min(ranks.get(row[0], 0), row[1])
+                    except sqlite3.OperationalError as exc:
+                        if not _is_fts_query_error(exc):
+                            raise
+                        hits.update(r[0] for r in conn.execute("SELECT id FROM doc_segments"))
+                else:
+                    hits.update(r[0] for r in conn.execute("SELECT id FROM doc_segments"))
+            # Only verified exclusions may be subtracted: grams are a candidate superset.
+            verified = set()
+            for sid in hits:
+                content = conn.execute("SELECT content FROM doc_segments WHERE id = ?", (sid,)).fetchone()[0]
+                if self._literal_matches(content, term, match_case, whole_word):
+                    verified.add(sid)
+            candidates[term] = verified
+        selected = parsed.root.evaluate(candidates.__getitem__)
+        def rows():
+            for sid in sorted(selected):
+                if cancel_check and cancel_check():
+                    raise SearchQueryError("搜尋已取消。", "cancelled")
+                row = conn.execute(f"SELECT s.id AS segment_row_id, s.doc_id, s.segment_id, "
+                    f"s.segment_type, s.content, 0.0 AS rank, d.path, d.filename, d.file_type, "
+                    f"d.file_size, d.mtime, d.ctime FROM doc_segments s JOIN documents d ON d.id=s.doc_id "
+                    f"WHERE s.id = ? {filter_clause}", [sid, *filter_params]).fetchone()
+                if row:
+                    data = dict(row)
+                    data["rank"] = ranks.get(sid, 0.0)
+                    yield data
+        keywords = [t for t in parsed.root.terms() if t]
+        return self._aggregate_rows(rows(), keywords, limit, clean_query, match_case, whole_word)
 
-        params: List[Any] = [fts_query]
-
-        sql = f"""
-            SELECT 
-                f.doc_id,
-                f.segment_id,
-                f.segment_type,
-                f.content,
-                bm25(doc_fts) as rank,
-                d.path,
-                d.filename,
-                d.file_type,
-                d.file_size,
-                d.mtime,
-                d.ctime
-            FROM doc_fts f
-            JOIN documents d ON d.id = CAST(f.doc_id AS INTEGER)
-            WHERE doc_fts MATCH ?
-              {filter_clause}
-            ORDER BY rank ASC
-            LIMIT ?
-        """
-        params.extend(filter_params)
-        params.append(limit * 3)
-
+    @staticmethod
+    def _parse(query):
         try:
-            cursor = conn.execute(sql, params)
-            rows = cursor.fetchall()
-        except sqlite3.OperationalError as e:
-            # Only an FTS query-language problem justifies the slower LIKE search; locks,
-            # corruption, and programming errors must surface instead of changing algorithms.
-            if not _is_fts_query_error(e):
-                storage_error = classify(e, self.db.db_path)
-                if storage_error is None:
-                    raise
-                raise storage_error from e
-            logger.info("FTS query %r rejected (%s); using LIKE search", fts_query, e)
-            rows = self._fallback_like_search(keywords, filter_clause, filter_params, limit)
+            return parse_query(query)
+        except QuerySyntaxError as exc:
+            messages = {"unpaired_phrase": "精確片語的雙引號未成對。",
+                        "operator_position": "AND、OR、NOT 前後都必須有搜尋詞。",
+                        "repeated_operator": "AND、OR、NOT 不可連續使用。"}
+            raise SearchQueryError(messages[exc.code], exc.code) from exc
 
-        return self._aggregate_rows(
-            rows,
-            keywords,
-            limit,
-            clean_query,
-            match_case,
-            whole_word,
-            verify_literal=verify_literal,
-        )
+    def search_page(self, query_str, *, cursor=None, limit=200, **options):
+        if limit < 1:
+            raise ValueError("limit must be positive")
+        fingerprint = hashlib.sha256(json.dumps([query_str, options], sort_keys=True,
+            default=str).encode()).hexdigest()
+        conn = self.db.get_connection()
+        # All reads in a page share a SQLite snapshot while other threads may update the index.
+        with conn:
+            conn.execute("BEGIN")
+            revision = self.db.revision()
+            after = None
+            if cursor:
+                try:
+                    token = json.loads(base64.urlsafe_b64decode(cursor.encode()))
+                    if token[0] != revision or token[1] != fingerprint:
+                        raise ValueError()
+                    after = tuple(token[2])
+                except (ValueError, TypeError, KeyError, IndexError) as exc:
+                    raise SearchQueryError("索引或搜尋條件已變更，請重新搜尋。", "stale_cursor") from exc
+            items = self.search(query_str, limit=2**63-1, **options)
+            items.sort(key=lambda x: (x.rank_score, x.doc_id))
+            total = len(items)
+            if after is not None:
+                items = [x for x in items if (x.rank_score, x.doc_id) > after]
+            more = len(items) > limit
+            items = items[:limit]
+            next_cursor = None
+            if more:
+                last = items[-1]
+                next_cursor = base64.urlsafe_b64encode(json.dumps(
+                    [revision, fingerprint, [last.rank_score, last.doc_id]]).encode()).decode()
+            return SearchPage(items, next_cursor, more, total, True, revision)
 
     def _aggregate_rows(
         self,
@@ -312,7 +371,7 @@ class DocumentSearcher:
                 )
 
         results = list(doc_map.values())
-        results.sort(key=lambda item: item.rank_score)
+        results.sort(key=lambda item: (item.rank_score, item.doc_id))
         return results[:limit]
 
     @staticmethod
@@ -446,15 +505,14 @@ class DocumentSearcher:
         conn = self.db.get_connection()
         conn.create_function("fold", 1, fold, deterministic=True)
         escaped_query = self._escape_like(fold(canonical_text(filename_query)))
-        params: List[Any] = [f"%{escaped_query}%", *filter_params, limit]
+        params: List[Any] = [f"%{escaped_query}%", *filter_params]
         rows = conn.execute(
             f"""
                 SELECT id, path, filename, file_type, file_size, mtime, ctime
                 FROM documents d
                 WHERE fold(d.filename) LIKE ? ESCAPE '\\'
                   {filter_clause}
-                ORDER BY d.filename COLLATE NOCASE
-                LIMIT ?
+                ORDER BY d.filename COLLATE NOCASE, d.id
             """,
             params,
         ).fetchall()
@@ -494,7 +552,7 @@ class DocumentSearcher:
                     ],
                 )
             )
-        return results
+        return results[:limit]
 
     def _search_negative_only(
         self,
