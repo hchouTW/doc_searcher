@@ -1083,6 +1083,9 @@ def test_document_continuation_ui(tmp_path, language, theme):
     config = AppConfig(tmp_path / "config.json")
     config.db_path = str(tmp_path / "index.db")
     config.language = language
+    # Without search roots the default "temp" exclusion tests the whole path, which on Windows
+    # contains ...\\AppData\\Local\\Temp\\ and would hide every stored document.
+    config.exclude_patterns = []
     db = Database(config.db_path)
     for index in range(202):
         db.save_document_index(
@@ -1135,6 +1138,29 @@ def test_document_continuation_ui(tmp_path, language, theme):
     assert len({item.doc_id for item in window._loaded_results}) == 202
     window.close()
     app.processEvents()
+
+
+def test_sidebar_widens_for_wider_fonts_instead_of_scrolling(tmp_path):
+    app = _app()
+    original = app.font()
+    wide = app.font()
+    wide.setPointSizeF(original.pointSizeF() + 6)  # stands in for a wider platform font
+    app.setFont(wide)
+    try:
+        config = AppConfig(tmp_path / "config.json")
+        config.db_path = str(tmp_path / "index.db")
+        config.language = "en-US"
+        window = MainWindow(config)
+        window.apply_theme(LIGHT_PALETTE)
+        window.resize(1300, 850)
+        window.show()
+        app.processEvents()
+        overflow = window.sidebar_scroll.horizontalScrollBar().maximum()
+        assert overflow == 0, _sidebar_overflow_report(window, overflow)
+        assert window.sidebar_scroll.width() <= window.sidebar_scroll.maximumWidth()
+        window.close()
+    finally:
+        app.setFont(original)
 
 
 def test_negative_only_preview_finishes_without_positive_locations(tmp_path):

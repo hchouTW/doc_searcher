@@ -7,6 +7,7 @@
 #   - Listens to macOS/Windows system colorScheme changes and updates theme dynamically.
 #   - Provides a manual theme toggle button (Auto / Dark / Light).
 #   - Hosts the "Display Columns" button above the results table and persists its choice.
+#   - Widens the sidebar to its content's minimum (language/font/theme dependent), never below 280 px.
 #   - Ensures high-contrast readability with no system-color mismatches.
 #   - Owns widgets and workers only: filter translation/validation lives in search_filters,
 #     index/search scheduling and indexing status decisions in coordination, and indexing
@@ -882,6 +883,19 @@ class MainWindow(QMainWindow):
         self.table.apply_theme(theme)
         self.column_button.apply_theme(theme)
         self.preview.apply_theme(theme)
+        self._fit_sidebar_width()
+
+    def _fit_sidebar_width(self):
+        """Keep the sidebar wide enough for its widest card in this language, font and theme.
+
+        Wider fonts (e.g. English labels on Linux) need more than the 280 px floor; without
+        this the sidebar grows a horizontal scrollbar.
+        """
+        scroll = self.sidebar_scroll
+        needed = self.sidebar.minimumSizeHint().width() + 2 * scroll.frameWidth()
+        if scroll.verticalScrollBar().isVisible():
+            needed += scroll.verticalScrollBar().width()
+        scroll.setMinimumWidth(min(max(280, needed), scroll.maximumWidth()))
 
     def _get_theme_btn_text(self) -> str:
         if self.theme_mode == "auto":
@@ -1011,6 +1025,7 @@ class MainWindow(QMainWindow):
                     self.progress_text_label.setText(tr(self.language, "progress_scanning"))
         elif not self.search_worker:
             self.status_label.setText(self._idle_status_text())
+        self._fit_sidebar_width()
 
     def _on_language_changed(self, button):
         language = button.property("lang_code")
