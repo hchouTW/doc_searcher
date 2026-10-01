@@ -8,10 +8,21 @@
 
 from typing import List, Tuple
 
-APP_VERSION = "1.3.1"
+APP_VERSION = "1.4.0"
 
 # Newest first: (version, release_date, [highlight, ...])
 CHANGELOG: List[Tuple[str, str, List[str]]] = [
+    (
+        "1.4.0",
+        "2026-10-01",
+        [
+            "live_folder_indexing",
+            "optional_tesseract_ocr",
+            "expanded_hybrid_search",
+            "extraction_quality_reporting",
+            "complete_hit_counts",
+        ],
+    ),
     (
         "1.3.1",
         "2026-09-30",
