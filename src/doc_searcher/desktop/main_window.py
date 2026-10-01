@@ -62,6 +62,7 @@ from doc_searcher.desktop.i18n import tr
 from doc_searcher.version import APP_VERSION, CHANGELOG
 from doc_searcher.desktop.theme import ThemeColors, get_active_theme, apply_application_theme
 from doc_searcher.platform.resource_path import resource_path
+from .about_dialog import AboutDialog
 from .column_menu import ColumnMenuButton
 from .result_table import ResultTable
 from .preview_panel import PreviewPanel
@@ -1698,22 +1699,19 @@ class MainWindow(QMainWindow):
         self.search_input.setFocus()
 
     def _show_about_dialog(self):
-        about_box = QMessageBox(self)
-        about_box.setWindowTitle(tr(self.language, "about_title"))
-        about_box.setIcon(QMessageBox.Information)
-        about_box.setTextFormat(Qt.TextFormat.RichText)
-        lines = [
-            f"<h3>{tr(self.language, 'about_current_version', version=APP_VERSION)}</h3>",
-            f"<h4>{tr(self.language, 'about_changelog_heading')}</h4>",
-        ]
+        entries = []
         for version, date, highlight_keys in CHANGELOG:
-            lines.append(f"<p><b>v{version}</b> — {date}</p><ul>")
-            lines.extend(
+            items = "".join(
                 f"<li>{tr(self.language, f'changelog_{key}')}</li>" for key in highlight_keys
             )
-            lines.append("</ul>")
-        about_box.setText("".join(lines))
-        about_box.exec()
+            entries.append(f"<p><b>v{version}</b> — {date}</p><ul>{items}</ul>")
+        AboutDialog(
+            self,
+            tr(self.language, "about_title"),
+            f"<h3>{tr(self.language, 'about_current_version', version=APP_VERSION)}</h3>"
+            f"<h4>{tr(self.language, 'about_changelog_heading')}</h4>",
+            "".join(entries),
+        ).exec()
 
     def _show_search_help(self):
         help_box = QDialog(self)
