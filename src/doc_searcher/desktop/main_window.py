@@ -9,6 +9,7 @@
 #   - Hosts the "Display Columns" button above the results table and persists its choice.
 #   - Persists the "Tesseract OCR" checkbox (off by default); turning it on re-indexes so files
 #     indexed without OCR are re-extracted.
+#   - Widens the sidebar (280-360 px normally) when its content needs more, instead of scrolling.
 #   - Ensures high-contrast readability with no system-color mismatches.
 #   - Owns widgets and workers only: filter translation/validation lives in search_filters,
 #     index/search scheduling and indexing status decisions in coordination, and indexing
@@ -50,7 +51,7 @@ from PySide6.QtWidgets import (
     QTextBrowser,
     QDialogButtonBox,
 )
-from PySide6.QtCore import QThread, Qt, QTimer, QDate
+from PySide6.QtCore import QEvent, QThread, Qt, QTimer, QDate
 from PySide6.QtGui import QIcon, QKeySequence, QShortcut, QTextDocument
 
 from doc_searcher.config import AppConfig
@@ -69,6 +70,10 @@ from . import search_filters
 from .coordination import WorkScheduler, summarize_indexing
 from .search_filters import FilterState
 from .search_input import SyntaxSearchInput
+
+
+SIDEBAR_MIN_WIDTH = 280  # px; floor, and the default width range's lower bound
+SIDEBAR_MAX_WIDTH = 360  # px; normal ceiling, exceeded only when the content needs more
 
 
 class ContentWidthComboBox(QComboBox):
@@ -249,9 +254,12 @@ class MainWindow(QMainWindow):
         main_layout.addWidget(self.splitter)
         self.sidebar_scroll = QScrollArea()
         self.sidebar_scroll.setWidgetResizable(True)
-        self.sidebar_scroll.setMinimumWidth(280)
-        self.sidebar_scroll.setMaximumWidth(360)
+        self.sidebar_scroll.setMinimumWidth(SIDEBAR_MIN_WIDTH)
+        self.sidebar_scroll.setMaximumWidth(SIDEBAR_MAX_WIDTH)
         self.sidebar = QWidget()
+        # Refit the width whenever the sidebar's layout or its viewport changes.
+        self.sidebar.installEventFilter(self)
+        self.sidebar_scroll.viewport().installEventFilter(self)
         sidebar_layout = QVBoxLayout(self.sidebar)
         sidebar_layout.setContentsMargins(0, 0, 4, 0)
         sidebar_layout.setSpacing(10)
@@ -890,6 +898,29 @@ class MainWindow(QMainWindow):
         self.table.apply_theme(theme)
         self.column_button.apply_theme(theme)
         self.preview.apply_theme(theme)
+        self._fit_sidebar_width()
+
+    def eventFilter(self, watched, event):
+        if (watched is self.sidebar and event.type() == QEvent.Type.LayoutRequest) or (
+            watched is self.sidebar_scroll.viewport() and event.type() == QEvent.Type.Resize
+        ):
+            # Sizes are only final once the window is polished and shown, and change with the
+            # language, theme and font; fit after the layout settles, not inside its event.
+            QTimer.singleShot(0, self._fit_sidebar_width)
+        return super().eventFilter(watched, event)
+
+    def _fit_sidebar_width(self):
+        """Keep the sidebar wide enough for its widest card in this language, font and theme.
+
+        Wider fonts (e.g. English labels on the Linux and Windows CI fonts) need more than the
+        usual 280-360 px range; widening is better than a horizontal scrollbar.
+        """
+        scroll = self.sidebar_scroll
+        needed = self.sidebar.minimumSizeHint().width() + 2 * scroll.frameWidth()
+        if self.sidebar.minimumSizeHint().height() > scroll.viewport().height():
+            needed += scroll.verticalScrollBar().sizeHint().width()  # a scrollbar will show
+        scroll.setMaximumWidth(max(SIDEBAR_MAX_WIDTH, needed))
+        scroll.setMinimumWidth(max(SIDEBAR_MIN_WIDTH, needed))
 
     def _get_theme_btn_text(self) -> str:
         if self.theme_mode == "auto":
@@ -1021,6 +1052,7 @@ class MainWindow(QMainWindow):
                     self.progress_text_label.setText(tr(self.language, "progress_scanning"))
         elif not self.search_worker:
             self.status_label.setText(self._idle_status_text())
+        self._fit_sidebar_width()
 
     def _on_language_changed(self, button):
         language = button.property("lang_code")

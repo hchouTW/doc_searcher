@@ -51,7 +51,8 @@ def test_fmt_08_unsupported_extensions_are_never_indexed(env):
     for marker in ("QANEGjson", "QANEGlog", "QANEGpng", "QANEGexe"):
         assert env.search(marker) == set()
     indexed = {row[0] for row in env.db.get_connection().execute("SELECT path FROM documents")}
-    assert {path.rsplit("/", 1)[-1] for path in indexed if "/neg/" in path} == {"pixel.png"}
+    names = {Path(path).name for path in indexed if Path(path).parent.name == "neg"}
+    assert names == {"pixel.png"}
 
 
 ENCODING_MARKERS = {

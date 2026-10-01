@@ -1,4 +1,5 @@
 """Literal recall, boolean scope and stable document continuation regressions."""
+
 import pytest
 
 from doc_searcher.search.searcher import DocumentSearcher, SearchQueryError
@@ -9,10 +10,24 @@ from doc_searcher.storage.database import Database
 @pytest.fixture
 def corpus(tmp_path):
     db = Database(str(tmp_path / "index.db"))
+
     def save(name, texts):
-        return db.save_document_index(str(tmp_path / name), "txt", 100, 1,
-            [{"segment_id": str(i), "segment_type": "section", "content": text,
-              "tokenized_content": tokenize_for_fts(text)} for i, text in enumerate(texts)])
+        return db.save_document_index(
+            str(tmp_path / name),
+            "txt",
+            100,
+            1,
+            [
+                {
+                    "segment_id": str(i),
+                    "segment_type": "section",
+                    "content": text,
+                    "tokenized_content": tokenize_for_fts(text),
+                }
+                for i, text in enumerate(texts)
+            ],
+        )
+
     yield db, DocumentSearcher(db), save
     db.close()
 
@@ -65,16 +80,21 @@ def test_continuation_and_stale_revision(corpus):
         searcher.search_page("計畫", limit=2, cursor=first.next_cursor)
     assert error.value.code == "stale_cursor"
 
-@pytest.mark.parametrize("query,oracle", [
-    ("計畫", lambda t: "计画" in t),
-    ('"都市計畫"', lambda t: "都市计画" in t),
-    ("計 畫", lambda t: "计" in t and "画" in t),
-    ("計畫 OR 升等", lambda t: "计画" in t or "升等" in t),
-    ("計畫 NOT 都市", lambda t: "计画" in t and "都市" not in t),
-    ("計畫 OR 教師 NOT 升等", lambda t: "计画" in t or ("教师" in t and "升等" not in t)),
-])
+
+@pytest.mark.parametrize(
+    "query,oracle",
+    [
+        ("計畫", lambda t: "计画" in t),
+        ('"都市計畫"', lambda t: "都市计画" in t),
+        ("計 畫", lambda t: "计" in t and "画" in t),
+        ("計畫 OR 升等", lambda t: "计画" in t or "升等" in t),
+        ("計畫 NOT 都市", lambda t: "计画" in t and "都市" not in t),
+        ("計畫 OR 教師 NOT 升等", lambda t: "计画" in t or ("教师" in t and "升等" not in t)),
+    ],
+)
 def test_index_matches_folded_oracle(corpus, query, oracle):
     from doc_searcher.search.script_fold import fold
+
     _, searcher, save = corpus
     texts = ["都市計畫", "計 畫", "教師升等級審查", "教師公告", "计画", "𠀀计画"]
     for i, text in enumerate(texts):
@@ -87,6 +107,7 @@ def test_cjk_migration_rollback_and_rebuild_without_files(corpus, monkeypatch):
     import sqlite3
     from doc_searcher.storage import migrations
     from doc_searcher.storage.errors import MigrationError
+
     db, _, save = corpus
     save("missing.txt", ["都市計畫𠀀"])
     path = db.db_path
@@ -98,10 +119,16 @@ def test_cjk_migration_rollback_and_rebuild_without_files(corpus, monkeypatch):
     conn.commit()
     conn.close()
     original = migrations._v4_cjk
+
     def broken(conn):
         original(conn)
         raise RuntimeError("injected index build failure")
-    monkeypatch.setattr(migrations, "MIGRATIONS", [(*m[:2], broken) if m[0] == 4 else m for m in migrations.MIGRATIONS])
+
+    monkeypatch.setattr(
+        migrations,
+        "MIGRATIONS",
+        [(*m[:2], broken) if m[0] == 4 else m for m in migrations.MIGRATIONS],
+    )
     with pytest.raises(MigrationError):
         Database(path)
     conn = sqlite3.connect(path)

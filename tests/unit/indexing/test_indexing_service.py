@@ -208,8 +208,10 @@ def test_clear_failure_rolls_back_documents_and_both_search_indexes(db, roots):
     IndexingService(db).run(IndexRequest(roots=[str(r) for r in roots]))
     conn = db.get_connection()
     revision = db.revision()
-    counts = {table: conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
-              for table in ("documents", "doc_segments", "doc_fts", "doc_cjk_fts")}
+    counts = {
+        table: conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+        for table in ("documents", "doc_segments", "doc_fts", "doc_cjk_fts")
+    }
     conn.execute("""CREATE TRIGGER fail_clear BEFORE DELETE ON documents
                     WHEN OLD.id = (SELECT MAX(id) FROM documents)
                     BEGIN SELECT RAISE(ABORT, 'injected clear failure'); END""")
@@ -237,8 +239,9 @@ def test_cancelled_clear_preserves_every_document(db, roots, cancel_on_progress)
 def test_clear_progress_is_bounded_and_reports_committed_total(db, roots):
     IndexingService(db).run(IndexRequest(roots=[str(r) for r in roots]))
     progress = []
-    stats = IndexingService(db).clear(on_progress=lambda current, total, name:
-                                    progress.append((current, total)))
+    stats = IndexingService(db).clear(
+        on_progress=lambda current, total, name: progress.append((current, total))
+    )
     assert stats["deleted"] == 4
     assert progress == [(0, 4), (4, 4)]
 
