@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- The Version Info dialog sizes itself to its content and the screen: compact for short changelogs, capped to the usable screen area, with only the changelog scrolling and the heading and OK button always visible; it re-wraps on resize and centers over the main window.
+
 ## 1.4.0 - 2026-10-01
 
 - Automatically index folder changes in desktop/MCP, with CLI `--watch`, pending/error diagnostics and safe retries for files modified during extraction.
