@@ -99,14 +99,18 @@ def test_pdf_02_owner_password_pdf_text_is_extracted(env):
 
 
 def test_pdf_03_scanned_pdf_ocr_or_actionable_runtime_failure(env):
-    from doc_searcher.parsers import parse_file
+    from doc_searcher.parsers import ocr, parse_file
 
-    scanned = parse_file(str(env.root / "scan/scanned.pdf"))
+    # Tesseract OCR is off by default, so the indexed scan has no text and says why.
+    assert env.search("QASCANkeyword") == set()
+    skipped = parse_file(str(env.root / "scan/scanned.pdf"))
+    assert [w["code"] for w in skipped.warnings] == ["ocr_disabled"]
+    with ocr.enabled_scope(True):
+        scanned = parse_file(str(env.root / "scan/scanned.pdf"))
     if scanned.omitted_locations:
-        assert env.search("QASCANkeyword") == set()
         assert any(w["code"] == "ocr_failed" for w in scanned.warnings)
     else:
-        assert env.search("QASCANkeyword") == {"scan/scanned.pdf"}
+        assert "QASCANkeyword" in scanned.full_text
     row = (
         env.db.get_connection()
         .execute("SELECT total_segments, error FROM documents WHERE filename = 'scanned.pdf'")

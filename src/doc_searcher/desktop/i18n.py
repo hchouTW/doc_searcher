@@ -423,6 +423,7 @@ for _language, _labels in {
 for _language, _values in {
     "zh-TW": {
         "auto_updates": "自動更新索引",
+        "ocr_tip": "以本機 Tesseract 辨識掃描頁與圖片文字（預設關閉；需另行安裝 Tesseract）",
         "related_hit": "相關段落",
         "live_pending": "自動更新中；待處理 {count} 項",
         "search_literal": "關鍵字",
@@ -432,6 +433,7 @@ for _language, _values in {
     },
     "en-US": {
         "auto_updates": "Auto update index",
+        "ocr_tip": "Recognize scanned pages and images with local Tesseract (off by default; install Tesseract separately)",
         "related_hit": "Related passage",
         "live_pending": "Auto update pending: {count}",
         "search_literal": "Keyword",

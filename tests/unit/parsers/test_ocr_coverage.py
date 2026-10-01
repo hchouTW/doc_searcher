@@ -4,8 +4,15 @@ from io import BytesIO
 from PIL import Image
 import pymupdf
 import pytest
-from doc_searcher.parsers import parse_file
+from doc_searcher.parsers import ocr, parse_file
 from doc_searcher.parsers.pdf_parser import PdfParser
+
+
+@pytest.fixture(autouse=True)
+def ocr_enabled():
+    """These tests cover OCR behavior, which is off unless a run enables it."""
+    with ocr.enabled_scope(True):
+        yield
 
 
 def image_bytes():

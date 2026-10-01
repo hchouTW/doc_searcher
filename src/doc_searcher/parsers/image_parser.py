@@ -1,6 +1,7 @@
 # Purpose: Make supported standalone images searchable using local OCR.
 # Behavior: Process every TIFF frame or single PNG/JPEG with bounded rendering and provenance.
 # Usage: PyMuPDF, Pillow (TIFF frame decoding), and Tesseract with configured language data.
+#   With OCR off the image is recorded without text and an "ocr_disabled" warning.
 import os
 from .base import BaseParser, ExtractedDoc, ParseStatus, SourceTextBuilder
 from . import ocr
@@ -13,6 +14,19 @@ class ImageParser(BaseParser):
         path = os.path.abspath(file_path)
         extension = os.path.splitext(path)[1][1:].lower()
         segments, warnings, omitted = [], [], []
+        if not ocr.is_enabled():
+            return ExtractedDoc(
+                path,
+                extension,
+                warnings=[
+                    dict(
+                        code="ocr_disabled",
+                        location="image",
+                        message="Tesseract OCR is off; image text was not recognized.",
+                    )
+                ],
+                omitted_locations=["image"],
+            )
         try:
             from PIL import Image, ImageSequence
 

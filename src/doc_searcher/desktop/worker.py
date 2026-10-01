@@ -48,6 +48,7 @@ class IndexWorker(QThread):
         exclude_patterns: Optional[List[str]] = None,
         clear_index: bool = False,
         force_paths=None,
+        ocr: bool = False,
     ):
         super().__init__()
         self.db = db
@@ -57,6 +58,7 @@ class IndexWorker(QThread):
             exclude_patterns=list(exclude_patterns or []),
             force_paths=list(force_paths or []),
             reprocess_only=bool(force_paths),
+            ocr=ocr,
         )
         self.clear_index = clear_index
         self.service = IndexingService(db)

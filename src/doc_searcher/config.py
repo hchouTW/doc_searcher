@@ -96,6 +96,7 @@ class Settings:
     exclude_patterns: List[str] = field(default_factory=lambda: DEFAULT_EXCLUDE_PATTERNS.copy())
     search_filters: SearchFilters = field(default_factory=SearchFilters)
     visible_columns: List[str] = field(default_factory=lambda: list(COLUMN_IDS))
+    ocr_enabled: bool = False
 
 
 # ------------------------------------------------------------------ validation
@@ -162,6 +163,9 @@ def _validate(raw: Dict[str, Any], default_db_path: str) -> Tuple[Settings, List
     if "include_subdirectories" in raw:
         value = raw["include_subdirectories"]
         take("include_subdirectories", value, isinstance(value, bool))
+    if "ocr_enabled" in raw:
+        value = raw["ocr_enabled"]
+        take("ocr_enabled", value, isinstance(value, bool))
     if "enabled_extensions" in raw:
         extensions = _validate_extensions(raw["enabled_extensions"])
         take("enabled_extensions", extensions, extensions is not None)
@@ -362,6 +366,15 @@ class AppConfig:
     @include_subdirectories.setter
     def include_subdirectories(self, enabled: bool):
         self.settings.include_subdirectories = bool(enabled)
+        self.save()
+
+    @property
+    def ocr_enabled(self) -> bool:
+        return self.settings.ocr_enabled
+
+    @ocr_enabled.setter
+    def ocr_enabled(self, enabled: bool):
+        self.settings.ocr_enabled = bool(enabled)
         self.save()
 
     @property
