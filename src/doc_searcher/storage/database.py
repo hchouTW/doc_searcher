@@ -123,6 +123,17 @@ class Database:
         cursor = conn.execute("SELECT path, mtime, file_size FROM documents")
         return {row["path"]: (row["mtime"], row["file_size"]) for row in cursor.fetchall()}
 
+    def paths_with_warning(self, code: str) -> List[str]:
+        """Paths whose stored extraction warnings include the given warning code."""
+        rows = self.get_connection().execute(
+            "SELECT path, warnings FROM documents WHERE warnings LIKE ?", (f'%"{code}"%',)
+        )
+        return [
+            row["path"]
+            for row in rows
+            if any(warning.get("code") == code for warning in json.loads(row["warnings"]))
+        ]
+
     def get_stats(self) -> Dict[str, Any]:
         """Return overall database index statistics."""
         conn = self.get_connection()

@@ -11,6 +11,8 @@
 #   - clear() atomically resets documents and search indexes in one transaction; pause/cancel
 #     apply before the reset, and progress reports its start and committed completion.
 #   - Holds a per-database, in-process lock while writing, so two runs never write concurrently.
+#   - request.ocr enables Tesseract OCR for the run; when enabled, unchanged files previously
+#     indexed with OCR off ("ocr_disabled" warning) are re-extracted.
 # Usage notes, dependencies, or assumptions:
 #   - No Qt, MCP, or printing here; adapters translate phases/results into signals or messages.
 #   - Result keys: indexed, deleted, failed, cancelled, skipped (no root was available),
@@ -48,6 +50,7 @@ class IndexRequest:
     scope: Optional[List[str]] = None
     force_paths: List[str] = field(default_factory=list)
     reprocess_only: bool = False
+    ocr: bool = False
 
 
 class IndexingService:
@@ -123,9 +126,25 @@ class IndexingService:
             if request.reprocess_only:
                 to_index, to_delete = permitted, []
             else:
-                to_index = list(dict.fromkeys([*to_index, *permitted]))
+                missing_ocr = []
+                if request.ocr:
+                    scanned = {path for path, _, _ in current_files}
+                    missing_ocr = [
+                        path
+                        for path in self.db.paths_with_warning("ocr_disabled")
+                        if path in scanned
+                        and (
+                            request.scope is None
+                            or any(
+                                self.scanner.is_path_within_directory(path, root)
+                                for root in request.scope
+                            )
+                        )
+                    ]
+                to_index = list(dict.fromkeys([*to_index, *permitted, *missing_ocr]))
             if to_index or to_delete:
                 phase("indexing")
+            self.indexer.ocr_enabled = request.ocr
             stats: Dict[str, Any] = self.indexer.run_batch_indexing(
                 to_index, to_delete, progress_callback=on_progress, reset_cancellation=False
             )
@@ -182,6 +201,7 @@ class IndexingService:
                     continue
                 # Events force parsing: same-size writes or preserved timestamps still matter.
                 updates.append(path)
+            self.indexer.ocr_enabled = request.ocr
             result = self.indexer.run_batch_indexing(updates, deletes, reset_cancellation=False)
             result.update(
                 elapsed=time.monotonic() - start,

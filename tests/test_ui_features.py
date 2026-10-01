@@ -1223,6 +1223,30 @@ def test_expanded_passage_preview_has_no_literal_navigation(tmp_path):
     app.processEvents()
 
 
+def test_tesseract_ocr_checkbox_defaults_off_persists_and_reindexes(tmp_path, monkeypatch):
+    app = _app()
+    root = tmp_path / "docs"
+    root.mkdir()
+    config_path = tmp_path / "config.json"
+    config = AppConfig(config_path)
+    config.db_path = str(tmp_path / "index.db")
+    config.directories = [str(root)]
+    window = MainWindow(config)
+    started = []
+    monkeypatch.setattr(window, "_start_indexing", lambda *args, **kwargs: started.append(1))
+
+    assert window.ocr_checkbox.text() == "Tesseract OCR"
+    assert not window.ocr_checkbox.isChecked()
+    window.ocr_checkbox.setChecked(True)
+    assert AppConfig(config_path).ocr_enabled is True
+    assert started == [1]  # Files indexed without OCR are re-extracted.
+    window.ocr_checkbox.setChecked(False)
+    assert AppConfig(config_path).ocr_enabled is False
+    assert started == [1]
+    window.close()
+    app.processEvents()
+
+
 def test_close_releases_paused_manual_writer_before_joining_watcher():
     import subprocess
     import sys

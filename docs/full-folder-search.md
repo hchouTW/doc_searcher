@@ -6,9 +6,29 @@ The default literal search uses SQLite FTS5/BM25 and verifies candidates against
 
 XLSX reads every worksheet, including hidden sheets and rows, formulas, saved formula results, and ordinary cell comments—even on otherwise empty cells. Formula results require a cache saved by Excel or another spreadsheet application; formulas and macros are never executed. Comments and values retain worksheet/cell provenance. DOCX includes headers, footers, nested tables and textboxes. PPTX includes grouped shapes, tables, notes and visible layout/master decorations, excluding inherited placeholder prompts and hidden master shapes.
 
-PDF native text is sorted by position. Scanned pages, outlined text and significant image regions on mixed pages receive local OCR. Mixed pages use original raster pixels; geometrically overlapping native/OCR words are deduplicated so existing OCR layers do not inflate counts. Readable native text survives an OCR failure. PNG, JPEG and multi-frame TIFF also use OCR. OCR text has page/image provenance but recognition accuracy depends on image quality and layout.
+PDF native text is sorted by position. When Tesseract OCR is enabled (see [OCR setting](#ocr-setting)), scanned pages, outlined text and significant image regions on mixed pages receive local OCR. Mixed pages use original raster pixels; geometrically overlapping native/OCR words are deduplicated so existing OCR layers do not inflate counts. Readable native text survives an OCR failure. PNG, JPEG and multi-frame TIFF also use OCR. OCR text has page/image provenance but recognition accuracy depends on image quality and layout.
 
-Install Tesseract and its `eng`, `chi_tra` and `chi_sim` language data. On macOS:
+### OCR setting
+
+Tesseract OCR is **off by default**. With it off, native PDF/Office/text extraction is unchanged, but scanned pages and image regions are not recognized and standalone images are indexed without text. Each skipped page or image is recorded as an `ocr_disabled` extraction warning, so those files appear in the extraction-quality list as partial or no-text documents.
+
+Turn it on with any of the following:
+
+| Surface | How | Persistence |
+| --- | --- | --- |
+| Desktop | Check **Tesseract OCR** in the indexing panel | Saved as `"ocr_enabled": true` in `config.json` |
+| MCP | Uses the desktop setting from `config.json` | Read on each re-index |
+| CLI | Add `--ocr` (or enable it in the desktop) | `--ocr` applies to that run only |
+
+```bash
+doc-searcher --dir /path/to/docs --search '會議' --ocr
+```
+
+When OCR is turned on, the next indexing run re-extracts unchanged files that were indexed with an `ocr_disabled` warning; other files are not re-parsed. The desktop starts that run immediately. Turning OCR off does not remove text already recognized: it stays searchable until the file changes or is reprocessed.
+
+### Installing Tesseract
+
+Install Tesseract and its `eng`, `chi_tra` and `chi_sim` language data before enabling OCR. On macOS:
 
 ```bash
 brew install tesseract tesseract-lang
@@ -24,7 +44,7 @@ For other platforms install the Tesseract executable and language data through t
 | `DOC_SEARCHER_OCR_TIMEOUT` | `30` seconds | Per-image timeout, clamped to 1–120 seconds |
 | `DOC_SEARCHER_OCR_MIN_CHARS` | `40` | Sparse-page threshold; mixed image regions are also checked |
 
-Rendering is capped at 12 million pixels. OCR subprocesses are interrupted during cancellation/shutdown. Missing engines/languages, unreadable/encrypted files, failed pages, unsupported embedded Office objects, missing formula caches and threaded comments appear in extraction diagnostics. The application does not decrypt documents or guarantee extraction of every embedded object. Blank images can produce no recognized text.
+The environment settings take effect only while OCR is enabled. Rendering is capped at 12 million pixels. OCR subprocesses are interrupted during cancellation/shutdown. Missing engines/languages, unreadable/encrypted files, failed pages, unsupported embedded Office objects, missing formula caches and threaded comments appear in extraction diagnostics. The application does not decrypt documents or guarantee extraction of every embedded object. Blank images can produce no recognized text.
 
 ## Automatic updates
 
@@ -36,7 +56,7 @@ doc-searcher --watch --dir /path/to/docs --search '會議'
 
 File events are debounced for 350 ms; create/update/move/delete use the serialized index writer. A file changed during parsing is retried. Configured exclusions, hidden directories and folder ownership apply to event updates. Unavailable folders retain their records. Folder events reconcile the owned folder scope; this can cost a full scan. Periodic reconciliation recovers missed events. macOS uses watchdog polling at 500 ms to avoid a native FSEvents shutdown crash; platforms without watchdog reconcile approximately every second (including macOS Python 3.14, where the wheel is unavailable).
 
-The measured five-second target applies to small native-text changes with an idle worker. Large files, OCR, initial scans and queues can take longer. Diagnostics show pending work, watcher errors and semantic indexing state. Application shutdown ends background monitoring; it is not an operating-system service.
+The measured five-second target applies to small native-text changes with an idle worker. Large files, OCR (when enabled), initial scans and queues can take longer. Diagnostics show pending work, watcher errors and semantic indexing state. Application shutdown ends background monitoring; it is not an operating-system service.
 
 ## Expanded and hybrid retrieval
 

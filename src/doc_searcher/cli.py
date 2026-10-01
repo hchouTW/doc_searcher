@@ -8,6 +8,7 @@
 #   - GUI: doc-searcher   (or python -m doc_searcher)
 #   - CLI: doc-searcher --dir /path/to/folder --search "關鍵字"
 #   - CLI stdout carries only search results; progress and diagnostics go to stderr.
+#   - Tesseract OCR runs only with --ocr or the desktop "Tesseract OCR" setting (off by default).
 #   - Also: doc-searcher --help | --version | --self-check [--report FILE] (none starts the GUI;
 #     see doc_searcher.selfcheck).
 #   - CLI exit codes: 0 success, 1 directory unavailable (index left unchanged), 2 usage error,
@@ -45,6 +46,7 @@ def run_cli_mode(
     whole_word=False,
     reprocess=None,
     search_mode="literal",
+    ocr=False,
 ) -> int:
     """Run headless search via terminal for quick testing or scripts; returns an exit code."""
     from doc_searcher.config import AppConfig, ConfigError
@@ -81,6 +83,7 @@ def run_cli_mode(
             scope=[abs_dir],
             force_paths=list(reprocess or []),
             reprocess_only=bool(reprocess),
+            ocr=ocr or config.ocr_enabled,
         )
         try:
             stats = IndexingService(db, scanner).run(request)
@@ -165,7 +168,7 @@ def run_cli_mode(
         db.close()
 
 
-def run_watch_mode(folder, query=None, type_filter="all", search_mode="literal"):
+def run_watch_mode(folder, query=None, type_filter="all", search_mode="literal", ocr=False):
     """Watch a folder until Ctrl-C; optional queries emit refreshed JSON pages."""
     import time
     from doc_searcher.config import AppConfig
@@ -184,7 +187,11 @@ def run_watch_mode(folder, query=None, type_filter="all", search_mode="literal")
     watcher = FolderWatcher(
         db,
         lambda: IndexRequest(
-            [root], config.include_subdirectories, config.exclude_patterns, scope=[root]
+            [root],
+            config.include_subdirectories,
+            config.exclude_patterns,
+            scope=[root],
+            ocr=ocr or config.ocr_enabled,
         ),
     )
     watcher.start()
@@ -264,6 +271,11 @@ def main(argv=None) -> int:
         default="literal",
         help="Retrieval mode",
     )
+    parser.add_argument(
+        "--ocr",
+        action="store_true",
+        help="Recognize scanned pages and images with local Tesseract (off by default)",
+    )
     parser.add_argument("--synonyms", metavar="JSON", help="Local domain synonym dictionary")
     parser.add_argument(
         "--embedding-model", metavar="DIR", help="Local multilingual E5 model directory"
@@ -288,7 +300,7 @@ def main(argv=None) -> int:
     if args.watch:
         if not args.dir:
             parser.error("--watch requires --dir")
-        return run_watch_mode(args.dir, args.search, args.type, args.mode)
+        return run_watch_mode(args.dir, args.search, args.type, args.mode, ocr=args.ocr)
     if args.build_vectors:
         from doc_searcher.config import AppConfig
         from doc_searcher.storage.database import Database
@@ -329,7 +341,9 @@ def main(argv=None) -> int:
     if args.reprocess:
         if not args.dir:
             parser.error("--reprocess requires --dir to define the allowed folder")
-        return run_cli_mode(args.dir, args.search or "", args.type, reprocess=args.reprocess)
+        return run_cli_mode(
+            args.dir, args.search or "", args.type, reprocess=args.reprocess, ocr=args.ocr
+        )
     if args.dir is not None or args.search is not None:
         if not (args.dir and args.search):
             parser.error("CLI 模式需要同時指定 --dir 與 --search")
@@ -361,8 +375,9 @@ def main(argv=None) -> int:
                 match_case=args.match_case,
                 whole_word=args.whole_word,
                 search_mode=args.mode,
+                ocr=args.ocr,
             )
-        return run_cli_mode(args.dir, args.search, args.type)
+        return run_cli_mode(args.dir, args.search, args.type, ocr=args.ocr)
 
     # Launch PySide6 GUI
     from doc_searcher.desktop.app import run_app

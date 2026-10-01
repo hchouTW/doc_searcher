@@ -4,6 +4,7 @@
 
 - Automatically index folder changes in desktop/MCP, with CLI `--watch`, pending/error diagnostics and safe retries for files modified during extraction.
 - Local Tesseract OCR covers scanned/mixed PDFs and PNG/JPEG/TIFF; existing PDF text layers are geometrically deduplicated. Missing runtimes/languages and failed pages remain visible in diagnostics.
+- Tesseract OCR is off by default: enable the desktop **Tesseract OCR** checkbox (saved as `ocr_enabled` in `config.json`, also used by MCP) or pass CLI `--ocr`. Skipped pages/images are reported as `ocr_disabled` warnings and are re-extracted automatically once OCR is enabled.
 - XLSX ordinary comments include empty hidden cells; PPTX groups, notes, tables and visible inherited decorations retain source locations. Unsupported embedded content produces warnings.
 - Explicit expanded/hybrid modes add scoped synonyms, English typo matching and optional local multilingual E5 dense retrieval with source-aware overlapping chunks. Literal occurrence counts remain authoritative. Schema 6 stores revision-checked vectors.
 - Setup and measured acceptance evidence: [full-folder search](docs/full-folder-search.md), [validation](docs/benchmarks/full-folder-coverage-validation.md).

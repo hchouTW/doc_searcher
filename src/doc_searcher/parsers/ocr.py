@@ -1,6 +1,8 @@
 # Purpose: Local, bounded OCR shared by scanned PDF and image parsers.
 # Behavior: Render RGB images and invoke Tesseract without a shell, with a timeout.
 # Usage: Install Tesseract and eng/chi_tra/chi_sim data; optional DOC_SEARCHER_OCR_* overrides.
+#   OCR is off unless the caller enables it for the current thread with enabled_scope(True);
+#   parsers then report skipped image text as "ocr_disabled" warnings.
 import csv
 import io
 import os
@@ -32,6 +34,20 @@ def cancellation_scope(check):
     finally:
         _cancellation.check = previous
         _cancellation.state = previous_state
+
+
+@contextmanager
+def enabled_scope(enabled):
+    previous = getattr(_cancellation, "enabled", False)
+    _cancellation.enabled = bool(enabled)
+    try:
+        yield
+    finally:
+        _cancellation.enabled = previous
+
+
+def is_enabled():
+    return getattr(_cancellation, "enabled", False)
 
 
 def check_cancelled():

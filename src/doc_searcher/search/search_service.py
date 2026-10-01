@@ -81,6 +81,7 @@ class SearchService:
             list(self.config.directories),
             self.config.include_subdirectories,
             list(self.config.exclude_patterns),
+            ocr=self.config.ocr_enabled,
         )
 
     def close(self):
@@ -284,6 +285,7 @@ class SearchService:
                 exclude_patterns=self.config.exclude_patterns,
                 force_paths=paths,
                 reprocess_only=True,
+                ocr=self.config.ocr_enabled,
             )
             result = IndexingService(self.db, self.scanner).run(request)
             state = "completed"
@@ -327,6 +329,7 @@ class SearchService:
             exclude_patterns=self.config.exclude_patterns,
             # A subfolder request reconciles only that subtree; other folders keep their entries.
             scope=[scope] if scope is not None else None,
+            ocr=self.config.ocr_enabled,
         )
         stats = IndexingService(self.db, self.scanner).run(request)
         # Keep the MCP payload compact: only mention problems that occurred.

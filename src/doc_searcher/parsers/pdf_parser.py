@@ -1,6 +1,7 @@
 # Purpose: PDF document text extraction parser.
 # What the code does:
 #   - Extracts sorted native text and OCRs scanned/image regions through bounded Tesseract subprocesses.
+#   - With OCR off, those regions are omitted and reported as "ocr_disabled" warnings.
 #   - Reports ENCRYPTED only when a user password is required to read the text.
 #   - Preserves readable pages and reports failed/no-native-text page locations.
 # Usage notes, dependencies, or assumptions:
@@ -121,7 +122,16 @@ class PdfParser(BaseParser):
                         clips = [
                             (location, None, None)
                         ]  # text sometimes consists of vector outlines
-                    for ocr_location, clip, transform in clips:
+                    if clips and not ocr.is_enabled():
+                        warnings.append(
+                            dict(
+                                code="ocr_disabled",
+                                location=location,
+                                message="Tesseract OCR is off; image text was not recognized.",
+                            )
+                        )
+                        omitted.append(location)
+                    for ocr_location, clip, transform in clips if ocr.is_enabled() else []:
                         try:
                             recognized = ocr.recognize(
                                 ocr.render_image(clip)

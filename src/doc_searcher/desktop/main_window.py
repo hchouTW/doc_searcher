@@ -7,6 +7,8 @@
 #   - Listens to macOS/Windows system colorScheme changes and updates theme dynamically.
 #   - Provides a manual theme toggle button (Auto / Dark / Light).
 #   - Hosts the "Display Columns" button above the results table and persists its choice.
+#   - Persists the "Tesseract OCR" checkbox (off by default); turning it on re-indexes so files
+#     indexed without OCR are re-extracted.
 #   - Widens the sidebar (280-360 px normally) when its content needs more, instead of scrolling.
 #   - Ensures high-contrast readability with no system-color mismatches.
 #   - Owns widgets and workers only: filter translation/validation lives in search_filters,
@@ -190,6 +192,7 @@ class MainWindow(QMainWindow):
                 list(self.config.directories),
                 self.config.include_subdirectories,
                 list(self.config.exclude_patterns),
+                ocr=self.config.ocr_enabled,
             ),
         )
         self.auto_updates = QCheckBox(tr(self.language, "auto_updates"))
@@ -198,6 +201,11 @@ class MainWindow(QMainWindow):
             lambda enabled: self.folder_watcher.resume() if enabled else self.folder_watcher.pause()
         )
         self.index_frame.layout().addWidget(self.auto_updates)
+        self.ocr_checkbox = QCheckBox("Tesseract OCR")
+        self.ocr_checkbox.setChecked(self.config.ocr_enabled)
+        self.ocr_checkbox.setToolTip(tr(self.language, "ocr_tip"))
+        self.ocr_checkbox.toggled.connect(self._on_ocr_toggled)
+        self.index_frame.layout().addWidget(self.ocr_checkbox)
         self._live_generation = 0
         self.folder_watcher.start()
         self.live_timer = QTimer(self)
@@ -927,6 +935,8 @@ class MainWindow(QMainWindow):
             self.load_more_button.setText(tr(self.language, "load_more"))
         if hasattr(self, "auto_updates"):
             self.auto_updates.setText(tr(self.language, "auto_updates"))
+        if hasattr(self, "ocr_checkbox"):
+            self.ocr_checkbox.setToolTip(tr(self.language, "ocr_tip"))
         if hasattr(self, "retrieval_mode"):
             for index, key in enumerate(("search_literal", "search_expanded", "search_hybrid")):
                 self.retrieval_mode.setItemText(index, tr(self.language, key))
@@ -1247,6 +1257,13 @@ class MainWindow(QMainWindow):
             self._invalidate_directory_results()
             self._start_indexing()
 
+    def _on_ocr_toggled(self, enabled: bool):
+        self.config.ocr_enabled = enabled
+        # Turning OCR on re-extracts files indexed while it was off; turning it off keeps
+        # existing OCR text until a file changes.
+        if enabled and self.config.directories:
+            self._start_indexing()
+
     def _on_manual_refresh(self):
         if self.config.directories:
             self._mark_last_updated()
@@ -1290,6 +1307,7 @@ class MainWindow(QMainWindow):
             self.config.exclude_patterns,
             clear_index=clear_index,
             force_paths=self._force_paths,
+            ocr=self.config.ocr_enabled,
         )
         self._force_paths = []
         self.index_worker.progress.connect(self._on_indexing_progress)

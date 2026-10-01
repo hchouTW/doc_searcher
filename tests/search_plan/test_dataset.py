@@ -9,7 +9,7 @@ import pytest
 
 from doc_searcher.indexing.indexer import DocumentIndexer
 from doc_searcher.indexing.scanner import FileScanner
-from doc_searcher.parsers import ParseStatus, is_supported, parse_file
+from doc_searcher.parsers import ParseStatus, is_supported, ocr, parse_file
 from doc_searcher.search.searcher import DocumentSearcher
 from doc_searcher.storage.database import Database
 from search_plan import dataset
@@ -138,7 +138,11 @@ def test_unsupported_scanned_and_broken_files_behave_as_recorded(built):
     root, manifest = built
     for entry in entries(manifest, expect=dataset.SKIPPED_UNSUPPORTED):
         assert not is_supported(entry["path"])
-    scanned = parse_file(str(root / "scan/scanned.pdf"))
+    skipped = parse_file(str(root / "scan/scanned.pdf"))  # Tesseract OCR is off by default.
+    assert skipped.status == ParseStatus.PARTIAL
+    assert [w["code"] for w in skipped.warnings] == ["ocr_disabled"]
+    with ocr.enabled_scope(True):
+        scanned = parse_file(str(root / "scan/scanned.pdf"))
     if scanned.omitted_locations:
         assert scanned.status == ParseStatus.PARTIAL
         assert any(w["code"] == "ocr_failed" for w in scanned.warnings)

@@ -7,6 +7,7 @@
 #     stops the batch.
 # Usage notes, dependencies, or assumptions:
 #   - Integrates parsers, database, and doc_searcher.search.text_helper.
+#   - Tesseract OCR runs only when ocr_enabled is set (off by default).
 
 import logging
 import os
@@ -32,6 +33,7 @@ class DocumentIndexer:
         self.db = db
         self._is_cancelled = False
         self.request_is_current: Callable[[], bool] = lambda: True
+        self.ocr_enabled = False
         self._resume_event = threading.Event()
         self._resume_event.set()
 
@@ -84,9 +86,12 @@ class DocumentIndexer:
         # parse_file never raises for document problems; a bad file becomes an error record.
         from doc_searcher.parsers import ocr
 
-        with ocr.cancellation_scope(
-            lambda: self.is_cancelled or not self.request_is_current()
-        ) as cancellation:
+        with (
+            ocr.enabled_scope(self.ocr_enabled),
+            ocr.cancellation_scope(
+                lambda: self.is_cancelled or not self.request_is_current()
+            ) as cancellation,
+        ):
             extracted = parse_file(abs_path)
         if cancellation["cancelled"] or not self.request_is_current():
             raise FileChangedDuringParsing(abs_path)
