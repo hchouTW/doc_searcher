@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QScrollArea,
     QTextBrowser,
+    QWidget,
 )
 
 import pytest
@@ -43,6 +44,26 @@ def _app():
     return QApplication.instance() or QApplication([])
 
 
+def _sidebar_overflow_report(window, overflow):
+    """Name the sidebar widgets wider than the viewport, so a font-dependent overflow is fixable."""
+    viewport = window.sidebar_scroll.viewport().width()
+    wide = []
+    for child in window.sidebar.findChildren(QWidget):
+        if not child.isVisible():
+            continue
+        right = child.mapTo(window.sidebar, child.rect().topRight()).x()
+        if right > viewport:
+            wide.append(
+                f"{type(child).__name__}({child.objectName() or child.text() if hasattr(child, 'text') else ''!r}) "
+                f"right={right} hint={child.sizeHint().width()} min={child.minimumSizeHint().width()}"
+            )
+    return (
+        f"sidebar overflows by {overflow}px (viewport {viewport}px, sidebar min "
+        f"{window.sidebar.minimumSizeHint().width()}px, font {QApplication.font().family()!r}): "
+        + "; ".join(wide[:8])
+    )
+
+
 @pytest.fixture(autouse=True)
 def _collect_unreachable_qt_objects():
     """Destroy this test's orphaned widgets now, not at an arbitrary later GC point.
@@ -56,6 +77,10 @@ def _collect_unreachable_qt_objects():
     yield
     app = QApplication.instance()
     if app is not None:
+        # A failed assertion skips a test's own window.close(), which would leave its
+        # folder-watcher thread running into later tests.
+        for widget in app.topLevelWidgets():
+            widget.close()
         app.processEvents()
     gc.collect()
 
@@ -1082,20 +1107,26 @@ def test_document_continuation_ui(tmp_path, language, theme):
     window._trigger_search()
 
     def wait_for(count):
-        deadline = time.monotonic() + 5
+        started = time.monotonic()
+        deadline = started + 5
         while (
             len(window._loaded_results) != count or window.search_worker
         ) and time.monotonic() < deadline:
             app.processEvents()
             time.sleep(0.01)
-        assert len(window._loaded_results) == count
-        assert window.search_worker is None
+        state = (
+            f"loaded={len(window._loaded_results)} worker_running={window.search_worker is not None} "
+            f"label={window.results_count_label.text()!r} waited={time.monotonic() - started:.1f}s"
+        )
+        assert len(window._loaded_results) == count, state
+        assert window.search_worker is None, state
 
     wait_for(200)
     window.resize(1300, 850)
     window.show()
     app.processEvents()
-    assert window.sidebar_scroll.horizontalScrollBar().maximum() == 0
+    overflow = window.sidebar_scroll.horizontalScrollBar().maximum()
+    assert overflow == 0, _sidebar_overflow_report(window, overflow)
     assert not window.load_more_button.isHidden()
     assert window._result_page.has_more
     window._load_more_results()
