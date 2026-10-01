@@ -1,4 +1,4 @@
-# DocSearcher v1.4.0
+# DocSearcher v1.4.1
 
 **本機多格式文件關鍵字檢索系統 · Local multi-format document keyword search**
 
@@ -11,6 +11,15 @@
 不想自行安裝 Python？到 [GitHub Releases 最新版本](https://github.com/hchouTW/doc_searcher/releases/latest) 下載：`DocSearcher-macOS-arm64.zip`（Apple Silicon）或 `DocSearcher-Windows-x64.exe`（Windows x64）。以 `SHA256SUMS.txt` 核對檔案；未簽署版本的首次開啟方式見下方「macOS Gatekeeper」。Linux 請依下方步驟從原始碼安裝。
 
 Don't want to set up Python? Download from the [latest GitHub release](https://github.com/hchouTW/doc_searcher/releases/latest): `DocSearcher-macOS-arm64.zip` (Apple Silicon) or `DocSearcher-Windows-x64.exe` (Windows x64). Verify with `SHA256SUMS.txt`; see "macOS Gatekeeper" below for opening unsigned builds. On Linux, install from source as described below.
+
+---
+
+## ✨ v1.4.1 更新重點 · What's new in v1.4.1
+
+| 繁體中文 | English |
+| --- | --- |
+| **自適應版本資訊視窗**：依內容與螢幕大小調整，只有更新日誌可捲動 | **Adaptive Version Info dialog**: sizes to its content and the screen; only the changelog scrolls |
+| **文件更新**：新增下載說明、自動索引與 CLI 選項，並更新中英文截圖 | **Docs refresh**: download, live-indexing and CLI notes, plus updated English and Chinese screenshots |
 
 ---
 

@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.4.1 - 2026-10-01
 
 - The Version Info dialog sizes itself to its content and the screen: compact for short changelogs, capped to the usable screen area, with only the changelog scrolling and the heading and OK button always visible; it re-wraps on resize and centers over the main window.
 
