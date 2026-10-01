@@ -1,5 +1,6 @@
 # Purpose: Reproduce README screenshots using synthetic documents and isolated settings.
-# Behavior: Renders identical search results in both themes and the advanced filter panel.
+# Behavior: Renders identical search results in both themes, the advanced filter panel, and the
+#   search mode (Literal/Expanded/Hybrid) dropdown opened over the results controls.
 # Usage: QT_QPA_PLATFORM=offscreen python scripts/capture_screenshots.py
 # Requires the installed project/PySide6; never opens or modifies the user's index.
 
@@ -10,13 +11,38 @@ from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QPoint, Qt
+from PySide6.QtGui import QPainter
 from PySide6.QtWidgets import QApplication
 
 from doc_searcher.config import AppConfig
 from doc_searcher.desktop.main_window import MainWindow
 from doc_searcher.desktop.theme import get_active_theme
 from doc_searcher.search.searcher import SearchResultItem, SegmentMatch
+
+
+def grab_mode_dropdown(app, window, target):
+    """Save the search-mode combo with its opened list, cropped to the left control column."""
+    combo = window.retrieval_mode
+    panel = combo.window()
+    combo.showPopup()
+    app.processEvents()
+    popup = combo.view().window()
+    top_left = combo.mapTo(panel, QPoint(0, 0))
+    base = panel.grab()
+    painter = QPainter(base)
+    painter.drawPixmap(combo.mapTo(panel, QPoint(0, combo.height())), popup.grab())
+    painter.end()
+    combo.hidePopup()
+    app.processEvents()
+    margin = 16
+    crop = base.copy(
+        max(top_left.x() - margin, 0),
+        max(top_left.y() - 200, 0),
+        combo.width() + 2 * margin,
+        combo.height() + 200 + 120,
+    )
+    crop.save(str(target))
 
 
 def main():
@@ -77,6 +103,7 @@ def main():
             app.processEvents()
             window.advanced_dialog.grab().save(str(output / f"doc_searcher_advanced_{mode}.png"))
             window.btn_advanced_filters.setChecked(False)
+            grab_mode_dropdown(app, window, output / f"doc_searcher_modes_{mode}.png")
         # Preserve the original README image path for external links.
         shutil.copyfile(
             output / "doc_searcher_advanced_light.png", output / "doc_searcher_advanced.png"
