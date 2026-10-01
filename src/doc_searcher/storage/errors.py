@@ -50,7 +50,8 @@ def classify(exc: BaseException, db_path: str) -> Optional[StorageError]:
     if "locked" in message or "busy" in message:
         return DatabaseLockedError(
             f"{db_path} is locked by another program (another DocSearcher window, the MCP "
-            f"server, or a backup tool). Close it and try again."
+            f"server, or a backup tool) and did not free up in time. Close it, or wait for its "
+            f"indexing to finish, and try again."
         )
     if "readonly" in message or "read-only" in message or "unable to open database file" in message:
         return DatabaseReadOnlyError(

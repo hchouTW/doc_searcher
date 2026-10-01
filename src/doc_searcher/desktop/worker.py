@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from PySide6.QtCore import QThread, Signal
 
 from doc_searcher.storage.database import Database
+from doc_searcher.storage.errors import classify
 from doc_searcher.indexing.service import IndexingService, IndexRequest
 from doc_searcher.search.searcher import DocumentSearcher, SearchQueryError
 
@@ -68,7 +69,7 @@ class IndexWorker(QThread):
         try:
             self._run_indexing()
         except Exception as exc:
-            message = str(exc)
+            message = str(classify(exc, self.db.db_path) or exc)
             self.state_changed.emit("error")
             self.status_changed.emit(f"索引失敗：{message}")
             self.indexing_finished.emit({"indexed": 0, "deleted": 0, "failed": 1, "error": message})
