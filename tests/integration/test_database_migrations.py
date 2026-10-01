@@ -90,7 +90,11 @@ def test_failed_migration_rolls_back_and_leaves_database_usable(tmp_path, monkey
         conn.execute("UPDATE documents SET extra = 'x'")
         raise RuntimeError("simulated bug in migration 4")
 
-    monkeypatch.setattr(migrations, "MIGRATIONS", [*migrations.MIGRATIONS, (migrations.latest_version() + 1, "broken", broken)])
+    monkeypatch.setattr(
+        migrations,
+        "MIGRATIONS",
+        [*migrations.MIGRATIONS, (migrations.latest_version() + 1, "broken", broken)],
+    )
     with pytest.raises(MigrationError, match="rolled back") as exc:
         Database(str(path))
     assert f"schema {migrations.latest_version()}" in str(exc.value)

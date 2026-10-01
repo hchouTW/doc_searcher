@@ -167,10 +167,13 @@ class SearchWorker(QThread):
 
 class ContextWorker(QThread):
     """Load a single occurrence and bounded context away from Qt's UI thread."""
+
     ready = Signal(dict)
     failed = Signal(str)
 
-    def __init__(self, db, query, doc_id, revision, ordinal, options, *, full_segment=False, text_offset=0):
+    def __init__(
+        self, db, query, doc_id, revision, ordinal, options, *, full_segment=False, text_offset=0
+    ):
         super().__init__()
         self.db, self.query, self.doc_id, self.revision = db, query, doc_id, revision
         self.ordinal, self.options = ordinal, options
@@ -183,11 +186,19 @@ class ContextWorker(QThread):
     def run(self):
         try:
             searcher = DocumentSearcher(self.db)
-            page = searcher.match_locations(self.query, self.doc_id, revision=self.revision,
-                offset=self.ordinal, limit=1, cancel_check=self._cancelled.is_set, **self.options)
+            page = searcher.match_locations(
+                self.query,
+                self.doc_id,
+                revision=self.revision,
+                offset=self.ordinal,
+                limit=1,
+                cancel_check=self._cancelled.is_set,
+                **self.options,
+            )
             if page.locations and not self._cancelled.is_set():
-                context = searcher.match_context(page.locations[0], full_segment=self.full_segment,
-                                               text_offset=self.text_offset)
+                context = searcher.match_context(
+                    page.locations[0], full_segment=self.full_segment, text_offset=self.text_offset
+                )
                 self.ready.emit(context)
         except Exception as exc:
             if not self._cancelled.is_set():
@@ -198,6 +209,7 @@ class ContextWorker(QThread):
 
 class QualityWorker(QThread):
     """Retrieve a bounded extraction-problem page away from the UI thread."""
+
     ready = Signal(dict)
     failed = Signal(str)
 
