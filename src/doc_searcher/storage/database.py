@@ -6,7 +6,7 @@
 #   - Stores and looks up documents by canonical path (platform.paths).
 # Usage notes, dependencies, or assumptions:
 #   - Requires sqlite3 with FTS5; environmental failures raise storage.errors.StorageError.
-#   - Enables foreign keys and WAL mode for high concurrency.
+#   - Enables foreign keys and WAL mode; waits up to BUSY_TIMEOUT_SECONDS for another writer.
 
 import json
 import os
@@ -26,7 +26,10 @@ def _path_spellings(file_path: str) -> Tuple[str, str]:
     return os.path.abspath(file_path), canonical_path(file_path)
 
 
-def _enable_wal(conn: sqlite3.Connection, timeout: float = 5.0) -> None:
+BUSY_TIMEOUT_SECONDS = 30.0  # a large document's write transaction can outlast a few seconds
+
+
+def _enable_wal(conn: sqlite3.Connection, timeout: float = BUSY_TIMEOUT_SECONDS) -> None:
     """Switch to WAL (persistent in the file) unless it is already on.
 
     The switch needs an exclusive lock and SQLite reports "database is locked" at once instead
@@ -46,6 +49,16 @@ def _enable_wal(conn: sqlite3.Connection, timeout: float = 5.0) -> None:
             time.sleep(0.05)
 
 
+def _begin_write(conn: sqlite3.Connection) -> None:
+    """Take the write lock before reading what the write depends on.
+
+    A deferred transaction would read first and upgrade later: another process could commit in
+    between (a duplicate path, or an instant "database is locked" that ignores busy_timeout).
+    """
+    if not conn.in_transaction:
+        conn.execute("BEGIN IMMEDIATE")
+
+
 class Database:
     """SQLite3 database manager with FTS5 full-text indexing."""
 
@@ -60,10 +73,10 @@ class Database:
         """Get or create connection with WAL mode enabled."""
         conn = getattr(self._thread_state, "connection", None)
         if conn is None:
-            conn = sqlite3.connect(self.db_path, timeout=5.0)
+            conn = sqlite3.connect(self.db_path, timeout=BUSY_TIMEOUT_SECONDS)
             try:
                 conn.row_factory = sqlite3.Row
-                conn.execute("PRAGMA busy_timeout=5000;")
+                conn.execute(f"PRAGMA busy_timeout={int(BUSY_TIMEOUT_SECONDS * 1000)};")
                 _enable_wal(conn)
                 conn.execute("PRAGMA foreign_keys=ON;")
                 conn.execute("PRAGMA synchronous=NORMAL;")
@@ -171,6 +184,7 @@ class Database:
         """
         conn = self.get_connection()
         with conn:
+            _begin_write(conn)
             cursor = conn.execute(
                 "SELECT id FROM documents WHERE path = ?", (os.path.abspath(file_path),)
             )
@@ -193,7 +207,7 @@ class Database:
         """
         conn = self.get_connection()
         with conn:
-            conn.execute("BEGIN IMMEDIATE")
+            _begin_write(conn)
             count = conn.execute("SELECT COUNT(*) FROM documents").fetchone()[0]
             if count:
                 conn.execute("DELETE FROM doc_fts")
@@ -223,8 +237,12 @@ class Database:
         now = time.time()
         creation_time = mtime if ctime is None else ctime
         conn = self.get_connection()
+        keeps_segments = bool(segments) and (not error or parse_status == "partial")
+        # CJK tokenizing is CPU-heavy; do it before the write lock is taken.
+        cjk_rows = [cjk_tokens(seg["content"]) for seg in segments] if keeps_segments else []
 
         with conn:
+            _begin_write(conn)
             # Check existing
             cursor = conn.execute("SELECT id FROM documents WHERE path = ?", (abs_path,))
             existing = cursor.fetchone()
@@ -286,7 +304,7 @@ class Database:
                 ),
             )
             # Useful partial text remains searchable alongside quality diagnostics.
-            if segments and (not error or parse_status == "partial"):
+            if keeps_segments:
                 seg_rows = []
                 fts_rows = []
                 for seg in segments:
@@ -322,14 +340,16 @@ class Database:
                     fts_rows,
                 )
 
+            # Segment rows were inserted in order, so ascending ids line up with cjk_rows.
+            segment_ids = [
+                r[0]
+                for r in conn.execute(
+                    "SELECT id FROM doc_segments WHERE doc_id = ? ORDER BY id", (doc_id,)
+                )
+            ]
             conn.executemany(
                 "INSERT INTO doc_cjk_fts(rowid, tokens) VALUES (?, ?)",
-                [
-                    (r["id"], cjk_tokens(r["content"]))
-                    for r in conn.execute(
-                        "SELECT id, content FROM doc_segments WHERE doc_id = ?", (doc_id,)
-                    )
-                ],
+                zip(segment_ids, cjk_rows, strict=True),
             )
             conn.execute("UPDATE index_state SET revision = revision + 1 WHERE id = 1")
         return doc_id
