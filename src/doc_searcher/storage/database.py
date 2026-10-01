@@ -49,6 +49,16 @@ def _enable_wal(conn: sqlite3.Connection, timeout: float = BUSY_TIMEOUT_SECONDS)
             time.sleep(0.05)
 
 
+def _begin_write(conn: sqlite3.Connection) -> None:
+    """Take the write lock before reading what the write depends on.
+
+    A deferred transaction would read first and upgrade later: another process could commit in
+    between (a duplicate path, or an instant "database is locked" that ignores busy_timeout).
+    """
+    if not conn.in_transaction:
+        conn.execute("BEGIN IMMEDIATE")
+
+
 class Database:
     """SQLite3 database manager with FTS5 full-text indexing."""
 
@@ -174,6 +184,7 @@ class Database:
         """
         conn = self.get_connection()
         with conn:
+            _begin_write(conn)
             cursor = conn.execute(
                 "SELECT id FROM documents WHERE path = ?", (os.path.abspath(file_path),)
             )
@@ -196,7 +207,7 @@ class Database:
         """
         conn = self.get_connection()
         with conn:
-            conn.execute("BEGIN IMMEDIATE")
+            _begin_write(conn)
             count = conn.execute("SELECT COUNT(*) FROM documents").fetchone()[0]
             if count:
                 conn.execute("DELETE FROM doc_fts")
@@ -231,6 +242,7 @@ class Database:
         cjk_rows = [cjk_tokens(seg["content"]) for seg in segments] if keeps_segments else []
 
         with conn:
+            _begin_write(conn)
             # Check existing
             cursor = conn.execute("SELECT id FROM documents WHERE path = ?", (abs_path,))
             existing = cursor.fetchone()

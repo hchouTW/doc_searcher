@@ -60,3 +60,27 @@ def test_index_worker_reports_classified_lock_message(tmp_path):
     worker.status_changed.connect(messages.append)
     worker.run()
     assert messages and "locked by another program" in messages[0]
+
+
+def test_concurrent_writers_to_one_path_do_not_race(tmp_path):
+    """Two processes (modelled by two Database objects) may save the same new path at once."""
+    import threading
+
+    path = str(tmp_path / "index.db")
+    first, second = Database(path), Database(path)
+    errors = []
+
+    def writer(db):
+        try:
+            for n in range(40):
+                db.save_document_index(f"/x/doc{n}.txt", "txt", 1, 1.0, _segments(2))
+        except Exception as exc:  # noqa: BLE001 - the test reports whatever escaped
+            errors.append(repr(exc))
+        finally:
+            db.close()
+
+    threads = [threading.Thread(target=writer, args=(db,)) for db in (first, second)]
+    [t.start() for t in threads]
+    [t.join() for t in threads]
+    assert errors == []
+    assert Database(path).get_stats()["total_docs"] == 40
