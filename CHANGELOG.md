@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.4.0 - 2026-10-01
 
 - Automatically index folder changes in desktop/MCP, with CLI `--watch`, pending/error diagnostics and safe retries for files modified during extraction.
 - Local Tesseract OCR covers scanned/mixed PDFs and PNG/JPEG/TIFF; existing PDF text layers are geometrically deduplicated. Missing runtimes/languages and failed pages remain visible in diagnostics.

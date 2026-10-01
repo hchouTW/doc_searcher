@@ -1,8 +1,20 @@
-# DocSearcher v1.3.1
+# DocSearcher v1.4.0
 
 **本機多格式文件關鍵字檢索系統 · Local multi-format document keyword search**
 
 [繁體中文](#繁體中文) · [English](#english)
+
+---
+
+## ✨ v1.4.0 更新重點 · What's new in v1.4.0
+
+| 繁體中文 | English |
+| --- | --- |
+| **資料夾自動索引**：資料夾變更會自動增量索引，並提供待處理／錯誤診斷 | **Live indexing**: folder changes are indexed automatically, with pending/error diagnostics |
+| **選用 OCR**：Tesseract OCR 預設關閉，可辨識掃描 PDF 與圖片 | **Optional OCR**: Tesseract OCR is off by default and covers scanned PDFs and images |
+| **擴充／混合搜尋**：同義詞、英文拼字容錯與選用的本機向量檢索 | **Expanded/hybrid search**: synonyms, English typo matching and optional local vector retrieval |
+| **擷取品質**：保存警告並可重新處理選定文件 | **Extraction quality**: warnings are stored and selected documents can be reprocessed |
+| **命中次數**：以原文出現次數計算，預覽可逐一跳至每個位置 | **Hit counts**: count original-text occurrences; the preview steps through each one |
 
 ---
 
