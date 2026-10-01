@@ -101,7 +101,9 @@ def parse_query(query: str) -> ParsedQuery:
         i = 1
         while i < len(parts):
             if parts[i] == operator:
-                parts[i-1:i+2] = [Node(operator=operator, left=parts[i-1], right=parts[i+1])]
+                parts[i - 1 : i + 2] = [
+                    Node(operator=operator, left=parts[i - 1], right=parts[i + 1])
+                ]
             else:
                 i += 2
     return ParsedQuery(parts[0])

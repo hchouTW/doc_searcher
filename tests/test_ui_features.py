@@ -7,6 +7,7 @@
 # Usage notes, dependencies, or assumptions:
 #   - Uses Qt's offscreen platform so no desktop session is required.
 
+import gc
 import os
 import time
 from datetime import datetime
@@ -40,6 +41,23 @@ from doc_searcher.version import APP_VERSION
 
 def _app():
     return QApplication.instance() or QApplication([])
+
+
+@pytest.fixture(autouse=True)
+def _collect_unreachable_qt_objects():
+    """Destroy this test's orphaned widgets now, not at an arbitrary later GC point.
+
+    Parentless tables/dialogs created by tests become unreachable reference cycles. Left to
+    automatic GC, the whole file segfaulted inside QApplication.setStyleSheet (always in the
+    same test, on macOS and CI Linux/Windows); each test passed alone, the file passed with
+    automatic GC disabled, and it passed with a collection after every test. The exact Qt
+    internals were not isolated, so this is a test-suite mitigation rather than a product fix.
+    """
+    yield
+    app = QApplication.instance()
+    if app is not None:
+        app.processEvents()
+    gc.collect()
 
 
 def _result(name: str, matches: int) -> SearchResultItem:

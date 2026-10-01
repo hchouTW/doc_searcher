@@ -103,4 +103,6 @@ def test_huge_match_is_truncated():
 
 def test_zero_width_matches_produce_no_empty_marks():
     snippets = generate_regex_highlighted_snippets("foo bar", compile_user_regex(r"(?=bar)"))
-    assert "zero-width" in snippets[0] and "<mark" not in snippets[0] #  # the lookahead matches, but there is no text to highlight
+    assert (
+        "zero-width" in snippets[0] and "<mark" not in snippets[0]
+    )  #  # the lookahead matches, but there is no text to highlight

@@ -35,6 +35,7 @@ class DocxParser(BaseParser):
             from docx.oxml.ns import qn
             from docx.opc.constants import RELATIONSHIP_TYPE as RT
             from .base import SourceTextBuilder
+
             warnings: List[dict] = []
             omitted: List[str] = []
             parts = [(str(doc.part.partname), "body", doc.element.body)]
@@ -45,15 +46,26 @@ class DocxParser(BaseParser):
                     name = str(part.partname)
                     if name not in seen:
                         seen.add(name)
-                        parts.append((name, "header" if relation.reltype == RT.HEADER else "footer", part.element))
+                        parts.append(
+                            (
+                                name,
+                                "header" if relation.reltype == RT.HEADER else "footer",
+                                part.element,
+                            )
+                        )
             for part_name, part_kind, root in parts:
                 builder, previous = SourceTextBuilder(), None
                 paragraphs = {node: i for i, node in enumerate(root.iter(qn("w:p")), 1)}
                 for node in self._effective_nodes(root, part_name, warnings, omitted):
                     if node.tag in (qn("w:altChunk"), qn("w:object")):
                         location = f"{part_name}:{node.getroottree().getpath(node)}"
-                        warnings.append(dict(code="unsupported_object", location=location,
-                                             message="Embedded Office objects are not extracted."))
+                        warnings.append(
+                            dict(
+                                code="unsupported_object",
+                                location=location,
+                                message="Embedded Office objects are not extracted.",
+                            )
+                        )
                         omitted.append(location)
                     if node.tag not in (qn("w:t"), qn("w:tab"), qn("w:br"), qn("w:cr")):
                         continue
@@ -65,17 +77,37 @@ class DocxParser(BaseParser):
                     if any(a.tag == qn("w:txbxContent") for a in ancestors):
                         kind = "text_box"
                     elif part_kind == "body":
-                        kind = "table_cell" if any(a.tag == qn("w:tc") for a in ancestors) else "paragraph"
-                    source = dict(kind=kind, part=part_name, paragraph=paragraphs[paragraph],
-                                  location=paragraph.getroottree().getpath(paragraph))
-                    text = node.text or "" if node.tag == qn("w:t") else "\t" if node.tag == qn("w:tab") else "\n"
+                        kind = (
+                            "table_cell"
+                            if any(a.tag == qn("w:tc") for a in ancestors)
+                            else "paragraph"
+                        )
+                    source = dict(
+                        kind=kind,
+                        part=part_name,
+                        paragraph=paragraphs[paragraph],
+                        location=paragraph.getroottree().getpath(paragraph),
+                    )
+                    text = (
+                        node.text or ""
+                        if node.tag == qn("w:t")
+                        else "\t"
+                        if node.tag == qn("w:tab")
+                        else "\n"
+                    )
                     builder.append(text, source, "" if source == previous else "\n\n")
                     previous = source
                 segment = builder.segment(part_name, "section")
                 if segment.text.strip():
                     segments.append(segment)
-            return ExtractedDoc(abs_path, "docx", len(segments), segments,
-                                warnings=warnings, omitted_locations=omitted)
+            return ExtractedDoc(
+                abs_path,
+                "docx",
+                len(segments),
+                segments,
+                warnings=warnings,
+                omitted_locations=omitted,
+            )
         except Exception as e:
             return ExtractedDoc.from_exception(abs_path, "docx", "Error reading docx content", e)
 
@@ -95,17 +127,31 @@ class DocxParser(BaseParser):
             node = stack.pop()
             yield node
             if node.tag == mc + "AlternateContent":
-                selected = next((child for child in node if child.tag == mc + "Choice"
-                    and all(child.nsmap.get(prefix) in supported
-                            for prefix in child.get("Requires", "").split())), None)
+                selected = next(
+                    (
+                        child
+                        for child in node
+                        if child.tag == mc + "Choice"
+                        and all(
+                            child.nsmap.get(prefix) in supported
+                            for prefix in child.get("Requires", "").split()
+                        )
+                    ),
+                    None,
+                )
                 if selected is None:
                     selected = next((child for child in node if child.tag == mc + "Fallback"), None)
                 if selected is not None:
                     stack.append(selected)
                 else:
                     location = f"{part_name}:{node.getroottree().getpath(node)}"
-                    warnings.append(dict(code="unsupported_compatibility_branch", location=location,
-                        message="No supported Office compatibility branch or fallback."))
+                    warnings.append(
+                        dict(
+                            code="unsupported_compatibility_branch",
+                            location=location,
+                            message="No supported Office compatibility branch or fallback.",
+                        )
+                    )
                     omitted.append(location)
             else:
                 stack.extend(reversed(list(node)))

@@ -6,7 +6,7 @@ from doc_searcher.search.script_fold import fold
 
 def is_cjk(char: str) -> bool:
     n = ord(char)
-    return 0x3400 <= n <= 0x9fff or 0xf900 <= n <= 0xfaff or 0x20000 <= n <= 0x323af
+    return 0x3400 <= n <= 0x9FFF or 0xF900 <= n <= 0xFAFF or 0x20000 <= n <= 0x323AF
 
 
 def cjk_tokens(text: str) -> str:
