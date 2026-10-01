@@ -47,6 +47,7 @@ def get_service() -> SearchService:
     if _service is None:
         try:
             _service = SearchService()
+            _service.start_watching()
         except (ConfigError, StorageError) as exc:
             raise ToolError(str(exc)) from exc
     return _service
@@ -79,6 +80,9 @@ def search_documents(
     match_case: bool = False,
     whole_word: bool = False,
     regex: bool = False,
+    search_mode: Literal["literal", "expanded", "hybrid"] = "literal",
+    synonyms: Optional[dict[str, list[str]]] = None,
+    synonym_scopes: Optional[list[dict[str, Any]]] = None,
 ) -> dict[str, Any]:
     """Search indexed local documents and return ranked hits with highlighted snippets.
 
@@ -86,7 +90,18 @@ def search_documents(
     resource_uri for reading the full text.
     """
     try:
-        return get_service().search(query, formats, limit, cursor=cursor, match_case=match_case, whole_word=whole_word, regex=regex)
+        return get_service().search(
+            query,
+            formats,
+            limit,
+            cursor=cursor,
+            match_case=match_case,
+            whole_word=whole_word,
+            regex=regex,
+            search_mode=search_mode,
+            synonyms=synonyms,
+            synonym_scopes=synonym_scopes,
+        )
     except ValueError as exc:
         raise ToolError(str(exc)) from exc
 
@@ -143,25 +158,49 @@ def main() -> None:
     MuPDF's messages into logging, so sys.stdout is never swapped.
     """
     configure_logging()
-    mcp.run("stdio")
-
-
+    try:
+        mcp.run("stdio")
+    finally:
+        if _service is not None:
+            _service.close()
 
 
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=True, open_world_hint=False))
-def get_match_locations(query: str, doc_id: int, revision: int, offset: int = 0, limit: int = 100, match_case: bool = False, whole_word: bool = False, regex: bool = False) -> dict[str, Any]:
+def get_match_locations(
+    query: str,
+    doc_id: int,
+    revision: int,
+    offset: int = 0,
+    limit: int = 100,
+    match_case: bool = False,
+    whole_word: bool = False,
+    regex: bool = False,
+) -> dict[str, Any]:
     """Load a bounded page of original-text occurrences for an indexed document."""
     try:
-        return get_service().match_locations(query, doc_id, revision=revision, offset=offset, limit=limit, match_case=match_case, whole_word=whole_word, regex=regex)
+        return get_service().match_locations(
+            query,
+            doc_id,
+            revision=revision,
+            offset=offset,
+            limit=limit,
+            match_case=match_case,
+            whole_word=whole_word,
+            regex=regex,
+        )
     except (ValueError, LookupError) as exc:
         raise ToolError(str(exc)) from exc
 
 
 @mcp.tool(annotations=ToolAnnotations(read_only_hint=True, open_world_hint=False))
-def get_match_context(location: dict[str, Any], full_segment: bool = False, text_offset: int = 0) -> dict[str, Any]:
+def get_match_context(
+    location: dict[str, Any], full_segment: bool = False, text_offset: int = 0
+) -> dict[str, Any]:
     """Read occurrence context or a 2048-character original segment page; never reads disk files."""
     try:
-        return get_service().match_context(location, full_segment=full_segment, text_offset=text_offset)
+        return get_service().match_context(
+            location, full_segment=full_segment, text_offset=text_offset
+        )
     except (ValueError, LookupError) as exc:
         raise ToolError(str(exc)) from exc
 
@@ -175,7 +214,9 @@ def get_problem_documents(offset: int = 0, limit: int = 100) -> dict[str, Any]:
         raise ToolError(str(exc)) from exc
 
 
-@mcp.tool(annotations=ToolAnnotations(read_only_hint=False, destructive_hint=False, open_world_hint=False))
+@mcp.tool(
+    annotations=ToolAnnotations(read_only_hint=False, destructive_hint=False, open_world_hint=False)
+)
 def reprocess_documents(paths: list[str]) -> dict[str, Any]:
     """Reparse explicitly selected indexed documents even when size/mtime are unchanged; poll get_index_status."""
     try:

@@ -21,12 +21,17 @@ from doc_searcher.platform.paths import canonical_path
 logger = logging.getLogger(__name__)
 
 
+class FileChangedDuringParsing(RuntimeError):
+    """An unstable file is retried instead of committing text from an obsolete read."""
+
+
 class DocumentIndexer:
     """Manages document text extraction and index building."""
 
     def __init__(self, db: Database):
         self.db = db
         self._is_cancelled = False
+        self.request_is_current: Callable[[], bool] = lambda: True
         self._resume_event = threading.Event()
         self._resume_event.set()
 
@@ -77,7 +82,24 @@ class DocumentIndexer:
             return False
 
         # parse_file never raises for document problems; a bad file becomes an error record.
-        extracted = parse_file(abs_path)
+        from doc_searcher.parsers import ocr
+
+        with ocr.cancellation_scope(
+            lambda: self.is_cancelled or not self.request_is_current()
+        ) as cancellation:
+            extracted = parse_file(abs_path)
+        if cancellation["cancelled"] or not self.request_is_current():
+            raise FileChangedDuringParsing(abs_path)
+        try:
+            after = os.stat(abs_path)
+        except OSError as exc:
+            raise FileChangedDuringParsing(abs_path) from exc
+        if (st.st_mtime_ns, st.st_size, st.st_ino) != (
+            after.st_mtime_ns,
+            after.st_size,
+            after.st_ino,
+        ):
+            raise FileChangedDuringParsing(abs_path)
         assert extracted.status is not None  # ExtractedDoc.__post_init__ always derives an outcome.
         if extracted.status is ParseStatus.UNSUPPORTED:
             return False
@@ -90,8 +112,10 @@ class DocumentIndexer:
                 mtime=mtime,
                 ctime=ctime,
                 segments=[],
-                error=extracted.error, parse_status=extracted.status.value,
-                warnings=extracted.warnings, omitted_locations=extracted.omitted_locations,
+                error=extracted.error,
+                parse_status=extracted.status.value,
+                warnings=extracted.warnings,
+                omitted_locations=extracted.omitted_locations,
                 parser_version=extracted.parser_version,
             )
             return False
@@ -120,8 +144,10 @@ class DocumentIndexer:
             mtime=mtime,
             ctime=ctime,
             segments=prepared_segments,
-            error=extracted.error, parse_status=extracted.status.value,
-            warnings=extracted.warnings, omitted_locations=extracted.omitted_locations,
+            error=extracted.error,
+            parse_status=extracted.status.value,
+            warnings=extracted.warnings,
+            omitted_locations=extracted.omitted_locations,
             parser_version=extracted.parser_version,
         )
         return True
@@ -132,7 +158,7 @@ class DocumentIndexer:
         to_delete_files: List[str],
         progress_callback: Optional[Callable[[int, int, str], None]] = None,
         reset_cancellation: bool = True,
-    ) -> Dict[str, int]:
+    ) -> Dict[str, Any]:
         """Execute indexing on list of files with progress notifications.
 
         Returns:
@@ -140,13 +166,13 @@ class DocumentIndexer:
         """
         if reset_cancellation:
             self.reset_cancellation()
-        stats = {"indexed": 0, "deleted": 0, "failed": 0}
+        stats: Dict[str, Any] = {"indexed": 0, "deleted": 0, "failed": 0, "retry_paths": []}
         total = len(to_delete_files) + len(to_index_files)
         completed = 0
 
         # 1. Process deletions
         for del_path in to_delete_files:
-            if not self.wait_until_ready():
+            if not self.wait_until_ready() or not self.request_is_current():
                 break
             completed += 1
             if progress_callback:
@@ -156,14 +182,18 @@ class DocumentIndexer:
 
         # 2. Process additions/updates
         for file_path in to_index_files:
-            if not self.wait_until_ready():
+            if not self.wait_until_ready() or not self.request_is_current():
                 break
 
             completed += 1
             if progress_callback:
                 progress_callback(completed, total, os.path.basename(file_path))
 
-            success = self.index_single_file(file_path)
+            try:
+                success = self.index_single_file(file_path)
+            except FileChangedDuringParsing:
+                stats["retry_paths"].append(file_path)
+                continue
             if success:
                 stats["indexed"] += 1
             else:

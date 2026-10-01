@@ -78,7 +78,11 @@ class ExtractedDoc:
                 self.status = ParseStatus.CORRUPT
             else:
                 has_text = any(seg.text.strip() for seg in self.segments)
-                self.status = (ParseStatus.PARTIAL if self.warnings else ParseStatus.SUCCESS) if has_text else ParseStatus.EMPTY
+                self.status = (
+                    (ParseStatus.PARTIAL if self.warnings else ParseStatus.SUCCESS)
+                    if has_text
+                    else ParseStatus.EMPTY
+                )
 
     @classmethod
     def failed(
@@ -123,11 +127,12 @@ class BaseParser(ABC):
 
 def parser_version_for(file_type: str) -> str:
     """Versions identify files eligible for explicit extraction reprocessing."""
-    return "2" if file_type in {"docx", "xlsx", "pdf"} else "1"
+    return "3" if file_type in {"xlsx", "pdf", "pptx"} else "2" if file_type == "docx" else "1"
 
 
 class SourceTextBuilder:
     """Build original text together with spans; never strip it after recording offsets."""
+
     def __init__(self):
         self.parts = []
         self.sources = []

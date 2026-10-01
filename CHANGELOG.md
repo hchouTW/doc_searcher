@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Automatically index folder changes in desktop/MCP, with CLI `--watch`, pending/error diagnostics and safe retries for files modified during extraction.
+- Local Tesseract OCR covers scanned/mixed PDFs and PNG/JPEG/TIFF; existing PDF text layers are geometrically deduplicated. Missing runtimes/languages and failed pages remain visible in diagnostics.
+- XLSX ordinary comments include empty hidden cells; PPTX groups, notes, tables and visible inherited decorations retain source locations. Unsupported embedded content produces warnings.
+- Explicit expanded/hybrid modes add scoped synonyms, English typo matching and optional local multilingual E5 dense retrieval with source-aware overlapping chunks. Literal occurrence counts remain authoritative. Schema 6 stores revision-checked vectors.
+- Setup and measured acceptance evidence: [full-folder search](docs/full-folder-search.md), [validation](docs/benchmarks/full-folder-coverage-validation.md).
+
 - Faster “Clear all folders”: clear stored text and both search indexes in one transaction, with bounded progress updates and atomic rollback on failure.
 - Chinese literal terms match contiguous original text independently of jieba token boundaries, including single characters and Traditional/Simplified equivalents.
 - Search limits apply to documents, with stable continuation and stale-index detection. All matching segments of selected documents remain accessible.

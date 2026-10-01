@@ -210,7 +210,7 @@ def test_permission_denied_is_unreadable(tmp_path, name, build):
 
 
 def test_unsupported_extension(tmp_path):
-    path = tmp_path / "photo.png"
+    path = tmp_path / "unsupported.xyz"
     path.write_bytes(b"\x89PNG")
     assert parse_file(str(path)).status is ParseStatus.UNSUPPORTED
 

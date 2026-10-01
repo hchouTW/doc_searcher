@@ -38,8 +38,8 @@
    - **純文字**：`.txt`, `.md`, `.csv`（依 BOM 辨識 UTF-8／UTF-16／UTF-32，並偵測無 BOM 的 UTF-16；其餘依序嘗試 UTF-8、Big5、GBK。無 BOM 的 GBK 可能被誤判為 Big5）
    - 路徑可含中日韓文字、emoji、空白、`%`、`_`、`[ ]` 等字元；在 macOS 上，以不同 Unicode 正規化形式（NFC／NFD）拼寫的同一路徑視為同一個檔案。從 1.2.0 升級後，第一次重新掃描會把以 NFD 儲存的舊索引項目重新建立一次。
    - 加密、損毀、空白或無法讀取的文件會記錄原因並略過，不會中斷整批索引；僅設定擁有者密碼（限制列印／複製）的 PDF 仍可擷取文字。
-3. **輕量極速，無 OCR 負擔**：
-   - 專注於文件內嵌文字流抽取，無需昂貴 GPU 或笨重 OCR 影像模型，幾秒內即可為數百至數千份文件建立完備索引。純影像的掃描版 PDF 沒有文字層，因此無法檢索。
+3. **本機文字擷取與掃描文件 OCR**：
+   - 原生文字快速索引；掃描 PDF 與 PNG/JPEG/TIFF 自動使用本機 Tesseract OCR。需安裝引擎與中英文語言資料，辨識失敗會列入診斷。詳見[全資料夾搜尋設定](docs/full-folder-search.md)。
 4. **SQLite FTS5 + jieba 中英文全文檢索**：
    - 內建 BM25 相關度評分，支援繁簡中文互搜（輸入簡體可找到繁體文件，反之亦然；以字為單位轉換，不做「軟體／软件」這類地區用語對應；正規表示式模式不轉換，高亮顯示文件原文字元）、英文混合詞組、英文詞形還原（`outstand`／`outstanding`／`outstandings` 互相命中；區分大小寫與完整單字仍要求完全相同）、精確片語（`"..."`）與布林運算（`AND` / `OR` / `NOT`）。
    - 每個中文查詢詞（例如 `計畫`、`升等`、單字 `計`）必須在同一區塊的原文連續出現，不受斷詞邊界影響；空白分隔的詞維持 AND 語意；含標點符號的查詢（`A-`、`2023-01-03`、`snake_case`、`Section 1 (Paragraphs)`）可照輸入內容檢索。
@@ -269,11 +269,13 @@ Windows 若出現 SmartScreen 提示，請點選「其他資訊」→「仍要�
 
 ### 搜尋完整性、命中次數與擷取品質
 
+自動監控資料夾、XLSX 隱藏儲存格註解、PPTX 群組內容與本機語意／同義詞搜尋已加入；設定與限制見[全資料夾搜尋](docs/full-folder-search.md)。
+
 - 「命中數」是原文中的實際出現次數，與命中區塊數、摘要數分開。相同位置去重、重疊的正向命中合併，緊鄰的不同命中仍分開；NOT 不增加命中數。引號片語以整個片語計算一次。
 - 搜尋先選文件再載入其命中區塊。結果可按「載入更多文件」繼續；更新索引或變更查詢後，舊的游標／位置需重新搜尋。預覽的上一個／下一個可走訪每次命中；「載入更多原文」按 2,048 字元分頁，不把大型文件一次繪製成 HTML。
 - Word 包含依序的本文／表格、頁首／頁尾與文字方塊。頁碼無法由 python-docx 推算；位置標示實際 part／段落。Excel 顯示工作表與儲存格（例如 `Sheet1!B12`），公式來源與快取值分開標示；未有快取值的公式仍可搜尋，且會顯示警告，程式不計算公式。
 - 「擷取品質與問題文件」列出無文字、部分擷取、解析失敗及未知品質；選取後可重新擷取，即使大小／修改時間未變。舊索引的品質為未知，搜尋索引升級僅使用已儲存的原文；重新擷取才會取得新增的 Office 內容與位置資訊。
-- 不支援 OCR、影像內文字、所有嵌入式 Office 物件、密碼解密或公式／巨集執行。PDF 頁面擷取失敗會保留其他頁並列出失敗頁。Regex 超時／取消會報錯，不回傳假裝完整的部分次數；零寬命中以游標線顯示並逐次計算。
+- OCR 支援掃描 PDF 與影像；需要 Tesseract 與語言資料。無法保證所有嵌入式 Office 物件，且不解密密碼或執行公式／巨集。PDF 頁面擷取失敗會保留其他頁並列出失敗頁。Regex 超時／取消會報錯，不回傳假裝完整的部分次數；零寬命中以游標線顯示並逐次計算。
 
 CLI 範例（舊的 `--dir ... --search ...` 用法仍可用）：
 
@@ -391,8 +393,8 @@ A fast, cross-platform, pure-Python full-text search app for local documents on 
    - **Plain text**: `.txt`, `.md`, `.csv` (UTF-8/UTF-16/UTF-32 detected from the BOM, BOM-less UTF-16 detected; otherwise UTF-8, Big5, GBK are tried in that order. BOM-less GBK may be misread as Big5)
    - Paths may contain CJK characters, emoji, spaces, `%`, `_`, `[ ]`; on macOS, the same path spelled in different Unicode normalization forms (NFC/NFD) counts as one file. After upgrading from 1.2.0, the first rescan re-creates old index entries that were stored in NFD once.
    - Encrypted, corrupt, empty or unreadable documents are logged with a reason and skipped without stopping the whole batch; PDFs with only an owner password (print/copy restrictions) still yield their text.
-3. **Lightweight and fast, no OCR overhead**:
-   - It extracts the text that is embedded in documents. No GPU and no heavy OCR model: hundreds to thousands of documents are fully indexed in seconds. Scanned image-only PDFs have no text layer and are therefore not searchable.
+3. **Local extraction and scanned-document OCR**:
+   - Native text is indexed directly; scanned PDFs and PNG/JPEG/TIFF images automatically use local Tesseract OCR. Install the engine and language data; failures appear in diagnostics. See [full-folder search setup](docs/full-folder-search.md).
 4. **SQLite FTS5 + jieba full-text search for Chinese and English**:
    - Built-in BM25 relevance ranking. **Traditional and Simplified Chinese match each other** (a Simplified query finds Traditional documents and vice versa; converted character by character, with no regional vocabulary mapping such as 軟體/软件; regex mode is not converted; the preview highlights the characters as written in the document). **English word forms match each other** (`outstand`, `outstanding` and `outstandings` find one another; match case and whole word still require the exact word). Mixed-language phrases, exact phrases (`"..."`) and boolean operators (`AND` / `OR` / `NOT`) are supported.
    - Each Chinese query term (`計畫`, `升等`, or a single character) must occur contiguously within one segment, independently of token boundaries. Space-separated terms retain AND semantics. Queries containing punctuation (`A-`, `2023-01-03`, `snake_case`, `Section 1 (Paragraphs)`) work as typed.
@@ -622,11 +624,13 @@ If Windows shows a SmartScreen prompt, click "More info" → "Run anyway".
 
 ### Search completeness, occurrences and extraction quality
 
+Automatic folder monitoring, hidden-cell XLSX comments, grouped PPTX content, and local semantic/synonym retrieval are available. See [full-folder search](docs/full-folder-search.md) for setup and limits.
+
 - Hit counts are original-text occurrences, separate from matching segments and rendered snippets. Repeated locations are deduplicated; overlapping positive intervals merge; adjacent hits stay separate. NOT adds no positive hits and quoted phrases count once.
 - Documents are selected before their matching segments. Use **Load more documents** to continue. Cursors and locations bind the query/options and index revision; search again after an update. Previous/next reaches each occurrence. **Load more original text** reads 2,048-character segment pages rather than rendering a large document at once.
 - DOCX includes ordered body/table text, shared headers/footers and text boxes, identified by part/paragraph rather than invented Word page numbers. XLSX preserves worksheet/cell locations (`Sheet1!B12`), formula source and cached values. Missing caches produce warnings; formulas and macros are never executed. Equivalent cached text of constant-string formulas is retained in source metadata instead of indexed twice.
 - **Extraction quality / problems** distinguishes no text, partial extraction, failures and unknown quality, and supports explicit reprocessing of selected documents with unchanged size/mtime. Legacy quality is unknown. Schema upgrades rebuild search candidates from stored text; reprocessing is needed to obtain newly supported Office content/source locations.
-- OCR/image text, password bypass and unsupported embedded Office objects are outside scope. Failed PDF pages are recorded while readable pages survive. Regex timeout/cancellation raises an error instead of returning incomplete counts as complete; zero-width hits count individually and show a caret.
+- Scanned PDFs/images use local OCR when Tesseract and language data are installed. Password bypass and unsupported embedded Office objects remain outside scope. Failed PDF pages are recorded while readable pages survive. Regex timeout/cancellation raises an error instead of returning incomplete counts as complete; zero-width hits count individually and show a caret.
 
 The existing CLI invocation remains valid. Add `--limit N --json` for a document page and `--cursor '<next_cursor>'` for continuation. Use `--locations DOC_ID --offset N --revision REVISION` with the same query/options to page locations, `--context '<location JSON>'` for bounded context, `--quality --offset N --limit N` for quality/problems, and `--dir ROOT --reprocess FILE` (repeatable) to reparse selected files. `--regex`, `--match-case`, and `--whole-word` are optional matching controls.
 

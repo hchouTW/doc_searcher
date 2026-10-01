@@ -1,5 +1,7 @@
 # Benchmarks (Task 5.1)
 
+The full-folder extension has separate [watcher/OCR/dense validation](benchmarks/full-folder-coverage-validation.md).
+
 ## How to run
 
 ```bash

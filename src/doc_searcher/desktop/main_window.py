@@ -153,6 +153,15 @@ class MainWindow(QMainWindow):
         self.quality_button = QPushButton(tr(self.language, "quality_problems"))
         self.quality_button.clicked.connect(self._show_quality_problems)
         self.results_count_label.parentWidget().layout().addWidget(self.quality_button)
+        self.retrieval_mode = QComboBox()
+        for key, mode in (
+            ("search_literal", "literal"),
+            ("search_expanded", "expanded"),
+            ("search_hybrid", "hybrid"),
+        ):
+            self.retrieval_mode.addItem(tr(self.language, key), mode)
+        self.retrieval_mode.currentIndexChanged.connect(lambda: self._on_metadata_filter_changed())
+        self.results_count_label.parentWidget().layout().addWidget(self.retrieval_mode)
         self.preview.reprocess_requested.connect(lambda path: self._reprocess_selected([path]))
         self._apply_language()
         self._restore_filter_settings()
@@ -167,9 +176,47 @@ class MainWindow(QMainWindow):
             except Exception:
                 pass
 
+        from doc_searcher.indexing.watcher import FolderWatcher
+        from doc_searcher.indexing.service import IndexRequest
+
+        self.folder_watcher = FolderWatcher(
+            self.db,
+            lambda: IndexRequest(
+                list(self.config.directories),
+                self.config.include_subdirectories,
+                list(self.config.exclude_patterns),
+            ),
+        )
+        self.auto_updates = QCheckBox(tr(self.language, "auto_updates"))
+        self.auto_updates.setChecked(True)
+        self.auto_updates.toggled.connect(
+            lambda enabled: self.folder_watcher.resume() if enabled else self.folder_watcher.pause()
+        )
+        self.index_frame.layout().addWidget(self.auto_updates)
+        self._live_generation = 0
+        self.folder_watcher.start()
+        self.live_timer = QTimer(self)
+        self.live_timer.setInterval(500)
+        self.live_timer.timeout.connect(self._poll_live_updates)
+        self.live_timer.start()
+
         # If directories exist, trigger initial incremental check
         if self.config.directories:
             self._start_indexing()
+
+    def _poll_live_updates(self):
+        status = self.folder_watcher.status()
+        if status["generation"] != self._live_generation:
+            self._live_generation = status["generation"]
+            self._update_db_status()
+            if self.search_input.text().strip():
+                self._trigger_search()
+        if status["pending"] or status["state"] == "indexing":
+            self.index_summary_label.setToolTip(
+                tr(self.language, "live_pending", count=status["pending"])
+            )
+        elif status["errors"]:
+            self.index_summary_label.setToolTip("\n".join(status["errors"]))
 
     def _init_ui(self):
         self.setWindowTitle("文件內文關鍵字檢索系統 (PDF / Word / PPT / Excel)")
@@ -847,6 +894,11 @@ class MainWindow(QMainWindow):
     def _apply_language(self):
         if hasattr(self, "load_more_button"):
             self.load_more_button.setText(tr(self.language, "load_more"))
+        if hasattr(self, "auto_updates"):
+            self.auto_updates.setText(tr(self.language, "auto_updates"))
+        if hasattr(self, "retrieval_mode"):
+            for index, key in enumerate(("search_literal", "search_expanded", "search_hybrid")):
+                self.retrieval_mode.setItemText(index, tr(self.language, key))
         if hasattr(self, "quality_button"):
             self.quality_button.setText(tr(self.language, "quality_problems"))
         """Refresh every persistent visible label after a locale change."""
@@ -1329,8 +1381,14 @@ class MainWindow(QMainWindow):
 
     def _update_db_status(self, update_main_status: bool = True):
         stats = self.db.get_stats()
-        self.index_summary_label.setText(tr(self.language, "quality_summary",
-            discovered=stats["discovered_documents"], searchable=stats["searchable_documents"]))
+        self.index_summary_label.setText(
+            tr(
+                self.language,
+                "quality_summary",
+                discovered=stats["discovered_documents"],
+                searchable=stats["searchable_documents"],
+            )
+        )
         self.index_summary_label.setToolTip(str(stats["quality_counts"]))
         self._refresh_last_updated_label(stats)
         if update_main_status:
@@ -1554,20 +1612,25 @@ class MainWindow(QMainWindow):
 
     def _current_search_filters(self) -> Dict[str, Any]:
         """Convert UI metadata choices into worker-safe numeric boundaries."""
-        return search_filters.to_search_kwargs(
+        options = search_filters.to_search_kwargs(
             self._filter_state(),
             exclude_patterns=self.config.exclude_patterns,
             search_roots=self.config.directories,
             now=time.time(),
         )
+        options["search_mode"] = self.retrieval_mode.currentData()
+        return options
 
     def _current_filter_signature(self) -> Tuple[Any, ...]:
         """Return stable UI values for rejecting results from superseded searches."""
-        return search_filters.signature(
-            self._filter_state(),
-            exclude_text=self.exclude_input.text(),
-            directories=self.config.directories,
-            include_subdirectories=self.config.include_subdirectories,
+        return (
+            self.retrieval_mode.currentData(),
+            *search_filters.signature(
+                self._filter_state(),
+                exclude_text=self.exclude_input.text(),
+                directories=self.config.directories,
+                include_subdirectories=self.config.include_subdirectories,
+            ),
         )
 
     def _insert_query_syntax(self, insertion: str):
@@ -1857,10 +1920,20 @@ class MainWindow(QMainWindow):
     def _show_quality_problems(self):
         from PySide6.QtWidgets import QDialog, QVBoxLayout, QListWidget, QListWidgetItem
         from .worker import QualityWorker
+
         dialog = QDialog(self)
         dialog.setWindowTitle(tr(self.language, "quality_problems"))
         dialog.resize(720, 420)
         layout = QVBoxLayout(dialog)
+        watcher_status = self.folder_watcher.status()
+        if watcher_status["errors"] or watcher_status["pending"]:
+            diagnostic = QLabel(
+                tr(self.language, "live_pending", count=watcher_status["pending"])
+                + "\n"
+                + "\n".join(watcher_status["errors"])
+            )
+            diagnostic.setWordWrap(True)
+            layout.addWidget(diagnostic)
         listing = QListWidget()
         listing.setSelectionMode(QListWidget.SelectionMode.ExtendedSelection)
         layout.addWidget(listing)
@@ -1868,30 +1941,41 @@ class MainWindow(QMainWindow):
         more = QPushButton(tr(self.language, "load_more"))
         layout.addWidget(reprocess)
         layout.addWidget(more)
+
         def load(offset=0):
             more.setEnabled(False)
             worker = QualityWorker(self.db, offset)
             self._quality_workers.append(worker)
+
             def ready(page):
                 more.setEnabled(True)
                 for row in page["documents"]:
                     label = tr(self.language, "quality_" + row["parse_status"])
-                    item = QListWidgetItem(f'{label} | {row["path"]}')
+                    item = QListWidgetItem(f"{label} | {row['path']}")
                     item.setData(Qt.ItemDataRole.UserRole, row["path"])
-                    item.setToolTip(str(row["warnings"] or row["error"] or row["omitted_locations"]))
+                    item.setToolTip(
+                        str(row["warnings"] or row["error"] or row["omitted_locations"])
+                    )
                     listing.addItem(item)
                 more.setVisible(page["has_more"])
                 more.setProperty("offset", page["next_offset"])
+
             worker.ready.connect(ready)
             worker.failed.connect(lambda message: more.setText(message))
+
             def finished():
                 self._quality_workers.remove(worker)
                 worker.deleteLater()
+
             worker.finished.connect(finished)
             worker.start()
+
         more.clicked.connect(lambda: load(more.property("offset") or 0))
-        reprocess.clicked.connect(lambda: self._reprocess_selected(
-            [item.data(Qt.ItemDataRole.UserRole) for item in listing.selectedItems()]))
+        reprocess.clicked.connect(
+            lambda: self._reprocess_selected(
+                [item.data(Qt.ItemDataRole.UserRole) for item in listing.selectedItems()]
+            )
+        )
         self._quality_dialog = dialog
         dialog.show()
         load()
@@ -1907,14 +1991,25 @@ class MainWindow(QMainWindow):
     def _on_table_item_selected(self, item: Optional[SearchResultItem]):
         page = getattr(self, "_result_page", None)
         if page:
-            self.preview.set_search_context(self.db, self.search_input.text().strip(),
-                                            self._current_search_filters(), page.revision)
+            self.preview.set_search_context(
+                self.db,
+                self.search_input.text().strip(),
+                self._current_search_filters(),
+                page.revision,
+            )
         self.preview.display_result(item)
 
     def _on_file_action_failed(self, action: str, item: SearchResultItem):
         self.preview.show_file_action_failure(action, item)
 
     def closeEvent(self, event):
+        self.live_timer.stop()
+        # Release a paused manual writer before joining a watcher waiting on its lock.
+        if self.index_worker and self.index_worker.isRunning():
+            self.index_worker.cancel()
+        if self.search_worker and self.search_worker.isRunning():
+            self.search_worker.cancel()
+        self.folder_watcher.stop()
         self.preview.shutdown()
         for worker in self._quality_workers:
             worker.wait()
@@ -1922,7 +2017,7 @@ class MainWindow(QMainWindow):
         self.scheduler.pending_search = None
         if self.index_worker and self.index_worker.isRunning():
             self.index_worker.cancel()
-            self.index_worker.wait(1000)
+            self.index_worker.wait()
         if self.search_worker and self.search_worker.isRunning():
             self.search_worker.wait(5000)
         self.db.close()

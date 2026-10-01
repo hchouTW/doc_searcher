@@ -44,37 +44,66 @@ def english_phrase_matches(content, term):
     """Porter phrase forms occupy one interval, with token separators preserved in text."""
     words = term.split()
     specs = [stem_spec(word) for word in words]
-    expressions = [stem_regex_source(spec) if spec else rf"\b{re.escape(word)}\b"
-                   for word, spec in zip(words, specs, strict=True)]
+    expressions = [
+        stem_regex_source(spec) if spec else rf"\b{re.escape(word)}\b"
+        for word, spec in zip(words, specs, strict=True)
+    ]
     pattern = re.compile(r"\W+".join(f"({x})" for x in expressions), re.IGNORECASE)
     for match in pattern.finditer(content):
-        if all(spec is None or matches_stem(spec, match.group(i + 1)) for i, spec in enumerate(specs)):
+        if all(
+            spec is None or matches_stem(spec, match.group(i + 1)) for i, spec in enumerate(specs)
+        ):
             yield match
 
 
-def iter_locations(content, positive_terms, *, regex_pattern=None, deadline=None,
-                   cancel_check=None, match_case=False, whole_word=False, stemming=True):
+def iter_locations(
+    content,
+    positive_terms,
+    *,
+    regex_pattern=None,
+    deadline=None,
+    cancel_check=None,
+    match_case=False,
+    whole_word=False,
+    stemming=True,
+):
     """Yield merged intervals in original Python character coordinates, without buffering hits."""
+
     def checked(iterator, term, group=0):
         for i, match in enumerate(iterator):
             if i % 256 == 0:
                 if cancel_check and cancel_check():
                     # Imported lazily: searcher uses this module too.
                     from doc_searcher.search.searcher import SearchQueryError
+
                     raise SearchQueryError("搜尋已取消。", "cancelled")
                 if deadline:
                     deadline.remaining()
             yield Occurrence(match.start(group), match.end(group), [term])
+
     streams = []
     if regex_pattern is not None:
-        streams.append(checked(regex_pattern.finditer(content, **Deadline.timeout_kwargs(deadline)),
-                               regex_pattern.pattern))
+        streams.append(
+            checked(
+                regex_pattern.finditer(content, **Deadline.timeout_kwargs(deadline)),
+                regex_pattern.pattern,
+            )
+        )
     else:
         for term in dict.fromkeys(positive_terms):
             if not term:
                 continue
-            use_stem = stemming and not (match_case or whole_word) and stem_spec(term) is not None
-            if stemming and not (match_case or whole_word) and re.fullmatch(r"[a-zA-Z]+(?:\s+[a-zA-Z]+)+", term):
+            use_stem = (
+                stemming
+                and len(term) > 2
+                and not (match_case or whole_word)
+                and stem_spec(term) is not None
+            )
+            if (
+                stemming
+                and not (match_case or whole_word)
+                and re.fullmatch(r"[a-zA-Z]+(?:\s+[a-zA-Z]+)+", term)
+            ):
                 streams.append(checked(english_phrase_matches(content, term), term))
             elif use_stem:
                 pattern = _highlight_pattern((term,), match_case, whole_word, True)
@@ -87,7 +116,9 @@ def iter_locations(content, positive_terms, *, regex_pattern=None, deadline=None
                 streams.append(checked(pattern.finditer(content), term, 1))
     pending = None
     for hit in heapq.merge(*streams, key=lambda x: (x.start, x.end)):
-        if pending and (hit.start < pending.end or (hit.start, hit.end) == (pending.start, pending.end)):
+        if pending and (
+            hit.start < pending.end or (hit.start, hit.end) == (pending.start, pending.end)
+        ):
             pending.end = max(pending.end, hit.end)
             pending.matched_terms = list(dict.fromkeys(pending.matched_terms + hit.matched_terms))
         else:
@@ -115,7 +146,7 @@ def render_context(content, occurrences, *, start=0, end=None, active=None):
         if a == b:
             pieces.append(f'<span{css} title="zero-width">│</span>')
         else:
-            pieces.append(f'<mark{css}>{html.escape(content[a:b])}</mark>')
+            pieces.append(f"<mark{css}>{html.escape(content[a:b])}</mark>")
         cursor = b
     pieces.append(html.escape(content[cursor:end]))
     return ("..." if start else "") + "".join(pieces) + ("..." if end < len(content) else "")
@@ -130,8 +161,9 @@ def occurrence_snippets(content, terms, *, max_snippets=3, context_chars=60, **o
         if start <= last_end:
             continue
         # Match against the full original text so context edges do not alter lookarounds.
-        locations = itertools.takewhile(lambda x, bound=end: x.start <= bound,
-                                         iter_locations(content, terms, **options))
+        locations = itertools.takewhile(
+            lambda x, bound=end: x.start <= bound, iter_locations(content, terms, **options)
+        )
         snippets.append(render_context(content, locations, start=start, end=end))
         last_end = end
         if len(snippets) >= max_snippets:

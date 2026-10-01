@@ -19,6 +19,7 @@ from .ppt_parser import PptParser
 from .xlsx_parser import XlsxParser
 from .xls_parser import XlsParser
 from .text_parser import TextParser
+from .image_parser import ImageParser
 
 __all__ = [
     "BaseParser",
@@ -50,6 +51,7 @@ _PARSERS: Dict[str, BaseParser] = {
     ".txt": TextParser(),
     ".md": TextParser(),
     ".csv": TextParser(),
+    **{extension: ImageParser() for extension in (".png", ".jpg", ".jpeg", ".tif", ".tiff")},
 }
 
 SUPPORTED_EXTENSIONS = set(_PARSERS.keys())

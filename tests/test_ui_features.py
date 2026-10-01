@@ -56,9 +56,7 @@ def _result(name: str, matches: int) -> SearchResultItem:
             SegmentMatch(
                 segment_id="1",
                 segment_type="text",
-                snippets=[
-                    'before <mark style="background-color: #ffeb3b">keyword</mark> after'
-                ]
+                snippets=['before <mark style="background-color: #ffeb3b">keyword</mark> after']
                 * matches,
             )
         ],
@@ -478,12 +476,24 @@ def test_preview_navigates_actual_occurrences_asynchronously(tmp_path, language,
     from doc_searcher.search.searcher import DocumentSearcher
     from doc_searcher.search.text_helper import tokenize_for_fts
     import time
+
     app = _app()
     db = Database(str(tmp_path / "index.db"))
     text = "會議 " * 8 + "x" * 100_000
-    db.save_document_index(str(tmp_path / "eight.txt"), "txt", len(text), 1,
-        [{"segment_id": "1", "segment_type": "section", "content": text,
-          "tokenized_content": tokenize_for_fts(text)}])
+    db.save_document_index(
+        str(tmp_path / "eight.txt"),
+        "txt",
+        len(text),
+        1,
+        [
+            {
+                "segment_id": "1",
+                "segment_type": "section",
+                "content": text,
+                "tokenized_content": tokenize_for_fts(text),
+            }
+        ],
+    )
     page = DocumentSearcher(db).search_page("會議")
     preview = PreviewPanel()
     preview.set_language(language)
@@ -494,7 +504,7 @@ def test_preview_navigates_actual_occurrences_asynchronously(tmp_path, language,
         deadline = time.monotonic() + 3
         while preview.browser.property("active_match_index") != i and time.monotonic() < deadline:
             app.processEvents()
-            time.sleep(.01)
+            time.sleep(0.01)
         assert preview.browser.property("active_match_index") == i
         assert preview.match_count == 8
         assert len(preview.browser.toHtml()) < 10_000
@@ -949,10 +959,23 @@ def test_selected_row_bar_and_contrast(theme):
 def test_preview_ignores_context_after_deselection(tmp_path):
     from doc_searcher.storage.database import Database
     from doc_searcher.search.searcher import DocumentSearcher
+
     app = _app()
     db = Database(str(tmp_path / "index.db"))
-    db.save_document_index(str(tmp_path / "a.txt"), "txt", 10, 1,
-        [{"segment_id": "1", "segment_type": "section", "content": "會議", "tokenized_content": "会议"}])
+    db.save_document_index(
+        str(tmp_path / "a.txt"),
+        "txt",
+        10,
+        1,
+        [
+            {
+                "segment_id": "1",
+                "segment_type": "section",
+                "content": "會議",
+                "tokenized_content": "会议",
+            }
+        ],
+    )
     page = DocumentSearcher(db).search_page("會議")
     preview = PreviewPanel()
     preview.set_search_context(db, "會議", {}, page.revision)
@@ -971,6 +994,7 @@ def test_quality_list_and_force_reprocess_ui(tmp_path, language, theme):
     from doc_searcher.storage.database import Database
     from doc_searcher.indexing.service import IndexingService, IndexRequest
     from PySide6.QtWidgets import QListWidget
+
     app = _app()
     root = tmp_path / "docs"
     root.mkdir()
@@ -992,7 +1016,7 @@ def test_quality_list_and_force_reprocess_ui(tmp_path, language, theme):
     deadline = time.monotonic() + 3
     while listing.count() == 0 and time.monotonic() < deadline:
         app.processEvents()
-        time.sleep(.01)
+        time.sleep(0.01)
     assert listing.count() == 1
     assert tr(language, "quality_empty") in listing.item(0).text()
     assert "2" in window.index_summary_label.text() and "1" in window.index_summary_label.text()
@@ -1001,7 +1025,7 @@ def test_quality_list_and_force_reprocess_ui(tmp_path, language, theme):
     deadline = time.monotonic() + 3
     while window.db.revision() == old_revision and time.monotonic() < deadline:
         app.processEvents()
-        time.sleep(.01)
+        time.sleep(0.01)
     assert window.db.revision() > old_revision
     window.close()
     app.processEvents()
@@ -1011,28 +1035,44 @@ def test_quality_list_and_force_reprocess_ui(tmp_path, language, theme):
 @pytest.mark.parametrize("theme", [LIGHT_PALETTE, DARK_PALETTE])
 def test_document_continuation_ui(tmp_path, language, theme):
     from doc_searcher.storage.database import Database
+
     app = _app()
     config = AppConfig(tmp_path / "config.json")
     config.db_path = str(tmp_path / "index.db")
     config.language = language
     db = Database(config.db_path)
     for index in range(202):
-        db.save_document_index(str(tmp_path / f"{index:03}.txt"), "txt", 6, 1,
-            [{"segment_id": "1", "segment_type": "section", "content": "會議",
-              "tokenized_content": "会 议"}])
+        db.save_document_index(
+            str(tmp_path / f"{index:03}.txt"),
+            "txt",
+            6,
+            1,
+            [
+                {
+                    "segment_id": "1",
+                    "segment_type": "section",
+                    "content": "會議",
+                    "tokenized_content": "会 议",
+                }
+            ],
+        )
     db.close()
     window = MainWindow(config)
     window.apply_theme(theme)
     window.search_input.setText("會議")
     window.search_timer.stop()
     window._trigger_search()
+
     def wait_for(count):
         deadline = time.monotonic() + 5
-        while (len(window._loaded_results) != count or window.search_worker) and time.monotonic() < deadline:
+        while (
+            len(window._loaded_results) != count or window.search_worker
+        ) and time.monotonic() < deadline:
             app.processEvents()
-            time.sleep(.01)
+            time.sleep(0.01)
         assert len(window._loaded_results) == count
         assert window.search_worker is None
+
     wait_for(200)
     window.resize(1300, 850)
     window.show()
@@ -1052,11 +1092,23 @@ def test_negative_only_preview_finishes_without_positive_locations(tmp_path):
     from doc_searcher.storage.database import Database
     from doc_searcher.search.searcher import DocumentSearcher
     from doc_searcher.search.text_helper import tokenize_for_fts
+
     app = _app()
     db = Database(str(tmp_path / "index.db"))
-    db.save_document_index(str(tmp_path / "present.txt"), "txt", 7, 1,
-        [{"segment_id": "1", "segment_type": "section", "content": "present",
-          "tokenized_content": tokenize_for_fts("present")}])
+    db.save_document_index(
+        str(tmp_path / "present.txt"),
+        "txt",
+        7,
+        1,
+        [
+            {
+                "segment_id": "1",
+                "segment_type": "section",
+                "content": "present",
+                "tokenized_content": tokenize_for_fts("present"),
+            }
+        ],
+    )
     page = DocumentSearcher(db).search_page("NOT absent")
     preview = PreviewPanel()
     preview.set_language("en-US")
@@ -1069,3 +1121,73 @@ def test_negative_only_preview_finishes_without_positive_locations(tmp_path):
     assert not preview.btn_context.isEnabled()
     preview.shutdown()
     db.close()
+
+
+def test_expanded_passage_preview_has_no_literal_navigation(tmp_path):
+    app = _app()
+    config = AppConfig(tmp_path / "config.json")
+    config.db_path = str(tmp_path / "index.db")
+    window = MainWindow(config)
+    window.retrieval_mode.setCurrentIndex(1)
+    assert window._current_search_filters()["search_mode"] == "expanded"
+    item = _result("semantic.txt", 0)
+    item.passages = [
+        dict(
+            text="研討會 domain passage",
+            segment_id="1",
+            segment_type="section",
+            matched_by="synonym",
+        )
+    ]
+    item.matched_by = ["synonym"]
+    window.preview.display_result(item)
+    assert "研討會 domain passage" in window.preview.browser.toPlainText()
+    assert not window.preview.btn_next_match.isEnabled()
+    window.auto_updates.setChecked(False)
+    assert window.folder_watcher.status()["state"] == "paused"
+    window.close()
+    app.processEvents()
+
+
+def test_close_releases_paused_manual_writer_before_joining_watcher():
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    source = """
+import tempfile, time
+from pathlib import Path
+from PySide6.QtWidgets import QApplication
+from doc_searcher.config import AppConfig
+from doc_searcher.desktop.main_window import MainWindow
+from doc_searcher.desktop.worker import IndexWorker
+from doc_searcher.indexing.service import _write_lock
+app = QApplication([])
+with tempfile.TemporaryDirectory() as directory:
+    root = Path(directory)
+    docs = root / 'docs'
+    docs.mkdir()
+    (docs / 'file.txt').write_text('keyword')
+    config = AppConfig(root / 'config.json')
+    config.db_path = str(root / 'index.db')
+    window = MainWindow(config)
+    config.directories = [str(docs)]
+    window.index_worker = IndexWorker(window.db, config.directories)
+    window.index_worker.pause()
+    window.index_worker.start()
+    deadline = time.monotonic() + 4
+    while not _write_lock(window.db.db_path).locked() and time.monotonic() < deadline:
+        time.sleep(.01)
+    assert _write_lock(window.db.db_path).locked()
+    time.sleep(.5)
+    window.close()
+    print('closed', flush=True)
+"""
+    environment = dict(
+        os.environ, QT_QPA_PLATFORM="offscreen", PYTHONPATH=str(Path(__file__).parents[1] / "src")
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", source], env=environment, capture_output=True, text=True, timeout=10
+    )
+    assert result.returncode == 0, result.stderr
+    assert "closed" in result.stdout

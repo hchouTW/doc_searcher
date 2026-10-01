@@ -53,15 +53,26 @@ class PreviewPanel(QWidget):
         self.theme: ThemeColors = get_active_theme()
         self._init_ui()
         from PySide6.QtWidgets import QPushButton
+
         self.btn_context = QPushButton(tr(self.language, "more_context"))
         self.btn_context.setEnabled(False)
         self.layout().addWidget(self.btn_context)
-        self.btn_context.clicked.connect(lambda: self._request_context(full_segment=True,
-            text_offset=self._active_context.get("next_offset") or 0 if self._active_context else 0))
+        self.btn_context.clicked.connect(
+            lambda: self._request_context(
+                full_segment=True,
+                text_offset=self._active_context.get("next_offset") or 0
+                if self._active_context
+                else 0,
+            )
+        )
         self.btn_reprocess = QPushButton(tr(self.language, "reprocess_selected"))
         self.layout().addWidget(self.btn_reprocess)
         self.btn_reprocess.setEnabled(False)
-        self.btn_reprocess.clicked.connect(lambda: self.reprocess_requested.emit(self.current_item.path) if self.current_item else None)
+        self.btn_reprocess.clicked.connect(
+            lambda: (
+                self.reprocess_requested.emit(self.current_item.path) if self.current_item else None
+            )
+        )
         self.apply_theme(self.theme)
 
     def _init_ui(self):
@@ -289,6 +300,7 @@ class PreviewPanel(QWidget):
 
     def _request_context(self, *, full_segment=False, text_offset=0):
         from doc_searcher.desktop.worker import ContextWorker
+
         if not self._search_context or not self.current_item or self.current_match < 0:
             return
         self._context_generation += 1
@@ -296,24 +308,37 @@ class PreviewPanel(QWidget):
         for worker in self._context_workers:
             worker.cancel()
         db, query, options, revision = self._search_context
-        worker = ContextWorker(db, query, self.current_item.doc_id, revision,
-            self.current_match, options, full_segment=full_segment, text_offset=text_offset)
+        worker = ContextWorker(
+            db,
+            query,
+            self.current_item.doc_id,
+            revision,
+            self.current_match,
+            options,
+            full_segment=full_segment,
+            text_offset=text_offset,
+        )
         self._context_workers.append(worker)
+
         def ready(context):
             if generation != self._context_generation or not self.current_item:
                 return
             self._active_context = context
             self._render_preview()
+
         def failed(message):
             if generation == self._context_generation:
                 self.notice_label.setText(tr(self.language, "locations_stale") + " " + message)
                 self.notice_label.show()
+
         worker.ready.connect(ready)
         worker.failed.connect(failed)
+
         def finished():
             if worker in self._context_workers:
                 self._context_workers.remove(worker)
             worker.deleteLater()
+
         worker.finished.connect(finished)
         worker.start()
 
@@ -372,15 +397,32 @@ class PreviewPanel(QWidget):
             context = self._active_context
             if context is not None:
                 import html
+
                 location = str(context.get("source") or context["segment_id"])
                 font_px = 13 + self.zoom_steps * 2
-                self.browser.setHtml(f'<body style="font-size:{font_px}px; color:{self.theme.text_primary};">'
-                    f'<b>{html.escape(location)}</b><p>{context["html"]}</p></body>')
+                self.browser.setHtml(
+                    f'<body style="font-size:{font_px}px; color:{self.theme.text_primary};">'
+                    f"<b>{html.escape(location)}</b><p>{context['html']}</p></body>"
+                )
                 self.browser.setProperty("active_match_index", self.current_match)
                 self.browser.setProperty("preview_font_px", font_px)
             else:
                 self.browser.setHtml(tr(self.language, "loading_context"))
                 self.browser.setProperty("active_match_index", -1)
+            return
+        if self.current_item.passages and not self.current_item.total_matches:
+            import html
+
+            label = tr(self.language, "semantic_passage")
+            blocks = [f"<b>{html.escape(label)}</b>"]
+            for passage in self.current_item.passages:
+                location = (
+                    f"{passage['segment_type']} {passage['segment_id']} ({passage['matched_by']})"
+                )
+                blocks.append(
+                    f"<p><b>{html.escape(location)}</b></p><p>{html.escape(passage['text'])}</p>"
+                )
+            self.browser.setHtml("".join(blocks))
             return
         # Build rich HTML snippets using theme colors
         item = self.current_item

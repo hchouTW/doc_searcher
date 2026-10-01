@@ -116,27 +116,47 @@ def _v3_stemming(conn: sqlite3.Connection) -> None:
 def _v4_cjk(conn: sqlite3.Connection) -> None:
     """Build independent Chinese candidates and a monotonic continuation revision."""
     from doc_searcher.search.cjk_index import cjk_tokens
-    conn.execute("CREATE TABLE IF NOT EXISTS index_state (id INTEGER PRIMARY KEY, revision INTEGER NOT NULL)")
+
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS index_state (id INTEGER PRIMARY KEY, revision INTEGER NOT NULL)"
+    )
     conn.execute("INSERT OR IGNORE INTO index_state VALUES (1, 0)")
-    conn.execute("CREATE VIRTUAL TABLE IF NOT EXISTS doc_cjk_fts USING fts5(tokens, tokenize='unicode61')")
+    conn.execute(
+        "CREATE VIRTUAL TABLE IF NOT EXISTS doc_cjk_fts USING fts5(tokens, tokenize='unicode61')"
+    )
     conn.execute("DELETE FROM doc_cjk_fts")
     rows = conn.execute("SELECT id, content FROM doc_segments ORDER BY id")
     while batch := rows.fetchmany(1000):
-        conn.executemany("INSERT INTO doc_cjk_fts(rowid, tokens) VALUES (?, ?)",
-                         [(r[0], cjk_tokens(r[1])) for r in batch])
+        conn.executemany(
+            "INSERT INTO doc_cjk_fts(rowid, tokens) VALUES (?, ?)",
+            [(r[0], cjk_tokens(r[1])) for r in batch],
+        )
 
 
 def _v5_quality(conn: sqlite3.Connection) -> None:
     """Older quality is unknown; source spans are populated only by explicit reprocessing."""
     columns = {r[1] for r in conn.execute("PRAGMA table_info(documents)")}
-    for name, definition in (("parse_status", "TEXT NOT NULL DEFAULT 'unknown'"),
-                              ("warnings", "TEXT NOT NULL DEFAULT '[]'"),
-                              ("omitted_locations", "TEXT NOT NULL DEFAULT '[]'"),
-                              ("parser_version", "TEXT NOT NULL DEFAULT ''")):
+    for name, definition in (
+        ("parse_status", "TEXT NOT NULL DEFAULT 'unknown'"),
+        ("warnings", "TEXT NOT NULL DEFAULT '[]'"),
+        ("omitted_locations", "TEXT NOT NULL DEFAULT '[]'"),
+        ("parser_version", "TEXT NOT NULL DEFAULT ''"),
+    ):
         if name not in columns:
             conn.execute(f"ALTER TABLE documents ADD COLUMN {name} {definition}")
     if "sources" not in {r[1] for r in conn.execute("PRAGMA table_info(doc_segments)")}:
         conn.execute("ALTER TABLE doc_segments ADD COLUMN sources TEXT NOT NULL DEFAULT '[]'")
+
+
+def _v6_semantic(conn):
+    conn.execute("""CREATE TABLE IF NOT EXISTS semantic_state (
+        singleton INTEGER PRIMARY KEY CHECK(singleton=1), model_id TEXT NOT NULL,
+        dimensions INTEGER NOT NULL, revision INTEGER NOT NULL)""")
+    conn.execute("""CREATE TABLE IF NOT EXISTS semantic_chunks (
+        id INTEGER PRIMARY KEY, segment_row_id INTEGER NOT NULL
+            REFERENCES doc_segments(id) ON DELETE CASCADE,
+        start INTEGER NOT NULL, end INTEGER NOT NULL, vector BLOB NOT NULL)""")
+    conn.execute("CREATE INDEX IF NOT EXISTS semantic_segment ON semantic_chunks(segment_row_id)")
 
 
 Migration = Tuple[int, str, Callable[[sqlite3.Connection], None]]
@@ -147,6 +167,7 @@ MIGRATIONS: List[Migration] = [
     (3, "English stemming (porter tokenizer)", _v3_stemming),
     (4, "Chinese literal candidate index and continuation revision", _v4_cjk),
     (5, "Persist extraction quality and source spans", _v5_quality),
+    (6, "Local dense passage vectors and model revision", _v6_semantic),
 ]
 
 

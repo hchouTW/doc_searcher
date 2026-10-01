@@ -198,3 +198,15 @@ def test_quality_summary_and_selected_reprocess(make_service, tmp_path):
     assert service.index_status()["reindex"]["result"]["indexed"] == 1
     with pytest.raises(ValueError):
         service.start_reprocess([str(tmp_path / "outside.txt")])
+
+
+def test_expanded_service_returns_synonym_provenance(make_service, tmp_path):
+    folder = tmp_path / "expanded"
+    folder.mkdir()
+    (folder / "seminar.txt").write_text("研討會")
+    service = make_service([folder])
+    reindex(service)
+    found = service.search("會議", search_mode="expanded", synonyms={"會議": ["研討會"]})
+    assert found["results"][0]["matched_by"] == ["synonym"]
+    assert found["results"][0]["match_count"] == 0
+    assert found["results"][0]["passages"][0]["text"] == "研討會"

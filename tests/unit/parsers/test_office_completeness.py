@@ -1,4 +1,5 @@
 """Synthetic Office source locations and partial PDF extraction regressions."""
+
 import zipfile
 from unittest.mock import MagicMock
 
@@ -10,6 +11,7 @@ from doc_searcher.parsers.pdf_parser import PdfParser
 def test_docx_order_shared_parts_and_text_boxes(tmp_path):
     from docx import Document
     from docx.oxml import OxmlElement
+
     doc = Document()
     doc.add_paragraph("before")
     table = doc.add_table(rows=1, cols=2)
@@ -36,13 +38,20 @@ def test_docx_order_shared_parts_and_text_boxes(tmp_path):
     for term in ("header-only", "footer-only", "text-box-only"):
         assert text.count(term) == 1
     sources = [span["source"] for segment in extracted.segments for span in segment.sources]
-    assert {s["kind"] for s in sources} >= {"header", "footer", "text_box", "paragraph", "table_cell"}
+    assert {s["kind"] for s in sources} >= {
+        "header",
+        "footer",
+        "text_box",
+        "paragraph",
+        "table_cell",
+    }
     assert all("part" in s for s in sources)
 
 
 def test_xlsx_formulas_caches_cells_and_hidden_sheets(tmp_path):
     import openpyxl
     from lxml import etree
+
     workbook = openpyxl.Workbook()
     sheet = workbook.active
     sheet.title = "Sheet1"
@@ -69,7 +78,10 @@ def test_xlsx_formulas_caches_cells_and_hidden_sheets(tmp_path):
         for name, value in contents.items():
             archive.writestr(name, value)
     result = XlsxParser().parse(str(path))
-    assert all(x in result.full_text for x in ("cache-only", "cached-result", "uncached-only", "hidden-only"))
+    assert all(
+        x in result.full_text
+        for x in ("cache-only", "cached-result", "uncached-only", "hidden-only")
+    )
     assert result.full_text.count("會議") == 8
     assert result.full_text.count("merged-only") == 1
     assert result.warnings and any("C2" in str(x) for x in result.warnings)
@@ -78,16 +90,19 @@ def test_xlsx_formulas_caches_cells_and_hidden_sheets(tmp_path):
     assert {x["source"]["location"] for x in spans} >= {"Sheet1!B1", "Sheet1!B8", "Sheet1!C2"}
     for segment in result.segments:
         for span in segment.sources:
-            assert segment.text[span["start"]:span["end"]]
+            assert segment.text[span["start"] : span["end"]]
 
 
 def test_pdf_partial_page_failure_is_recorded(tmp_path, monkeypatch):
     import pymupdf
+
     doc = MagicMock()
     doc.needs_pass = False
     doc.__len__.return_value = 3
     page = MagicMock()
     page.get_text.return_value = "readable-page"
+    page.get_image_info.return_value = []
+    page.get_drawings.return_value = []
     doc.load_page.side_effect = [page, RuntimeError("broken page"), page]
     monkeypatch.setattr(pymupdf, "open", lambda _: doc)
     result = PdfParser().parse(str(tmp_path / "partial.pdf"))
@@ -101,6 +116,7 @@ def test_pdf_partial_page_failure_is_recorded(tmp_path, monkeypatch):
 def test_formula_cached_text_is_not_counted_twice(tmp_path):
     import openpyxl
     from lxml import etree
+
     wb = openpyxl.Workbook()
     wb.active["A1"] = '="會議"'
     path = tmp_path / "same-source.xlsx"
@@ -124,22 +140,27 @@ def test_formula_cached_text_is_not_counted_twice(tmp_path):
 def test_docx_alternate_textbox_has_one_effective_representation(tmp_path):
     from docx import Document
     from lxml import etree
+
     doc = Document()
     paragraph = doc.add_paragraph("body")
-    paragraph._p.append(etree.fromstring('''
+    paragraph._p.append(
+        etree.fromstring("""
       <mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
        xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
        xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape">
         <mc:Choice Requires="wps"><w:txbxContent><w:p><w:r><w:t>UniqueTextBox</w:t></w:r></w:p></w:txbxContent></mc:Choice>
         <mc:Fallback><w:txbxContent><w:p><w:r><w:t>UniqueTextBox</w:t></w:r></w:p></w:txbxContent></mc:Fallback>
-      </mc:AlternateContent>'''))
+      </mc:AlternateContent>""")
+    )
     # Unknown required namespace must select the fallback, not silently extract both.
-    paragraph._p.append(etree.fromstring('''
+    paragraph._p.append(
+        etree.fromstring("""
       <mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
        xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:unknown="urn:unsupported">
         <mc:Choice Requires="unknown"><w:p><w:r><w:t>unsupported-choice</w:t></w:r></w:p></mc:Choice>
         <mc:Fallback><w:p><w:r><w:t>fallback-text</w:t></w:r></w:p></mc:Fallback>
-      </mc:AlternateContent>'''))
+      </mc:AlternateContent>""")
+    )
     path = tmp_path / "alternate.docx"
     doc.save(path)
     result = DocxParser().parse(str(path))
@@ -151,6 +172,7 @@ def test_docx_alternate_textbox_has_one_effective_representation(tmp_path):
 def test_xlsx_array_formula_source_and_range(tmp_path):
     import openpyxl
     from openpyxl.worksheet.formula import ArrayFormula
+
     wb = openpyxl.Workbook()
     wb.active["A1"] = ArrayFormula(ref="A1:A3", text='=IF(B1:B3="NeedleFormula",1,0)')
     path = tmp_path / "array.xlsx"
@@ -167,6 +189,7 @@ def test_xlsx_array_formula_source_and_range(tmp_path):
 def test_xlsx_nontext_formula_reports_omission(tmp_path):
     import openpyxl
     from openpyxl.worksheet.formula import DataTableFormula
+
     wb = openpyxl.Workbook()
     wb.active["A1"] = DataTableFormula(ref="A1:A3", r1="B1")
     path = tmp_path / "data-table.xlsx"

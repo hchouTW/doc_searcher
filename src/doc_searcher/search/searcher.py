@@ -36,7 +36,13 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Iterable, List, Optional
 import jieba
 
-from doc_searcher.search.matches import (iter_locations, occurrence_snippets, MatchLocation, MatchPage, render_context)
+from doc_searcher.search.matches import (
+    iter_locations,
+    occurrence_snippets,
+    MatchLocation,
+    MatchPage,
+    render_context,
+)
 from doc_searcher.search.cjk_index import candidate_expression
 from doc_searcher.search.query import parse_query, QuerySyntaxError
 from doc_searcher.storage.database import Database
@@ -83,6 +89,8 @@ class SearchResultItem:
     count_complete: bool = True
     parse_status: str = "unknown"
     warnings: List[dict] = field(default_factory=list)
+    matched_by: List[str] = field(default_factory=lambda: ["literal"])
+    passages: List[dict] = field(default_factory=list)
 
     @property
     def segment_count(self):
@@ -101,6 +109,9 @@ class SearchPage:
     total_documents: Optional[int]
     complete: bool
     revision: int
+    retrieval_mode: str = "literal"
+    semantic_ready: Optional[bool] = None
+    semantic_candidate_limit: Optional[int] = None
 
 
 class SearchQueryError(ValueError):
@@ -142,6 +153,11 @@ class DocumentSearcher:
 
     def search(self, *args, **options):
         """Search in one consistent snapshot, including during background index updates."""
+        mode = options.pop("search_mode", "literal")
+        if mode != "literal":
+            return self.search_page(*args, search_mode=mode, **options).items
+        options.pop("synonyms", None)
+        options.pop("synonym_scopes", None)
         conn = self.db.get_connection()
         try:
             if conn.in_transaction:
@@ -157,7 +173,11 @@ class DocumentSearcher:
 
     def _attach_quality(self, items):
         for item in items:
-            row = self.db.get_connection().execute("SELECT parse_status, warnings FROM documents WHERE id=?", (item.doc_id,)).fetchone()
+            row = (
+                self.db.get_connection()
+                .execute("SELECT parse_status, warnings FROM documents WHERE id=?", (item.doc_id,))
+                .fetchone()
+            )
             item.parse_status = row["parse_status"]
             item.warnings = json.loads(row["warnings"])
         return items
@@ -211,7 +231,9 @@ class DocumentSearcher:
                 limit,
                 match_case,
                 whole_word,
-                cancel_check, page_after, page_meta,
+                cancel_check,
+                page_after,
+                page_meta,
             )
         negative_only = re.fullmatch(r'NOT\s+(?:"([^"]+)"|(\S+))', clean_query, re.IGNORECASE)
         if negative_only:
@@ -241,63 +263,104 @@ class DocumentSearcher:
             hits: set[int] = set()
             grams = candidate_expression(term)
             if grams:
-                hits.update(r[0] for r in conn.execute(
-                    "SELECT rowid FROM doc_cjk_fts WHERE doc_cjk_fts MATCH ?", (grams,)))
+                hits.update(
+                    r[0]
+                    for r in conn.execute(
+                        "SELECT rowid FROM doc_cjk_fts WHERE doc_cjk_fts MATCH ?", (grams,)
+                    )
+                )
             expression = self._build_fts5_query('"' + term + '"')
             if expression:
                 try:
-                    for row in conn.execute("SELECT s.id, bm25(doc_fts) AS rank FROM doc_fts f "
+                    for row in conn.execute(
+                        "SELECT s.id, bm25(doc_fts) AS rank FROM doc_fts f "
                         "JOIN doc_segments s ON s.doc_id = CAST(f.doc_id AS INTEGER) "
                         "AND s.segment_id = f.segment_id AND s.segment_type = f.segment_type "
-                        "WHERE doc_fts MATCH ?", (expression,)):
+                        "WHERE doc_fts MATCH ?",
+                        (expression,),
+                    ):
                         hits.add(row[0])
                         ranks[row[0]] = min(ranks.get(row[0], 0), row[1])
                 except sqlite3.OperationalError as exc:
                     if not _is_fts_query_error(exc):
                         raise
-                    logger.info("FTS query %r rejected (%s); using stored-text scan", expression, exc)
+                    logger.info(
+                        "FTS query %r rejected (%s); using stored-text scan", expression, exc
+                    )
                     hits.update(r[0] for r in conn.execute("SELECT id FROM doc_segments"))
             elif not grams:
                 hits.update(r[0] for r in conn.execute("SELECT id FROM doc_segments"))
+            if len(term) <= 2 and not grams:
+                hits.update(row[0] for row in conn.execute("SELECT id FROM doc_segments"))
             # Only verified exclusions may be subtracted: grams are a candidate superset.
             verified = set()
             for sid in hits:
-                content = conn.execute("SELECT content FROM doc_segments WHERE id = ?", (sid,)).fetchone()[0]
+                content = conn.execute(
+                    "SELECT content FROM doc_segments WHERE id = ?", (sid,)
+                ).fetchone()[0]
                 if self._literal_matches(content, term, match_case, whole_word):
                     verified.add(sid)
             candidates[term] = verified
         selected = parsed.root.evaluate(candidates.__getitem__)
+
         def rows():
             for sid in sorted(selected):
                 if cancel_check and cancel_check():
                     raise SearchQueryError("搜尋已取消。", "cancelled")
-                row = conn.execute(f"SELECT s.id AS segment_row_id, s.doc_id, s.segment_id, "
+                row = conn.execute(
+                    f"SELECT s.id AS segment_row_id, s.doc_id, s.segment_id, "
                     f"s.segment_type, s.content, 0.0 AS rank, d.path, d.filename, d.file_type, "
                     f"d.file_size, d.mtime, d.ctime FROM doc_segments s JOIN documents d ON d.id=s.doc_id "
-                    f"WHERE s.id = ? {filter_clause}", [sid, *filter_params]).fetchone()
+                    f"WHERE s.id = ? {filter_clause}",
+                    [sid, *filter_params],
+                ).fetchone()
                 if row:
                     data = dict(row)
                     data["rank"] = ranks.get(sid, 0.0)
                     yield data
+
         keywords = [t for t in parsed.root.terms() if t]
-        return self._aggregate_rows(rows(), keywords, limit, clean_query, match_case, whole_word,
-                                    cancel_check=cancel_check, page_after=page_after, page_meta=page_meta)
+        return self._aggregate_rows(
+            rows(),
+            keywords,
+            limit,
+            clean_query,
+            match_case,
+            whole_word,
+            cancel_check=cancel_check,
+            page_after=page_after,
+            page_meta=page_meta,
+        )
 
     @staticmethod
     def _parse(query):
         try:
             return parse_query(query)
         except QuerySyntaxError as exc:
-            messages = {"unpaired_phrase": "精確片語的雙引號未成對。",
-                        "operator_position": "AND、OR、NOT 前後都必須有搜尋詞。",
-                        "repeated_operator": "AND、OR、NOT 不可連續使用。"}
+            messages = {
+                "unpaired_phrase": "精確片語的雙引號未成對。",
+                "operator_position": "AND、OR、NOT 前後都必須有搜尋詞。",
+                "repeated_operator": "AND、OR、NOT 不可連續使用。",
+            }
             raise SearchQueryError(messages[exc.code], exc.code) from exc
 
     def search_page(self, query_str, *, cursor=None, limit=200, **options):
+        mode = options.pop("search_mode", "literal")
+        if mode != "literal":
+            from .expanded import search_page
+
+            return search_page(self, query_str, mode=mode, cursor=cursor, limit=limit, **options)
+        options.pop("synonyms", None)
+        options.pop("synonym_scopes", None)
         if limit < 1:
             raise ValueError("limit must be positive")
-        fingerprint = hashlib.sha256(json.dumps([query_str, {k: v for k, v in options.items() if k != "cancel_check"}], sort_keys=True,
-            default=str).encode()).hexdigest()
+        fingerprint = hashlib.sha256(
+            json.dumps(
+                [query_str, {k: v for k, v in options.items() if k != "cancel_check"}],
+                sort_keys=True,
+                default=str,
+            ).encode()
+        ).hexdigest()
         conn = self.db.get_connection()
         # All reads in a page share a SQLite snapshot while other threads may update the index.
         with conn:
@@ -311,12 +374,16 @@ class DocumentSearcher:
                         raise ValueError()
                     after = tuple(token[2])
                 except (ValueError, TypeError, KeyError, IndexError) as exc:
-                    raise SearchQueryError("索引或搜尋條件已變更，請重新搜尋。", "stale_cursor") from exc
+                    raise SearchQueryError(
+                        "索引或搜尋條件已變更，請重新搜尋。", "stale_cursor"
+                    ) from exc
             meta = {}
-            special = not options.get("regex") and (self._extract_filename_query(query_str.strip()) is not None
-                or re.fullmatch(r'NOT\s+(?:"[^\"]+"|\S+)', query_str.strip(), re.IGNORECASE))
+            special = not options.get("regex") and (
+                self._extract_filename_query(query_str.strip()) is not None
+                or re.fullmatch(r'NOT\s+(?:"[^\"]+"|\S+)', query_str.strip(), re.IGNORECASE)
+            )
             if special:
-                items = self.search(query_str, limit=2**63-1, **options)
+                items = self.search(query_str, limit=2**63 - 1, **options)
                 items.sort(key=lambda x: (x.rank_score, x.doc_id))
                 total = len(items)
                 if after is not None:
@@ -324,13 +391,16 @@ class DocumentSearcher:
                 more = len(items) > limit
                 items = items[:limit]
             else:
-                items = self.search(query_str, limit=limit, page_after=after, page_meta=meta, **options)
+                items = self.search(
+                    query_str, limit=limit, page_after=after, page_meta=meta, **options
+                )
                 total, more = meta.get("total", 0), meta.get("more", False)
             next_cursor = None
             if more:
                 last = items[-1]
-                next_cursor = base64.urlsafe_b64encode(json.dumps(
-                    [revision, fingerprint, [last.rank_score, last.doc_id]]).encode()).decode()
+                next_cursor = base64.urlsafe_b64encode(
+                    json.dumps([revision, fingerprint, [last.rank_score, last.doc_id]]).encode()
+                ).decode()
             return SearchPage(items, next_cursor, more, total, True, revision)
 
     def match_locations(self, query_str, doc_id, *, offset=0, limit=100, revision=None, **options):
@@ -341,8 +411,9 @@ class DocumentSearcher:
         if not conn.in_transaction:
             with conn:
                 conn.execute("BEGIN")
-                return self.match_locations(query_str, doc_id, offset=offset, limit=limit,
-                                            revision=revision, **options)
+                return self.match_locations(
+                    query_str, doc_id, offset=offset, limit=limit, revision=revision, **options
+                )
         current = self.db.revision()
         if revision is not None and current != revision:
             raise SearchQueryError("索引已變更，請重新搜尋。", "stale_cursor")
@@ -352,16 +423,23 @@ class DocumentSearcher:
         match_case, whole_word = options.get("match_case", False), options.get("whole_word", False)
         regex_pattern, deadline = None, None
         filename = None if options.get("regex") else self._extract_filename_query(query_str)
-        negative = not options.get("regex") and re.fullmatch(r'NOT\s+(?:"[^\"]+"|\S+)', query_str, re.I)
+        negative = not options.get("regex") and re.fullmatch(
+            r'NOT\s+(?:"[^\"]+"|\S+)', query_str, re.I
+        )
         if options.get("regex"):
             try:
                 regex_pattern = compile_user_regex(query_str, match_case, whole_word)
             except RegexError as exc:
                 raise SearchQueryError(str(exc), "regex_syntax") from exc
             deadline = Deadline()
-        parsed = None if regex_pattern is not None or filename or negative else self._parse(query_str)
-        rows = [dict(id=0, segment_id="", segment_type="檔名", content=doc["filename"])] if filename else conn.execute(
-            "SELECT * FROM doc_segments WHERE doc_id=? ORDER BY id", (doc_id,))
+        parsed = (
+            None if regex_pattern is not None or filename or negative else self._parse(query_str)
+        )
+        rows = (
+            [dict(id=0, segment_id="", segment_type="檔名", content=doc["filename"])]
+            if filename
+            else conn.execute("SELECT * FROM doc_segments WHERE doc_id=? ORDER BY id", (doc_id,))
+        )
         locations, total = [], 0
         try:
             for row in rows:
@@ -370,11 +448,27 @@ class DocumentSearcher:
                 text = row["content"]
                 source_spans = None
                 source_starts = None
-                terms = [filename] if filename else [] if parsed is None else parsed.root.positives(
-                    lambda term, content=text: self._literal_matches(content, term, match_case, whole_word))
-                for hit in iter_locations(text, terms, regex_pattern=regex_pattern, deadline=deadline,
-                        cancel_check=options.get("cancel_check"), match_case=match_case,
-                        whole_word=whole_word, stemming=not bool(filename)):
+                terms = (
+                    [filename]
+                    if filename
+                    else []
+                    if parsed is None
+                    else parsed.root.positives(
+                        lambda term, content=text: self._literal_matches(
+                            content, term, match_case, whole_word
+                        )
+                    )
+                )
+                for hit in iter_locations(
+                    text,
+                    terms,
+                    regex_pattern=regex_pattern,
+                    deadline=deadline,
+                    cancel_check=options.get("cancel_check"),
+                    match_case=match_case,
+                    whole_word=whole_word,
+                    stemming=not bool(filename),
+                ):
                     if offset <= total < offset + limit:
                         source = None
                         if "sources" in row.keys():
@@ -384,23 +478,47 @@ class DocumentSearcher:
                             index = max(0, bisect.bisect_right(source_starts, hit.start) - 1)
                             found_sources = []
                             for span in itertools.islice(source_spans, index, None):
-                                if span["start"] > hit.end or (span["start"] >= hit.end and hit.start != hit.end):
+                                if span["start"] > hit.end or (
+                                    span["start"] >= hit.end and hit.start != hit.end
+                                ):
                                     break
-                                if span["start"] <= hit.start < span["end"] or (span["start"] < hit.end and span["end"] > hit.start):
+                                if span["start"] <= hit.start < span["end"] or (
+                                    span["start"] < hit.end and span["end"] > hit.start
+                                ):
                                     found_sources.append(span["source"])
                             if found_sources:
                                 source = found_sources[0]
                                 if len(found_sources) > 1:
-                                    source = dict(kind="range", locations=found_sources,
-                                        location=" → ".join(x.get("location", str(x)) for x in found_sources))
-                        locations.append(MatchLocation(hit.start, hit.end, hit.matched_terms,
-                            doc_id, row["id"], row["segment_id"], row["segment_type"], source, current))
+                                    source = dict(
+                                        kind="range",
+                                        locations=found_sources,
+                                        location=" → ".join(
+                                            x.get("location", str(x)) for x in found_sources
+                                        ),
+                                    )
+                        locations.append(
+                            MatchLocation(
+                                hit.start,
+                                hit.end,
+                                hit.matched_terms,
+                                doc_id,
+                                row["id"],
+                                row["segment_id"],
+                                row["segment_type"],
+                                source,
+                                current,
+                            )
+                        )
                     total += 1
         except TimeoutError as exc:
             raise SearchQueryError("正規表示式超過時間限制。", "regex_timeout") from exc
-        return MatchPage(locations, offset + limit if offset + limit < total else None, total, True, current)
+        return MatchPage(
+            locations, offset + limit if offset + limit < total else None, total, True, current
+        )
 
-    def match_context(self, location, *, context_chars=120, full_segment=False, text_offset=0, text_limit=2048):
+    def match_context(
+        self, location, *, context_chars=120, full_segment=False, text_offset=0, text_limit=2048
+    ):
         """Return bounded original context, rejecting deleted or replaced segment identities."""
         if isinstance(location, dict):
             location = MatchLocation(**location)
@@ -410,27 +528,52 @@ class DocumentSearcher:
         if not conn.in_transaction:
             with conn:
                 conn.execute("BEGIN")
-                return self.match_context(location, context_chars=context_chars, full_segment=full_segment,
-                                          text_offset=text_offset, text_limit=text_limit)
+                return self.match_context(
+                    location,
+                    context_chars=context_chars,
+                    full_segment=full_segment,
+                    text_offset=text_offset,
+                    text_limit=text_limit,
+                )
         if location.revision != self.db.revision():
             raise SearchQueryError("索引已變更，請重新搜尋。", "stale_cursor")
         if location.segment_row_id:
-            row = conn.execute("SELECT content FROM doc_segments WHERE id=? AND doc_id=?",
-                               (location.segment_row_id, location.doc_id)).fetchone()
+            row = conn.execute(
+                "SELECT content FROM doc_segments WHERE id=? AND doc_id=?",
+                (location.segment_row_id, location.doc_id),
+            ).fetchone()
         else:
-            row = conn.execute("SELECT filename AS content FROM documents WHERE id=?", (location.doc_id,)).fetchone()
+            row = conn.execute(
+                "SELECT filename AS content FROM documents WHERE id=?", (location.doc_id,)
+            ).fetchone()
         if row is None:
             raise SearchQueryError("文件已移除，請重新搜尋。", "stale_cursor")
         content = row["content"]
         if not 0 <= location.start <= location.end <= len(content):
             raise ValueError("Invalid location offsets")
         start = text_offset if full_segment else max(0, location.start - context_chars)
-        end = min(len(content), start + text_limit) if full_segment else min(len(content), location.start + 300 + context_chars, location.end + context_chars)
-        return dict(text=content[start:end], start=start, end=end, active_start=location.start,
-                    active_end=location.end, html=render_context(content, [location], start=start, end=end,
-                    active=(location.start, location.end)), segment_id=location.segment_id,
-                    segment_type=location.segment_type, source=location.source, revision=location.revision,
-                    next_offset=end if end < len(content) else None)
+        end = (
+            min(len(content), start + text_limit)
+            if full_segment
+            else min(
+                len(content), location.start + 300 + context_chars, location.end + context_chars
+            )
+        )
+        return dict(
+            text=content[start:end],
+            start=start,
+            end=end,
+            active_start=location.start,
+            active_end=location.end,
+            html=render_context(
+                content, [location], start=start, end=end, active=(location.start, location.end)
+            ),
+            segment_id=location.segment_id,
+            segment_type=location.segment_type,
+            source=location.source,
+            revision=location.revision,
+            next_offset=end if end < len(content) else None,
+        )
 
     def _aggregate_rows(
         self,
@@ -443,7 +586,9 @@ class DocumentSearcher:
         regex_pattern: Optional[Any] = None,
         deadline: Optional[Deadline] = None,
         verify_literal: bool = False,
-        cancel_check=None, page_after=None, page_meta=None,
+        cancel_check=None,
+        page_after=None,
+        page_meta=None,
     ) -> List[SearchResultItem]:
         """Aggregate matching segment rows into ranked document results.
 
@@ -459,42 +604,83 @@ class DocumentSearcher:
             if regex_pattern is not None:
                 if regex_pattern.search(content, **Deadline.timeout_kwargs(deadline)) is None:
                     continue
-            elif parsed is not None and verify_literal and not parsed.root.evaluate(lambda term, text=content: self._literal_matches(
-                    text, term, match_case, whole_word)):
+            elif (
+                parsed is not None
+                and verify_literal
+                and not parsed.root.evaluate(
+                    lambda term, text=content: self._literal_matches(
+                        text, term, match_case, whole_word
+                    )
+                )
+            ):
                 continue
             doc_id = int(row["doc_id"])
             stored = dict(row)
             if stored.get("segment_row_id"):
-                stored.pop("content", None)  # retain identities, not every candidate's original text
+                stored.pop(
+                    "content", None
+                )  # retain identities, not every candidate's original text
             groups.setdefault(doc_id, []).append(stored)
-        ranking = sorted(groups, key=lambda doc_id: (min(float(r["rank"]) for r in groups[doc_id]), doc_id))
+        ranking = sorted(
+            groups, key=lambda doc_id: (min(float(r["rank"]) for r in groups[doc_id]), doc_id)
+        )
         if page_meta is not None:
             page_meta["total"] = len(ranking)
         if page_after is not None:
-            ranking = [doc_id for doc_id in ranking if
-                       (min(float(r["rank"]) for r in groups[doc_id]), doc_id) > page_after]
+            ranking = [
+                doc_id
+                for doc_id in ranking
+                if (min(float(r["rank"]) for r in groups[doc_id]), doc_id) > page_after
+            ]
         if page_meta is not None:
             page_meta["more"] = len(ranking) > limit
         results = []
         for doc_id in ranking[:limit]:
             first = groups[doc_id][0]
-            item = SearchResultItem(doc_id, first["path"], first["filename"], first["file_type"],
-                first["file_size"], first["mtime"], min(float(r["rank"]) for r in groups[doc_id]),
-                0, ctime=first["ctime"])
+            item = SearchResultItem(
+                doc_id,
+                first["path"],
+                first["filename"],
+                first["file_type"],
+                first["file_size"],
+                first["mtime"],
+                min(float(r["rank"]) for r in groups[doc_id]),
+                0,
+                ctime=first["ctime"],
+            )
             for row in groups[doc_id]:
                 content = row.get("content")
                 if content is None:
-                    content = self.db.get_connection().execute("SELECT content FROM doc_segments WHERE id=?",
-                        (row["segment_row_id"],)).fetchone()[0]
-                terms = keywords if parsed is None else parsed.root.positives(
-                    lambda term, text=content: self._literal_matches(text, term, match_case, whole_word))
-                options = dict(regex_pattern=regex_pattern, deadline=deadline, cancel_check=cancel_check,
-                               match_case=match_case, whole_word=whole_word)
+                    content = (
+                        self.db.get_connection()
+                        .execute(
+                            "SELECT content FROM doc_segments WHERE id=?", (row["segment_row_id"],)
+                        )
+                        .fetchone()[0]
+                    )
+                terms = (
+                    keywords
+                    if parsed is None
+                    else parsed.root.positives(
+                        lambda term, text=content: self._literal_matches(
+                            text, term, match_case, whole_word
+                        )
+                    )
+                )
+                options = dict(
+                    regex_pattern=regex_pattern,
+                    deadline=deadline,
+                    cancel_check=cancel_check,
+                    match_case=match_case,
+                    whole_word=whole_word,
+                )
                 count = sum(1 for _ in iter_locations(content, terms, **options))
                 snippets = occurrence_snippets(content, terms, **options)
                 sid = row["segment_row_id"] if "segment_row_id" in row.keys() else 0
                 item.total_matches += count
-                item.segments.append(SegmentMatch(str(row["segment_id"]), row["segment_type"], snippets, sid, count))
+                item.segments.append(
+                    SegmentMatch(str(row["segment_id"]), row["segment_type"], snippets, sid, count)
+                )
             results.append(item)
         return results
 
@@ -502,7 +688,10 @@ class DocumentSearcher:
     def _build_type_clause(type_filter: str) -> str:
         """Build the fixed SQL clause for a supported file-type filter."""
         if isinstance(type_filter, (list, tuple)):
-            parts = [DocumentSearcher._build_type_clause(t).removeprefix("AND ") for t in dict.fromkeys(type_filter)]
+            parts = [
+                DocumentSearcher._build_type_clause(t).removeprefix("AND ")
+                for t in dict.fromkeys(type_filter)
+            ]
             return "AND (" + " OR ".join(parts) + ")" if parts else ""
         type_clause = ""
         type_filter_lower = type_filter.lower()
@@ -669,7 +858,16 @@ class DocumentSearcher:
                     mtime=row["mtime"],
                     ctime=row["ctime"],
                     rank_score=-1000.0,
-                    total_matches=sum(1 for _ in iter_locations(row["filename"], [filename_query], match_case=match_case, whole_word=whole_word, stemming=False)),
+                    total_matches=sum(
+                        1
+                        for _ in iter_locations(
+                            row["filename"],
+                            [filename_query],
+                            match_case=match_case,
+                            whole_word=whole_word,
+                            stemming=False,
+                        )
+                    ),
                     segments=[
                         SegmentMatch(
                             segment_id="",
@@ -747,7 +945,8 @@ class DocumentSearcher:
         match_case: bool,
         whole_word: bool,
         cancel_check: Optional[Callable[[], bool]] = None,
-        page_after=None, page_meta=None,
+        page_after=None,
+        page_meta=None,
     ) -> List[SearchResultItem]:
         """Run a validated user regular expression against indexed segments, within a budget."""
         try:
@@ -777,8 +976,15 @@ class DocumentSearcher:
 
         try:
             return self._aggregate_rows(
-                checked_rows(), [], limit, expression, regex_pattern=pattern, deadline=deadline,
-                cancel_check=cancel_check, page_after=page_after, page_meta=page_meta
+                checked_rows(),
+                [],
+                limit,
+                expression,
+                regex_pattern=pattern,
+                deadline=deadline,
+                cancel_check=cancel_check,
+                page_after=page_after,
+                page_meta=page_meta,
             )
         except TimeoutError as exc:
             raise SearchQueryError(
@@ -834,12 +1040,21 @@ class DocumentSearcher:
     def _literal_matches(
         content: str, term: str, match_case: bool, whole_word: bool, stemming: bool = True
     ) -> bool:
-        if stemming and not (match_case or whole_word) and re.fullmatch(r"[a-zA-Z]+(?:\s+[a-zA-Z]+)+", term):
+        if (
+            stemming
+            and not (match_case or whole_word)
+            and re.fullmatch(r"[a-zA-Z]+(?:\s+[a-zA-Z]+)+", term)
+        ):
             from doc_searcher.search.matches import english_phrase_matches
+
             return next(english_phrase_matches(content, term), None) is not None
         if not term:
             return False
-        spec = stem_spec(term) if stemming and not (match_case or whole_word) else None
+        spec = (
+            stem_spec(term)
+            if stemming and len(term) > 2 and not (match_case or whole_word)
+            else None
+        )
         if spec is not None:  # another form of the same English word counts, as in the index
             return any(
                 matches_stem(spec, found.group(0))

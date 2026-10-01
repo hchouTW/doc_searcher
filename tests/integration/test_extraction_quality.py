@@ -1,4 +1,5 @@
 """Persist quality/sources and explicitly reprocess unchanged selected files."""
+
 import os
 import pytest
 
@@ -32,6 +33,7 @@ def test_quality_and_force_unchanged_file(tmp_path):
 
 def test_partial_sources_survive_reopen_and_stale_locations(tmp_path):
     import openpyxl
+
     root = tmp_path / "docs"
     root.mkdir()
     path = root / "formula.xlsx"
@@ -45,14 +47,18 @@ def test_partial_sources_survive_reopen_and_stale_locations(tmp_path):
     IndexingService(db).run(IndexRequest([str(root)]))
     doc = db.get_document_by_path(str(path))
     assert doc["parse_status"] == "partial" and doc["warnings"]
-    assert doc["parser_version"] == "2"
+    from doc_searcher.parsers.base import parser_version_for
+
+    assert doc["parser_version"] == parser_version_for("xlsx")
     db.close()
     db = Database(dbpath)
     searcher = DocumentSearcher(db)
     page = searcher.search_page("會議")
     locations = searcher.match_locations("會議", page.items[0].doc_id, revision=page.revision)
     assert len(locations.locations) == 8
-    assert [x.source["location"] for x in locations.locations] == [f"Sheet!B{i}" for i in range(1, 9)]
+    assert [x.source["location"] for x in locations.locations] == [
+        f"Sheet!B{i}" for i in range(1, 9)
+    ]
     IndexingService(db).run(IndexRequest([str(root)], force_paths=[str(path)]))
     with pytest.raises(ValueError):
         searcher.match_context(locations.locations[0])
@@ -68,8 +74,11 @@ def test_force_paths_respect_scope_and_exclusions(tmp_path):
     db = Database(str(tmp_path / "index.db"))
     service = IndexingService(db)
     service.run(IndexRequest([str(root)]))
-    stats = service.run(IndexRequest([str(root)], exclude_patterns=["b.txt"],
-                                      force_paths=[str(a), str(b), str(outside)]))
+    stats = service.run(
+        IndexRequest(
+            [str(root)], exclude_patterns=["b.txt"], force_paths=[str(a), str(b), str(outside)]
+        )
+    )
     assert stats["indexed"] == 1
     assert db.get_document_by_path(str(outside)) is None
     db.close()
@@ -79,20 +88,29 @@ def test_legacy_quality_unknown_and_migration_rollback(tmp_path, monkeypatch):
     import sqlite3
     from doc_searcher.storage import migrations
     from doc_searcher.storage.errors import MigrationError
+
     path = str(tmp_path / "legacy.db")
     conn = sqlite3.connect(path)
     migrations._v1_baseline(conn)
     migrations._v3_stemming(conn)
     migrations._v4_cjk(conn)
-    conn.execute("INSERT INTO documents(path,filename,file_type,file_size,mtime,indexed_at) VALUES ('missing.txt','missing.txt','txt',1,1,1)")
+    conn.execute(
+        "INSERT INTO documents(path,filename,file_type,file_size,mtime,indexed_at) VALUES ('missing.txt','missing.txt','txt',1,1,1)"
+    )
     conn.execute("PRAGMA user_version=4")
     conn.commit()
     conn.close()
     original = migrations._v5_quality
+
     def broken(conn):
         original(conn)
         raise RuntimeError("injected quality migration failure")
-    monkeypatch.setattr(migrations, "MIGRATIONS", [(*m[:2], broken) if m[0] == 5 else m for m in migrations.MIGRATIONS])
+
+    monkeypatch.setattr(
+        migrations,
+        "MIGRATIONS",
+        [(*m[:2], broken) if m[0] == 5 else m for m in migrations.MIGRATIONS],
+    )
     with pytest.raises(MigrationError):
         Database(path)
     conn = sqlite3.connect(path)

@@ -91,6 +91,7 @@ def test_corrupt_index_is_reported_without_touching_it(data_dir, roots, capsys):
 def test_cli_search_pagination_and_locations(tmp_path, monkeypatch, capsys):
     import json
     from doc_searcher.cli import main
+
     monkeypatch.setenv("DOC_SEARCHER_DATA_DIR", str(tmp_path / "data"))
     docs = tmp_path / "docs"
     docs.mkdir()
@@ -110,6 +111,7 @@ def test_cli_search_pagination_and_locations(tmp_path, monkeypatch, capsys):
 
 def test_cli_quality_and_unchanged_reprocessing(data_dir, roots, capsys):
     import json
+
     root, _ = roots
     assert run("--dir", str(root), "--search", "alpha") == 0
     capsys.readouterr()
@@ -123,3 +125,20 @@ def test_cli_quality_and_unchanged_reprocessing(data_dir, roots, capsys):
     db = Database(AppConfig().db_path)
     assert db.revision() > old
     db.close()
+
+
+def test_expanded_cli_returns_synonym_passages(tmp_path, monkeypatch, capsys):
+    import json
+    from doc_searcher.cli import main
+
+    root = tmp_path / "docs"
+    root.mkdir()
+    (root / "meeting.txt").write_text("研討會")
+    dictionary = tmp_path / "synonyms.json"
+    dictionary.write_text(json.dumps({"terms": {"會議": ["研討會"]}}))
+    monkeypatch.setenv("DOC_SEARCHER_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv("DOC_SEARCHER_SYNONYMS", str(dictionary))
+    assert main(["--dir", str(root), "--search", "會議", "--mode", "expanded", "--json"]) == 0
+    page = json.loads(capsys.readouterr().out)
+    assert page["items"][0]["total_matches"] == 0
+    assert page["items"][0]["passages"][0]["text"] == "研討會"

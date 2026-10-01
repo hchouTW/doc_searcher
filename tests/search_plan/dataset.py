@@ -411,7 +411,12 @@ def _neg(b: _Builder) -> None:
         ("tool.exe", b"MZ QANEGexe"),
     ):
         b.target(f"neg/{name}").write_bytes(content)
-        b.record(f"neg/{name}", "neg", SKIPPED_UNSUPPORTED, [f"QANEG{name.split('.')[1]}"])
+        b.record(
+            f"neg/{name}",
+            "neg",
+            SKIPPED_UNREADABLE if name.endswith(".png") else SKIPPED_UNSUPPORTED,
+            [f"QANEG{name.split('.')[1]}"],
+        )
 
 
 def _scan(b: _Builder) -> None:
@@ -419,9 +424,9 @@ def _scan(b: _Builder) -> None:
     b.record(
         "scan/scanned.pdf",
         "scan",
-        NO_TEXT,
+        "ocr_dependent",
         ["QASCANkeyword"],
-        note="text exists only as pixels; no OCR, so the marker must NOT be found",
+        note="Local OCR recognizes the pixels when Tesseract and configured language data are available.",
     )
 
 

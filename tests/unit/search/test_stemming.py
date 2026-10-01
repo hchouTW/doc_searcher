@@ -156,7 +156,9 @@ def test_migration_from_a_pre_stemming_index_keeps_working(tmp_path):
     conn.close()
 
     reopened = Database(str(path))
-    assert reopened.applied_migrations == [3, 4, 5]
+    from doc_searcher.storage.migrations import latest_version
+
+    assert reopened.applied_migrations == list(range(3, latest_version() + 1))
     assert {r.filename for r in DocumentSearcher(reopened).search("outstanding")} == {"plural.txt"}
     sql = (
         reopened.get_connection()

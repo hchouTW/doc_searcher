@@ -139,7 +139,11 @@ def test_unsupported_scanned_and_broken_files_behave_as_recorded(built):
     for entry in entries(manifest, expect=dataset.SKIPPED_UNSUPPORTED):
         assert not is_supported(entry["path"])
     scanned = parse_file(str(root / "scan/scanned.pdf"))
-    assert scanned.status == ParseStatus.EMPTY
+    if scanned.omitted_locations:
+        assert scanned.status == ParseStatus.PARTIAL
+        assert any(w["code"] == "ocr_failed" for w in scanned.warnings)
+    else:
+        assert "QASCANkeyword" in scanned.full_text
     for entry in entries(manifest, expect=dataset.SKIPPED_UNREADABLE):
         path = root / entry["path"]
         if not path.is_file() or (entry["path"] == "bad/locked.txt" and RUNNING_AS_ROOT):
@@ -166,5 +170,6 @@ def test_dataset_can_be_indexed_end_to_end(built, tmp_path):
     assert hits("QABADgood") == {"bad/good.txt"}
     assert hits("QABADownerpdf") == {"bad/owner_password.pdf"}
     assert hits("QAENCutf8bom") == {"enc/utf8_bom.txt"}
-    assert hits("QASCANkeyword") == set()  # no OCR
+    scanned = parse_file(str(root / "scan/scanned.pdf"))
+    assert hits("QASCANkeyword") == (set() if scanned.omitted_locations else {"scan/scanned.pdf"})
     assert hits("QANEGjson") == set()  # unsupported extension

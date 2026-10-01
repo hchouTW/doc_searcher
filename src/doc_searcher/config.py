@@ -37,6 +37,11 @@ DEFAULT_EXTENSIONS = [
     ".txt",
     ".md",
     ".csv",
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".tif",
+    ".tiff",
 ]
 DEFAULT_EXCLUDE_PATTERNS = [".git", "node_modules", "temp", "__pycache__"]
 LANGUAGES = ("zh-TW", "en-US")

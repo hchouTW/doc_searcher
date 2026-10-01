@@ -65,6 +65,29 @@ class SearchService:
         self._reindex_lock = threading.Lock()
         self._reindex_thread: Optional[threading.Thread] = None
         self._reindex_state: Dict[str, Any] = {"state": "idle"}
+        self.watcher = None
+
+    def start_watching(self):
+        """Enable live updates explicitly for long-running integration owners."""
+        from doc_searcher.indexing.watcher import FolderWatcher
+
+        if self.watcher is None:
+            self.watcher = FolderWatcher(self.db, self._watch_request)
+            self.watcher.start()
+
+    def _watch_request(self):
+        self.config.load()
+        return IndexRequest(
+            list(self.config.directories),
+            self.config.include_subdirectories,
+            list(self.config.exclude_patterns),
+        )
+
+    def close(self):
+        if self.watcher:
+            self.watcher.stop()
+        self.wait_for_reindex()
+        self.db.close()
 
     # ----------------------------------------------------------------- search
     def search(
@@ -72,7 +95,14 @@ class SearchService:
         query: str,
         formats: Optional[Sequence[str]] = None,
         limit: int = 20,
-        *, cursor: Optional[str] = None, match_case=False, whole_word=False, regex=False,
+        *,
+        cursor: Optional[str] = None,
+        match_case=False,
+        whole_word=False,
+        regex=False,
+        search_mode="literal",
+        synonyms=None,
+        synonym_scopes=None,
     ) -> Dict[str, Any]:
         """Search the index; formats limits results to format groups (all when empty)."""
         if not query or not query.strip():
@@ -87,15 +117,34 @@ class SearchService:
             )
 
         try:
-            page = self.searcher.search_page(query, type_filter=sorted(set(groups)) or "all",
-                                             limit=limit, cursor=cursor, match_case=match_case, whole_word=whole_word, regex=regex)
+            page = self.searcher.search_page(
+                query,
+                type_filter=sorted(set(groups)) or "all",
+                limit=limit,
+                cursor=cursor,
+                match_case=match_case,
+                whole_word=whole_word,
+                regex=regex,
+                search_mode=search_mode,
+                synonyms=synonyms,
+                synonym_scopes=synonym_scopes,
+            )
         except SearchQueryError as exc:
             raise ValueError(str(exc)) from exc
         results = [self._result_to_dict(item) for item in page.items]
-        return {"query": query, "result_count": len(results), "results": results,
-                "next_cursor": page.next_cursor, "has_more": page.has_more,
-                "total_documents": page.total_documents, "complete": page.complete,
-                "revision": page.revision}
+        return {
+            "query": query,
+            "result_count": len(results),
+            "results": results,
+            "next_cursor": page.next_cursor,
+            "has_more": page.has_more,
+            "total_documents": page.total_documents,
+            "complete": page.complete,
+            "revision": page.revision,
+            "retrieval_mode": page.retrieval_mode,
+            "semantic_ready": page.semantic_ready,
+            "semantic_candidate_limit": page.semantic_candidate_limit,
+        }
 
     def match_locations(self, query, doc_id, **options):
         try:
@@ -124,6 +173,8 @@ class SearchService:
             "count_complete": item.count_complete,
             "parse_status": item.parse_status,
             "warnings": item.warnings,
+            "matched_by": item.matched_by,
+            "passages": item.passages,
             "matches": [
                 {
                     "location_type": segment.segment_type,
@@ -152,6 +203,7 @@ class SearchService:
             "last_indexed_at": _iso_time(stats["last_indexed_at"]),
             "directories": list(self.config.directories),
             "reindex": dict(self._reindex_state),
+            "watcher": self.watcher.status() if self.watcher else {"state": "disabled"},
         }
 
     # ---------------------------------------------------------------- reindex
@@ -205,30 +257,46 @@ class SearchService:
             raise ValueError("Select at least one indexed document.")
         for path in paths:
             if not self.db.get_document_by_path(path) or not any(
-                    self.scanner.is_path_within_directory(path, root) for root in self.config.directories):
+                self.scanner.is_path_within_directory(path, root)
+                for root in self.config.directories
+            ):
                 raise ValueError(f"{path} is not an indexed document inside a configured folder.")
         with self._reindex_lock:
             if self._reindex_thread is not None and self._reindex_thread.is_alive():
                 return {"status": "already_running", "reindex": dict(self._reindex_state)}
-            self._reindex_state = {"state": "running", "operation": "reprocess", "paths": paths,
-                                  "started_at": _iso_time(time.time())}
-            self._reindex_thread = threading.Thread(target=self._run_reprocess, args=(paths,), daemon=True)
+            self._reindex_state = {
+                "state": "running",
+                "operation": "reprocess",
+                "paths": paths,
+                "started_at": _iso_time(time.time()),
+            }
+            self._reindex_thread = threading.Thread(
+                target=self._run_reprocess, args=(paths,), daemon=True
+            )
             self._reindex_thread.start()
         return {"status": "started", "reindex": dict(self._reindex_state)}
 
     def _run_reprocess(self, paths):
         try:
-            request = IndexRequest(roots=list(self.config.directories),
+            request = IndexRequest(
+                roots=list(self.config.directories),
                 include_subdirectories=self.config.include_subdirectories,
-                exclude_patterns=self.config.exclude_patterns, force_paths=paths, reprocess_only=True)
+                exclude_patterns=self.config.exclude_patterns,
+                force_paths=paths,
+                reprocess_only=True,
+            )
             result = IndexingService(self.db, self.scanner).run(request)
             state = "completed"
         except Exception as exc:
             result, state = {"error": str(exc)}, "failed"
         finally:
             self.db.close()
-        self._reindex_state = {**self._reindex_state, "state": state,
-                              "finished_at": _iso_time(time.time()), "result": result}
+        self._reindex_state = {
+            **self._reindex_state,
+            "state": state,
+            "finished_at": _iso_time(time.time()),
+            "result": result,
+        }
 
     def wait_for_reindex(self, timeout: Optional[float] = None) -> None:
         """Block until the current background re-index finishes (used by tests)."""

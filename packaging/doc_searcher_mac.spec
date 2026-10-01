@@ -43,6 +43,16 @@ hiddenimports += collect_submodules(
     'doc_searcher', filter=lambda name: not name.startswith('doc_searcher.integrations')
 )
 
+# Dense search is opt-in for packaged builds; model files remain user-managed locally.
+package_semantic = os.environ.get('DOC_SEARCHER_PACKAGE_SEMANTIC') == '1'
+if package_semantic:
+    hiddenimports += [
+        'sentence_transformers', 'sentence_transformers.models.Transformer',
+        'sentence_transformers.models.Pooling', 'sentence_transformers.models.Normalize',
+        'transformers.models.xlm_roberta',
+    ]
+hiddenimports += ['watchdog.observers.polling', 'PIL.Image', 'PIL.TiffImagePlugin']
+
 a = Analysis(
     [os.path.join(PACKAGE, '__main__.py')],
     pathex=[SRC],
@@ -52,7 +62,7 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=['tkinter', 'matplotlib', 'scipy', 'torch', 'IPython'],
+    excludes=['tkinter', 'matplotlib', 'IPython'] + ([] if package_semantic else ['scipy', 'torch', 'sentence_transformers']),
     noarchive=False,
 )
 

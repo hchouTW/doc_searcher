@@ -16,6 +16,8 @@ DocSearcher is a local PySide6 desktop app that indexes documents into SQLite FT
 | Page navigation `1 / 2` | README documents previous/next *hit* navigation plus a hit counter, not paging [C] | PRV-03 tests hit navigation |
 | Stemming/plurals | No stemmer found [C: jieba only] | Decided 2026-09-30: **required** (OQ-2). Implemented with SQLite's porter tokenizer (`docs/adr/0003-english-stemming.md`); LANG-07 asserts it |
 
+The 2026-10-01 full-folder extension supersedes the original no-OCR decision below. Scanned PDFs now require OCR hits when Tesseract and languages are present, and explicit diagnostics otherwise. New regression and runtime evidence are in [full-folder validation](benchmarks/full-folder-coverage-validation.md).
+
 ## Objective
 
 When complete, every behaviour in the draft is either verified by an executed test with recorded Pass/Fail, or documented as unsupported with a test proving the app degrades gracefully. Every automatable case has a pytest test, and the manual GUI cases have a runnable script.
@@ -117,7 +119,7 @@ Priority: P0 blocks release, P1 should pass, P2 nice to have. Type: **A** automa
 | FMT-12 | – | Update a file and re-scan; delete a file and re-scan | Modified content re-indexed; deleted file removed, unless the volume is unavailable, in which case the index is preserved [C: README] | P0 | A |
 | PDF-01 | TC-05 | Text PDF, Chinese and English | Hits with page numbers | P0 | A |
 | PDF-02 | – | Owner-password-only PDF | Text extracted [C: README] | P1 | A |
-| PDF-03 | TC-05 | Scanned image-only PDF (TD-SCAN) | **No hits, no crash**; file recorded as empty/no-text with a reason. OCR is not supported [C] | P1 | A |
+| PDF-03 | TC-05 | Scanned image-only PDF (TD-SCAN) | **OCR hits when the engine/languages are installed; explicit failure otherwise**, no crash; unreadable pages retain a reason. | P1 | A |
 | PDF-04 | TC-10 | User-password-protected PDF | Skipped with recorded reason | P2 | A |
 
 ### 3. Indexing and directories

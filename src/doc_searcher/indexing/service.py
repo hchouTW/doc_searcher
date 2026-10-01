@@ -16,6 +16,8 @@
 #   - Result keys: indexed, deleted, failed, cancelled, skipped (no root was available),
 #     scanned, unavailable_directories, scan_error_paths, elapsed.
 
+import os
+import stat
 import threading
 import time
 from dataclasses import dataclass, field
@@ -107,8 +109,17 @@ class IndexingService:
                 preserved_directories=[*unavailable, *scan_errors],
             )
             force = {canonical_path(path) for path in request.force_paths}
-            permitted = [path for path, _, _ in current_files if path in force and
-                (request.scope is None or any(self.scanner.is_path_within_directory(path, root) for root in request.scope))]
+            permitted = [
+                path
+                for path, _, _ in current_files
+                if path in force
+                and (
+                    request.scope is None
+                    or any(
+                        self.scanner.is_path_within_directory(path, root) for root in request.scope
+                    )
+                )
+            ]
             if request.reprocess_only:
                 to_index, to_delete = permitted, []
             else:
@@ -127,6 +138,57 @@ class IndexingService:
                 elapsed=time.time() - start,
             )
             return self._finish(phase, stats)
+
+    def update_paths(self, request: IndexRequest, paths: List[str]) -> Dict[str, Any]:
+        """Update affected files only; inaccessible roots/files are never deletions."""
+        start = time.monotonic()
+        with self._locked():
+            available, unavailable = self.scanner.partition_directories(request.roots)
+            indexed = self._indexed_in_scope(request.scope)
+            updates, deletes, errors = [], [], []
+            for raw_path in dict.fromkeys(paths):
+                path = canonical_path(raw_path)
+                roots = [
+                    root for root in available if self.scanner.is_path_within_directory(path, root)
+                ]
+                if request.scope is not None and not any(
+                    self.scanner.is_path_within_directory(path, root) for root in request.scope
+                ):
+                    continue
+                if not roots or not self.scanner.is_valid_document_file(os.path.basename(path)):
+                    continue
+                roots = [
+                    root
+                    for root in roots
+                    if (request.include_subdirectories or os.path.dirname(path) == root)
+                    and not any(
+                        part.startswith(".") and part != "."
+                        for part in os.path.relpath(os.path.dirname(path), root).split(os.sep)
+                    )
+                    and not self.scanner.matches_exclusion(path, request.exclude_patterns, root)
+                ]
+                if not roots:
+                    continue
+                try:
+                    metadata = os.stat(path)
+                except FileNotFoundError:
+                    if path in indexed:
+                        deletes.append(path)
+                    continue
+                except OSError as exc:
+                    errors.append(dict(path=path, message=str(exc)))
+                    continue
+                if not stat.S_ISREG(metadata.st_mode):
+                    continue
+                # Events force parsing: same-size writes or preserved timestamps still matter.
+                updates.append(path)
+            result = self.indexer.run_batch_indexing(updates, deletes, reset_cancellation=False)
+            result.update(
+                elapsed=time.monotonic() - start,
+                unavailable_directories=unavailable,
+                scan_errors=errors,
+            )
+            return result
 
     def clear(self, on_progress: Optional[ProgressCallback] = None) -> Dict[str, Any]:
         """Clear the index in bulk; cancellation before the transaction preserves all text."""

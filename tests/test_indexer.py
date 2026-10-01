@@ -28,7 +28,7 @@ def test_file_scanner():
     # Test exclusions
     assert scanner.is_valid_document_file("~$contract.docx") is False
     assert scanner.is_valid_document_file(".DS_Store") is False
-    assert scanner.is_valid_document_file("image.png") is False
+    assert scanner.is_valid_document_file("image.png") is True
     assert scanner.is_valid_document_file("report.pdf") is True
     assert scanner.is_valid_document_file("data.xlsx") is True
 

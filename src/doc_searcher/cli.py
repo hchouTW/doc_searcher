@@ -28,7 +28,24 @@ EXIT_DATA = 3
 TYPE_FILTERS = ("all", "pdf", "word", "doc", "excel", "xls", "ppt", "powerpoint", "text")
 
 
-def run_cli_mode(folder: str, query: str, type_filter: str = "all", *, limit=200, cursor=None, locations=None, context=None, json_output=False, offset=0, revision=None, regex=False, match_case=False, whole_word=False, reprocess=None) -> int:
+def run_cli_mode(
+    folder: str,
+    query: str,
+    type_filter: str = "all",
+    *,
+    limit=200,
+    cursor=None,
+    locations=None,
+    context=None,
+    json_output=False,
+    offset=0,
+    revision=None,
+    regex=False,
+    match_case=False,
+    whole_word=False,
+    reprocess=None,
+    search_mode="literal",
+) -> int:
     """Run headless search via terminal for quick testing or scripts; returns an exit code."""
     from doc_searcher.config import AppConfig, ConfigError
     from doc_searcher.storage.database import Database
@@ -59,7 +76,12 @@ def run_cli_mode(folder: str, query: str, type_filter: str = "all", *, limit=200
         return EXIT_DATA
     try:
         # Scope = the requested root: entries owned by other roots are never reconciled.
-        request = IndexRequest(roots=[abs_dir], scope=[abs_dir], force_paths=list(reprocess or []), reprocess_only=bool(reprocess))
+        request = IndexRequest(
+            roots=[abs_dir],
+            scope=[abs_dir],
+            force_paths=list(reprocess or []),
+            reprocess_only=bool(reprocess),
+        )
         try:
             stats = IndexingService(db, scanner).run(request)
         except StorageError as exc:
@@ -67,7 +89,10 @@ def run_cli_mode(folder: str, query: str, type_filter: str = "all", *, limit=200
             return EXIT_DATA
         print(f"[*] 找到 {stats['scanned']} 個支援的文件檔案。", file=sys.stderr)
         quality_stats = db.get_stats()
-        print(f"[*] 已發現 {quality_stats['discovered_documents']} 份文件；{quality_stats['searchable_documents']} 份含可搜尋文字；擷取品質 {quality_stats['quality_counts']}", file=sys.stderr)
+        print(
+            f"[*] 已發現 {quality_stats['discovered_documents']} 份文件；{quality_stats['searchable_documents']} 份含可搜尋文字；擷取品質 {quality_stats['quality_counts']}",
+            file=sys.stderr,
+        )
         if stats["indexed"] or stats["deleted"] or stats["failed"]:
             summary = {key: stats[key] for key in ("indexed", "deleted", "failed", "cancelled")}
             print(f"[✓] 索引更新完成：{summary}", file=sys.stderr)
@@ -78,12 +103,36 @@ def run_cli_mode(folder: str, query: str, type_filter: str = "all", *, limit=200
         searcher = DocumentSearcher(db)
         try:
             if locations is not None:
-                print(json.dumps(asdict(searcher.match_locations(query, locations, revision=db.revision() if revision is None else revision, offset=offset, regex=regex, match_case=match_case, whole_word=whole_word)), ensure_ascii=False))
+                print(
+                    json.dumps(
+                        asdict(
+                            searcher.match_locations(
+                                query,
+                                locations,
+                                revision=db.revision() if revision is None else revision,
+                                offset=offset,
+                                regex=regex,
+                                match_case=match_case,
+                                whole_word=whole_word,
+                            )
+                        ),
+                        ensure_ascii=False,
+                    )
+                )
                 return EXIT_OK
             if context is not None:
                 print(json.dumps(searcher.match_context(json.loads(context)), ensure_ascii=False))
                 return EXIT_OK
-            page = searcher.search_page(query, type_filter=type_filter, limit=limit, cursor=cursor, regex=regex, match_case=match_case, whole_word=whole_word)
+            page = searcher.search_page(
+                query,
+                type_filter=type_filter,
+                limit=limit,
+                cursor=cursor,
+                regex=regex,
+                match_case=match_case,
+                whole_word=whole_word,
+                search_mode=search_mode,
+            )
         except (ValueError, LookupError) as exc:
             print(f"[!] {exc}", file=sys.stderr)
             return 2
@@ -92,13 +141,18 @@ def run_cli_mode(folder: str, query: str, type_filter: str = "all", *, limit=200
             print(json.dumps(asdict(page), ensure_ascii=False))
             return EXIT_OK
         if page.has_more:
-            print(f"[*] 已載入 {len(results)} 份文件，尚有更多結果。 --cursor {page.next_cursor}", file=sys.stderr)
+            print(
+                f"[*] 已載入 {len(results)} 份文件，尚有更多結果。 --cursor {page.next_cursor}",
+                file=sys.stderr,
+            )
 
         print(f"\n===== 檢索結果：共找到 {len(results)} 份文件 =====")
         for idx, r in enumerate(results, start=1):
             print(f"\n[{idx}] {r.filename} ({r.file_type.upper()}, {r.file_size} bytes)")
             print(f"    路徑: {r.path}")
             print(f"    命中次數: {r.total_matches}；命中區塊數: {r.segment_count}")
+            for passage in r.passages:
+                print(f"    - [{passage['matched_by']}] {passage['text']}")
             for seg in r.segments:
                 print(f"    - [{seg.segment_type} {seg.segment_id}]")
                 for snip in seg.snippets:
@@ -108,6 +162,53 @@ def run_cli_mode(folder: str, query: str, type_filter: str = "all", *, limit=200
         print("\n================================================")
         return EXIT_OK
     finally:
+        db.close()
+
+
+def run_watch_mode(folder, query=None, type_filter="all", search_mode="literal"):
+    """Watch a folder until Ctrl-C; optional queries emit refreshed JSON pages."""
+    import time
+    from doc_searcher.config import AppConfig
+    from doc_searcher.storage.database import Database
+    from doc_searcher.indexing.service import IndexRequest
+    from doc_searcher.indexing.scanner import FileScanner
+    from doc_searcher.indexing.watcher import FolderWatcher
+    from doc_searcher.search.searcher import DocumentSearcher
+
+    root = os.path.abspath(folder)
+    if not FileScanner().partition_directories([root])[0]:
+        print("Folder unavailable: " + root, file=sys.stderr)
+        return EXIT_UNAVAILABLE
+    config = AppConfig()
+    db = Database(config.db_path)
+    watcher = FolderWatcher(
+        db,
+        lambda: IndexRequest(
+            [root], config.include_subdirectories, config.exclude_patterns, scope=[root]
+        ),
+    )
+    watcher.start()
+    generation = -1
+    try:
+        while True:
+            status = watcher.status()
+            if status["generation"] != generation:
+                generation = status["generation"]
+                if query:
+                    page = DocumentSearcher(db).search_page(
+                        query, type_filter=type_filter, search_mode=search_mode
+                    )
+                    print(json.dumps(asdict(page), ensure_ascii=False), flush=True)
+                else:
+                    print(json.dumps(status, ensure_ascii=False), flush=True)
+            time.sleep(0.2)
+    except KeyboardInterrupt:
+        return EXIT_OK
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+    finally:
+        watcher.stop()
         db.close()
 
 
@@ -134,17 +235,47 @@ def main(argv=None) -> int:
 
     parser.add_argument("--limit", type=int, default=200, help="Maximum documents per page")
     parser.add_argument("--cursor", help="Continuation cursor from a previous search")
-    parser.add_argument("--locations", type=int, metavar="DOC_ID", help="Return occurrence locations as JSON")
-    parser.add_argument("--context", metavar="LOCATION_JSON", help="Read bounded occurrence context")
+    parser.add_argument(
+        "--locations", type=int, metavar="DOC_ID", help="Return occurrence locations as JSON"
+    )
+    parser.add_argument(
+        "--context", metavar="LOCATION_JSON", help="Read bounded occurrence context"
+    )
     parser.add_argument("--json", action="store_true", help="Return search page as JSON")
     parser.add_argument("--offset", type=int, default=0, help="Occurrence-page offset")
     parser.add_argument("--revision", type=int, help="Revision returned by search")
     parser.add_argument("--regex", action="store_true", help="Bounded regular-expression search")
     parser.add_argument("--match-case", action="store_true", help="Match original letter case")
     parser.add_argument("--whole-word", action="store_true", help="Match whole words")
-    parser.add_argument("--quality", action="store_true", help="List extraction quality/problems as JSON")
-    parser.add_argument("--reprocess", action="append", metavar="PATH", help="Force selected files to be reparsed")
+    parser.add_argument(
+        "--quality", action="store_true", help="List extraction quality/problems as JSON"
+    )
+    parser.add_argument(
+        "--reprocess", action="append", metavar="PATH", help="Force selected files to be reparsed"
+    )
+    parser.add_argument(
+        "--watch",
+        action="store_true",
+        help="Auto-index --dir until Ctrl-C; optional --search emits JSON updates",
+    )
+    parser.add_argument(
+        "--mode",
+        choices=("literal", "expanded", "hybrid"),
+        default="literal",
+        help="Retrieval mode",
+    )
+    parser.add_argument("--synonyms", metavar="JSON", help="Local domain synonym dictionary")
+    parser.add_argument(
+        "--embedding-model", metavar="DIR", help="Local multilingual E5 model directory"
+    )
+    parser.add_argument(
+        "--build-vectors", action="store_true", help="Build dense vectors from the existing index"
+    )
     args = parser.parse_args(argv)
+    if args.synonyms:
+        os.environ["DOC_SEARCHER_SYNONYMS"] = os.path.abspath(args.synonyms)
+    if args.embedding_model:
+        os.environ["DOC_SEARCHER_EMBEDDING_MODEL"] = os.path.abspath(args.embedding_model)
     configure_logging()
 
     if args.self_check:
@@ -154,15 +285,41 @@ def main(argv=None) -> int:
     if args.report:
         parser.error("--report 只能與 --self-check 一起使用")
 
+    if args.watch:
+        if not args.dir:
+            parser.error("--watch requires --dir")
+        return run_watch_mode(args.dir, args.search, args.type, args.mode)
+    if args.build_vectors:
+        from doc_searcher.config import AppConfig
+        from doc_searcher.storage.database import Database
+        from doc_searcher.search.semantic import SemanticIndex
+
+        db = Database(AppConfig().db_path)
+        try:
+            print(json.dumps({"chunks": SemanticIndex(db).rebuild()}))
+            return EXIT_OK
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        finally:
+            db.close()
     if args.quality:
         from doc_searcher.config import AppConfig
         from doc_searcher.storage.database import Database
         from doc_searcher.storage.errors import StorageError
+
         try:
             db = Database(AppConfig().db_path)
             try:
-                print(json.dumps(dict(stats=db.get_stats(), **db.problem_documents(offset=args.offset,
-                    limit=min(args.limit, 1000))), ensure_ascii=False))
+                print(
+                    json.dumps(
+                        dict(
+                            stats=db.get_stats(),
+                            **db.problem_documents(offset=args.offset, limit=min(args.limit, 1000)),
+                        ),
+                        ensure_ascii=False,
+                    )
+                )
                 return EXIT_OK
             finally:
                 db.close()
@@ -176,10 +333,35 @@ def main(argv=None) -> int:
     if args.dir is not None or args.search is not None:
         if not (args.dir and args.search):
             parser.error("CLI 模式需要同時指定 --dir 與 --search")
-        if args.cursor or args.locations is not None or args.context or args.json or args.limit != 200 or args.regex or args.match_case or args.whole_word or args.offset or args.revision is not None:
-            return run_cli_mode(args.dir, args.search, args.type, limit=args.limit, cursor=args.cursor,
-                                locations=args.locations, context=args.context, json_output=args.json, offset=args.offset, revision=args.revision,
-                                regex=args.regex, match_case=args.match_case, whole_word=args.whole_word)
+        if (
+            args.mode != "literal"
+            or args.cursor
+            or args.locations is not None
+            or args.context
+            or args.json
+            or args.limit != 200
+            or args.regex
+            or args.match_case
+            or args.whole_word
+            or args.offset
+            or args.revision is not None
+        ):
+            return run_cli_mode(
+                args.dir,
+                args.search,
+                args.type,
+                limit=args.limit,
+                cursor=args.cursor,
+                locations=args.locations,
+                context=args.context,
+                json_output=args.json,
+                offset=args.offset,
+                revision=args.revision,
+                regex=args.regex,
+                match_case=args.match_case,
+                whole_word=args.whole_word,
+                search_mode=args.mode,
+            )
         return run_cli_mode(args.dir, args.search, args.type)
 
     # Launch PySide6 GUI

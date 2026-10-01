@@ -1,0 +1,20 @@
+{
+  "platform": "macOS-26.5-arm64-arm-64bit-Mach-O",
+  "python": "3.13.2",
+  "watcher_seconds": [
+    0.422,
+    0.396,
+    0.508,
+    0.691,
+    0.909,
+    0.535
+  ],
+  "watcher_max_seconds": 0.909,
+  "chinese_ocr_seconds": 0.423,
+  "chinese_ocr_found": true,
+  "semantic_english_top": "hr.txt",
+  "semantic_chinese_top": "hr.txt",
+  "semantic_warm_build_query_seconds": 0.246,
+  "semantic_model": "intfloat/multilingual-e5-small",
+  "semantic_model_revision": "614241f622f53c4eeff9890bdc4f31cfecc418b3"
+}

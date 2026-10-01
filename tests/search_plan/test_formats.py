@@ -51,7 +51,7 @@ def test_fmt_08_unsupported_extensions_are_never_indexed(env):
     for marker in ("QANEGjson", "QANEGlog", "QANEGpng", "QANEGexe"):
         assert env.search(marker) == set()
     indexed = {row[0] for row in env.db.get_connection().execute("SELECT path FROM documents")}
-    assert not any("/neg/" in path for path in indexed)
+    assert {path.rsplit("/", 1)[-1] for path in indexed if "/neg/" in path} == {"pixel.png"}
 
 
 ENCODING_MARKERS = {
@@ -98,8 +98,15 @@ def test_pdf_02_owner_password_pdf_text_is_extracted(env):
     assert env.search("QABADownerpdf") == {"bad/owner_password.pdf"}
 
 
-def test_pdf_03_scanned_pdf_gives_no_hits_and_no_error(env):
-    assert env.search("QASCANkeyword") == set()  # no OCR
+def test_pdf_03_scanned_pdf_ocr_or_actionable_runtime_failure(env):
+    from doc_searcher.parsers import parse_file
+
+    scanned = parse_file(str(env.root / "scan/scanned.pdf"))
+    if scanned.omitted_locations:
+        assert env.search("QASCANkeyword") == set()
+        assert any(w["code"] == "ocr_failed" for w in scanned.warnings)
+    else:
+        assert env.search("QASCANkeyword") == {"scan/scanned.pdf"}
     row = (
         env.db.get_connection()
         .execute("SELECT total_segments, error FROM documents WHERE filename = 'scanned.pdf'")

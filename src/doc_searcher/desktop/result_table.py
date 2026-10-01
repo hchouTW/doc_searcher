@@ -312,7 +312,12 @@ class ResultTable(QTableWidget):
             it_name.setForeground(QColor(c.text_primary))
 
             # 3. Matches count (light-mode blue darkened to #0a58ca for WCAG AA on alternating rows)
-            it_matches = SortableTableItem(f"{item.total_matches} {tr(self.language, 'hit_unit')}")
+            count_text = (
+                tr(self.language, "related_hit")
+                if item.passages and not item.total_matches
+                else f"{item.total_matches} {tr(self.language, 'hit_unit')}"
+            )
+            it_matches = SortableTableItem(count_text)
             it_matches.setTextAlignment(
                 Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignVCenter
             )

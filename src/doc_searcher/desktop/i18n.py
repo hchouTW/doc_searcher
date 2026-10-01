@@ -368,10 +368,20 @@ def tr(language: str, key: str, **values: Any) -> str:
 
 # Search completeness and incremental context labels.
 TRANSLATIONS_EXTRA = {
-    "zh-TW": {"load_more": "載入更多文件", "loaded_results": "已載入 {count} 份文件，尚有更多結果", "more_context": "載入更多原文",
-              "loading_context": "正在載入命中位置…", "locations_stale": "位置已失效，請重新搜尋。"},
-    "en-US": {"load_more": "Load more documents", "loaded_results": "Loaded {count} documents; more results available", "more_context": "Load more original text",
-           "loading_context": "Loading occurrence context…", "locations_stale": "Locations changed; search again."},
+    "zh-TW": {
+        "load_more": "載入更多文件",
+        "loaded_results": "已載入 {count} 份文件，尚有更多結果",
+        "more_context": "載入更多原文",
+        "loading_context": "正在載入命中位置…",
+        "locations_stale": "位置已失效，請重新搜尋。",
+    },
+    "en-US": {
+        "load_more": "Load more documents",
+        "loaded_results": "Loaded {count} documents; more results available",
+        "more_context": "Load more original text",
+        "loading_context": "Loading occurrence context…",
+        "locations_stale": "Locations changed; search again.",
+    },
 }
 
 for _language, _labels in TRANSLATIONS_EXTRA.items():
@@ -379,15 +389,55 @@ for _language, _labels in TRANSLATIONS_EXTRA.items():
 
 
 for _language, _labels in {
-    "zh-TW": {"quality_problems": "擷取品質與問題文件", "reprocess_selected": "重新擷取所選文件",
+    "zh-TW": {
+        "quality_problems": "擷取品質與問題文件",
+        "reprocess_selected": "重新擷取所選文件",
         "quality_summary": "已發現 {discovered} 份文件；{searchable} 份含可搜尋文字",
-        "quality_success": "擷取成功", "quality_empty": "無可搜尋文字", "quality_partial": "部分擷取",
-        "quality_unknown": "擷取品質未知", "quality_corrupt": "解析失敗", "quality_unreadable": "無法讀取",
-        "quality_encrypted": "需要密碼", "quality_unsupported": "不支援格式", "quality_dependency_missing": "缺少解析套件"},
-    "en-US": {"quality_problems": "Extraction quality / problems", "reprocess_selected": "Reprocess selected documents",
+        "quality_success": "擷取成功",
+        "quality_empty": "無可搜尋文字",
+        "quality_partial": "部分擷取",
+        "quality_unknown": "擷取品質未知",
+        "quality_corrupt": "解析失敗",
+        "quality_unreadable": "無法讀取",
+        "quality_encrypted": "需要密碼",
+        "quality_unsupported": "不支援格式",
+        "quality_dependency_missing": "缺少解析套件",
+    },
+    "en-US": {
+        "quality_problems": "Extraction quality / problems",
+        "reprocess_selected": "Reprocess selected documents",
         "quality_summary": "Discovered {discovered} documents; {searchable} contain searchable text",
-        "quality_success": "Extracted", "quality_empty": "No searchable text", "quality_partial": "Partial extraction",
-        "quality_unknown": "Unknown extraction quality", "quality_corrupt": "Parse failed", "quality_unreadable": "Unreadable",
-        "quality_encrypted": "Password required", "quality_unsupported": "Unsupported format", "quality_dependency_missing": "Parser dependency missing"},
+        "quality_success": "Extracted",
+        "quality_empty": "No searchable text",
+        "quality_partial": "Partial extraction",
+        "quality_unknown": "Unknown extraction quality",
+        "quality_corrupt": "Parse failed",
+        "quality_unreadable": "Unreadable",
+        "quality_encrypted": "Password required",
+        "quality_unsupported": "Unsupported format",
+        "quality_dependency_missing": "Parser dependency missing",
+    },
 }.items():
     TRANSLATIONS[_language].update(_labels)
+
+for _language, _values in {
+    "zh-TW": {
+        "auto_updates": "自動更新索引",
+        "related_hit": "相關段落",
+        "live_pending": "自動更新中；待處理 {count} 項",
+        "search_literal": "關鍵字",
+        "search_expanded": "同義詞／錯字",
+        "search_hybrid": "關鍵字＋語意",
+        "semantic_passage": "相關段落（非關鍵字命中）",
+    },
+    "en-US": {
+        "auto_updates": "Auto update index",
+        "related_hit": "Related passage",
+        "live_pending": "Auto update pending: {count}",
+        "search_literal": "Keyword",
+        "search_expanded": "Synonyms / typos",
+        "search_hybrid": "Keyword + semantic",
+        "semantic_passage": "Related passage (no literal occurrence)",
+    },
+}.items():
+    TRANSLATIONS[_language].update(_values)
