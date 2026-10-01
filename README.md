@@ -467,17 +467,17 @@ A fast, cross-platform, pure-Python full-text search app for local documents on 
 
 | Light mode | Dark mode |
 | --- | --- |
-| ![Light mode](docs/screenshots/doc_searcher_light.png) | ![Dark mode](docs/screenshots/doc_searcher_dark.png) |
+| ![Light mode](docs/screenshots/doc_searcher_en_light.png) | ![Dark mode](docs/screenshots/doc_searcher_en_dark.png) |
 
 The left panel shows the **Auto update index** and **Tesseract OCR** options and the **Extraction quality / problems** entry. Both appearances use the same demo data and selection so the text, selection color and keyword highlight can be compared; all documents and paths in the images are synthetic examples.
 
 | Advanced filters (light) | Advanced filters (dark) |
 | --- | --- |
-| ![Advanced filters panel, light](docs/screenshots/doc_searcher_advanced_light.png) | ![Advanced filters panel, dark](docs/screenshots/doc_searcher_advanced_dark.png) |
+| ![Advanced filters panel, light](docs/screenshots/doc_searcher_advanced_en_light.png) | ![Advanced filters panel, dark](docs/screenshots/doc_searcher_advanced_en_dark.png) |
 
 | Search mode (light) | Search mode (dark) |
 | --- | --- |
-| ![Light search-mode dropdown](docs/screenshots/doc_searcher_modes_light.png) | ![Dark search-mode dropdown](docs/screenshots/doc_searcher_modes_dark.png) |
+| ![Light search-mode dropdown](docs/screenshots/doc_searcher_modes_en_light.png) | ![Dark search-mode dropdown](docs/screenshots/doc_searcher_modes_en_dark.png) |
 
 The dropdown below the results list switches the retrieval mode: **Keyword** (literal), **Synonyms / typos** (expanded) and **Keyword + semantic** (hybrid; needs a local model).
 
