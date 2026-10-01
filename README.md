@@ -6,6 +6,14 @@
 
 ---
 
+## ⬇️ 下載 · Download
+
+不想自行安裝 Python？到 [GitHub Releases 最新版本](https://github.com/hchouTW/doc_searcher/releases/latest) 下載：`DocSearcher-macOS-arm64.zip`（Apple Silicon）或 `DocSearcher-Windows-x64.exe`（Windows x64）。以 `SHA256SUMS.txt` 核對檔案；未簽署版本的首次開啟方式見下方「macOS Gatekeeper」。Linux 請依下方步驟從原始碼安裝。
+
+Don't want to set up Python? Download from the [latest GitHub release](https://github.com/hchouTW/doc_searcher/releases/latest): `DocSearcher-macOS-arm64.zip` (Apple Silicon) or `DocSearcher-Windows-x64.exe` (Windows x64). Verify with `SHA256SUMS.txt`; see "macOS Gatekeeper" below for opening unsigned builds. On Linux, install from source as described below.
+
+---
+
 ## ✨ v1.4.0 更新重點 · What's new in v1.4.0
 
 | 繁體中文 | English |
@@ -50,7 +58,8 @@
    - **純文字**：`.txt`, `.md`, `.csv`（依 BOM 辨識 UTF-8／UTF-16／UTF-32，並偵測無 BOM 的 UTF-16；其餘依序嘗試 UTF-8、Big5、GBK。無 BOM 的 GBK 可能被誤判為 Big5）
    - 路徑可含中日韓文字、emoji、空白、`%`、`_`、`[ ]` 等字元；在 macOS 上，以不同 Unicode 正規化形式（NFC／NFD）拼寫的同一路徑視為同一個檔案。從 1.2.0 升級後，第一次重新掃描會把以 NFD 儲存的舊索引項目重新建立一次。
    - 加密、損毀、空白或無法讀取的文件會記錄原因並略過，不會中斷整批索引；僅設定擁有者密碼（限制列印／複製）的 PDF 仍可擷取文字。
-3. **本機文字擷取與掃描文件 OCR**：
+3. **自動索引與本機文字擷取**：
+   - 勾選「自動更新索引」後，資料夾內的新增、修改、移動與刪除會自動增量索引（桌面版與 MCP 皆適用；CLI 用 `--watch`）；待處理工作與監看錯誤會顯示在診斷中。詳見[全資料夾搜尋設定](docs/full-folder-search.md)。
    - 原生文字快速索引；勾選「Tesseract OCR」（預設關閉，CLI 用 `--ocr`）後，掃描 PDF 與 PNG/JPEG/TIFF 會使用本機 Tesseract OCR。需安裝引擎與中英文語言資料；關閉時略過的頁面與辨識失敗都會列入診斷。詳見[全資料夾搜尋設定](docs/full-folder-search.md)。
 4. **SQLite FTS5 + jieba 中英文全文檢索**：
    - 內建 BM25 相關度評分，支援繁簡中文互搜（輸入簡體可找到繁體文件，反之亦然；以字為單位轉換，不做「軟體／软件」這類地區用語對應；正規表示式模式不轉換，高亮顯示文件原文字元）、英文混合詞組、英文詞形還原（`outstand`／`outstanding`／`outstandings` 互相命中；區分大小寫與完整單字仍要求完全相同）、精確片語（`"..."`）與布林運算（`AND` / `OR` / `NOT`）。
@@ -87,7 +96,7 @@
 | --- | --- |
 | ![淺色模式](docs/screenshots/doc_searcher_light.png) | ![深色模式](docs/screenshots/doc_searcher_dark.png) |
 
-兩種外觀使用相同的示範資料與選取結果，方便比較文字、選取色與關鍵字高亮；圖片中的文件與路徑皆為合成範例。
+畫面左側可見「自動更新索引」與「Tesseract OCR」選項，以及「擷取品質與問題文件」入口。兩種外觀使用相同的示範資料與選取結果，方便比較文字、選取色與關鍵字高亮；圖片中的文件與路徑皆為合成範例。
 
 | 進階篩選（淺色） | 進階篩選（深色） |
 | --- | --- |
@@ -243,7 +252,18 @@ doc-searcher --dir /path/to/documents --search "專案預算"
 
 # 依格式篩選 (支援: pdf, word, excel, ppt, text)
 doc-searcher --dir /path/to/documents --search "專案預算" --type excel
+
+# 持續監看資料夾並自動索引（Ctrl-C 結束；加上 --search 會輸出 JSON 更新）
+doc-searcher --watch --dir /path/to/documents --search "專案預算"
+
+# 擴充搜尋（同義詞、英文拼字容錯）；hybrid 另加本機向量檢索
+doc-searcher --dir /path/to/documents --search "會談" --mode expanded --synonyms /path/to/synonyms.json
+
+# 掃描 PDF／圖片 OCR（預設關閉，需安裝 Tesseract 與語言資料）
+doc-searcher --dir /path/to/documents --search "專案預算" --ocr
 ```
+
+`--mode literal|expanded|hybrid` 選擇檢索模式（預設 literal）；`--synonyms JSON` 指定同義詞字典；`--embedding-model DIR` 指定本機多語言 E5 模型資料夾，`--build-vectors` 由現有索引建立向量（hybrid 需要）。設定與限制詳見[全資料夾搜尋設定](docs/full-folder-search.md)。
 
 CLI 的標準輸出只包含搜尋結果；進度與診斷訊息寫入標準錯誤（可用 `DOC_SEARCHER_LOG_LEVEL=INFO` 或 `DEBUG` 顯示更多記錄）。CLI 只會更新 `--dir` 目錄內的索引，其他目錄的索引不受影響。`--dir` 與 `--search` 必須同時指定。結束代碼：`0` 成功、`1` 目錄無法存取（既有索引保留不變）、`2` 參數錯誤、`3` 無可寫入的資料資料夾。
 
@@ -405,7 +425,8 @@ A fast, cross-platform, pure-Python full-text search app for local documents on 
    - **Plain text**: `.txt`, `.md`, `.csv` (UTF-8/UTF-16/UTF-32 detected from the BOM, BOM-less UTF-16 detected; otherwise UTF-8, Big5, GBK are tried in that order. BOM-less GBK may be misread as Big5)
    - Paths may contain CJK characters, emoji, spaces, `%`, `_`, `[ ]`; on macOS, the same path spelled in different Unicode normalization forms (NFC/NFD) counts as one file. After upgrading from 1.2.0, the first rescan re-creates old index entries that were stored in NFD once.
    - Encrypted, corrupt, empty or unreadable documents are logged with a reason and skipped without stopping the whole batch; PDFs with only an owner password (print/copy restrictions) still yield their text.
-3. **Local extraction and scanned-document OCR**:
+3. **Live indexing and local extraction**:
+   - With **Auto update index** checked, files created, changed, moved or deleted in your folders are indexed incrementally (desktop and MCP; CLI `--watch`). Pending work and watcher errors appear in diagnostics. See [full-folder search setup](docs/full-folder-search.md).
    - Native text is indexed directly; with **Tesseract OCR** checked (off by default; CLI `--ocr`), scanned PDFs and PNG/JPEG/TIFF images use local Tesseract OCR. Install the engine and language data; skipped pages and failures appear in diagnostics. See [full-folder search setup](docs/full-folder-search.md).
 4. **SQLite FTS5 + jieba full-text search for Chinese and English**:
    - Built-in BM25 relevance ranking. **Traditional and Simplified Chinese match each other** (a Simplified query finds Traditional documents and vice versa; converted character by character, with no regional vocabulary mapping such as 軟體/软件; regex mode is not converted; the preview highlights the characters as written in the document). **English word forms match each other** (`outstand`, `outstanding` and `outstandings` find one another; match case and whole word still require the exact word). Mixed-language phrases, exact phrases (`"..."`) and boolean operators (`AND` / `OR` / `NOT`) are supported.
@@ -442,7 +463,7 @@ A fast, cross-platform, pure-Python full-text search app for local documents on 
 | --- | --- |
 | ![Light mode](docs/screenshots/doc_searcher_light.png) | ![Dark mode](docs/screenshots/doc_searcher_dark.png) |
 
-Both appearances use the same demo data and selection so the text, selection color and keyword highlight can be compared; all documents and paths in the images are synthetic examples.
+The left panel shows the **Auto update index** and **Tesseract OCR** options and the **Extraction quality / problems** entry. Both appearances use the same demo data and selection so the text, selection color and keyword highlight can be compared; all documents and paths in the images are synthetic examples.
 
 | Advanced filters (light) | Advanced filters (dark) |
 | --- | --- |
@@ -598,7 +619,18 @@ doc-searcher --dir /path/to/documents --search "project budget"
 
 # Filter by format (supported: pdf, word, excel, ppt, text)
 doc-searcher --dir /path/to/documents --search "project budget" --type excel
+
+# Watch the folder and index changes automatically (Ctrl-C to stop; with --search it emits JSON updates)
+doc-searcher --watch --dir /path/to/documents --search "project budget"
+
+# Expanded search (synonyms, English typo matching); hybrid adds local vector retrieval
+doc-searcher --dir /path/to/documents --search "talks" --mode expanded --synonyms /path/to/synonyms.json
+
+# OCR for scanned PDFs/images (off by default; needs Tesseract and language data)
+doc-searcher --dir /path/to/documents --search "project budget" --ocr
 ```
+
+`--mode literal|expanded|hybrid` selects the retrieval mode (default literal); `--synonyms JSON` supplies a synonym dictionary; `--embedding-model DIR` points to a local multilingual E5 model folder and `--build-vectors` builds vectors from the existing index (needed for hybrid). Setup and limits: [full-folder search setup](docs/full-folder-search.md).
 
 The CLI's standard output contains only the search results; progress and diagnostics go to standard error (set `DOC_SEARCHER_LOG_LEVEL=INFO` or `DEBUG` for more logging). The CLI only updates the index for the `--dir` folder; indexes of other folders are untouched. `--dir` and `--search` must be given together. Exit codes: `0` success, `1` folder not accessible (the existing index is kept unchanged), `2` argument error, `3` no writable data folder.
 
