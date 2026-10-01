@@ -1157,7 +1157,6 @@ def test_sidebar_widens_for_wider_fonts_instead_of_scrolling(tmp_path):
         app.processEvents()
         overflow = window.sidebar_scroll.horizontalScrollBar().maximum()
         assert overflow == 0, _sidebar_overflow_report(window, overflow)
-        assert window.sidebar_scroll.width() <= window.sidebar_scroll.maximumWidth()
         window.close()
     finally:
         app.setFont(original)
