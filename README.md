@@ -102,6 +102,12 @@ Don't want to set up Python? Download from the [latest GitHub release](https://g
 | --- | --- |
 | ![淺色進階篩選面板](docs/screenshots/doc_searcher_advanced_light.png) | ![深色進階篩選面板](docs/screenshots/doc_searcher_advanced_dark.png) |
 
+| 搜尋模式（淺色） | 搜尋模式（深色） |
+| --- | --- |
+| ![淺色搜尋模式選單](docs/screenshots/doc_searcher_modes_light.png) | ![深色搜尋模式選單](docs/screenshots/doc_searcher_modes_dark.png) |
+
+結果清單下方的下拉選單可切換檢索模式：「關鍵字」（字面）、「同義詞／錯字」（擴充）與「關鍵字＋語意」（混合，需本機模型）。
+
 展開「設定」後，點選外觀按鈕即可依序切換「自動 → 深色 → 淺色」。自動模式會跟隨系統外觀變更，手動模式則維持所選外觀。
 
 開發者可在安裝專案後執行 `python scripts/capture_screenshots.py` 重建截圖。腳本使用 Qt offscreen 與暫存設定／資料庫，不會讀寫個人索引；字型與控制項細節可能隨平台而異。
@@ -468,6 +474,12 @@ The left panel shows the **Auto update index** and **Tesseract OCR** options and
 | Advanced filters (light) | Advanced filters (dark) |
 | --- | --- |
 | ![Advanced filters panel, light](docs/screenshots/doc_searcher_advanced_light.png) | ![Advanced filters panel, dark](docs/screenshots/doc_searcher_advanced_dark.png) |
+
+| Search mode (light) | Search mode (dark) |
+| --- | --- |
+| ![Light search-mode dropdown](docs/screenshots/doc_searcher_modes_light.png) | ![Dark search-mode dropdown](docs/screenshots/doc_searcher_modes_dark.png) |
+
+The dropdown below the results list switches the retrieval mode: **Keyword** (literal), **Synonyms / typos** (expanded) and **Keyword + semantic** (hybrid; needs a local model).
 
 After expanding **Settings**, click the appearance button to cycle through "Auto → Dark → Light". Auto follows the system appearance; a manual choice stays as selected.
 
